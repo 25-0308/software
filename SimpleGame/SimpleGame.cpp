@@ -19,16 +19,26 @@ but WITHOUT ANY WARRANTY.
 
 #include "Camera.h"
 #include "GameObject.h"
+#include "PostProcess.h"
 #include "Renderer.h"
 
 Renderer *g_Renderer = NULL;
 Camera *g_Camera = NULL;
+PostProcess *g_PostProcess = NULL;
 std::vector<GameObject> g_Objects;
 std::chrono::steady_clock::time_point g_LastFrameTime;
 float g_ElapsedSeconds = 0.f;
 
+// Mood tuning for the post-process pass: exposure controls how quickly
+// highlights roll off (tone mapping), vignetteStrength controls how much
+// the screen edges darken.
+float g_Exposure = 1.2f;
+float g_VignetteStrength = 0.6f;
+
 void RenderScene(void)
 {
+	g_PostProcess->BeginCapture();
+
 	glClearColor(0.05f, 0.05f, 0.08f, 1.0f);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
@@ -48,6 +58,8 @@ void RenderScene(void)
 		Mat4 mvp = viewProjection * model;
 		g_Renderer->DrawObject(mvp, obj.r, obj.g, obj.b, obj.a);
 	}
+
+	g_PostProcess->EndCaptureAndPresent(g_Exposure, g_VignetteStrength);
 
 	glutSwapBuffers();
 }
@@ -113,10 +125,13 @@ int main(int argc, char **argv)
 	}
 
 	g_Camera = new Camera(8.f, 6.f, 1.f);
+	g_PostProcess = new PostProcess(800, 600);
 
 	// Prototype scene: a few objects spread across world X/Y/Z so the
 	// quarter-view projection and back-to-front depth sort are both visible.
-	g_Objects.push_back({ 0.f, 0.f, 0.f, 1.f, 1.f, 0.3f, 0.3f, 1.f });
+	// The first object's color goes above 1.0 to demonstrate HDR: it stays a
+	// bright, non-clipped highlight after tone mapping instead of flat white.
+	g_Objects.push_back({ 0.f, 0.f, 0.f, 1.f, 2.5f, 0.6f, 0.4f, 1.f });
 	g_Objects.push_back({ 1.5f, 1.f, 0.f, 1.f, 0.3f, 1.f, 0.3f, 1.f });
 	g_Objects.push_back({ -1.5f, 1.f, 0.f, 1.f, 0.3f, 0.3f, 1.f, 1.f });
 	g_Objects.push_back({ 0.f, 2.f, 0.f, 2.f, 0.6f, 0.6f, 0.6f, 1.f });
@@ -131,6 +146,7 @@ int main(int argc, char **argv)
 
 	glutMainLoop();
 
+	delete g_PostProcess;
 	delete g_Camera;
 	delete g_Renderer;
 

@@ -1,10 +1,5 @@
 #pragma once
 
-#include <string>
-#include <cstdlib>
-#include <fstream>
-#include <iostream>
-
 #include "Dependencies\glew.h"
 #include "Math3D.h"
 
@@ -19,9 +14,6 @@ public:
 
 private:
 	void Initialize(int windowSizeX, int windowSizeY);
-	bool ReadFile(const char* filename, std::string *target);
-	void AddShader(GLuint ShaderProgram, const char* pShaderText, GLenum ShaderType);
-	GLuint CompileShaders(const char* filenameVS, const char* filenameFS);
 	void CreateVertexBufferObjects();
 
 	bool m_Initialized = false;
