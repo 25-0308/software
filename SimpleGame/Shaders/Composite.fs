@@ -4,14 +4,20 @@ in vec2 v_UV;
 layout(location=0) out vec4 FragColor;
 
 uniform sampler2D u_Scene;
+uniform sampler2D u_Bloom;
 uniform float u_Exposure;
 uniform float u_VignetteStrength;
+uniform float u_BloomIntensity;
 
 void main()
 {
 	vec3 hdrColor = texture(u_Scene, v_UV).rgb;
+	vec3 bloomColor = texture(u_Bloom, v_UV).rgb;
 
-	// Exposure tone mapping so bright highlights roll off instead of clipping to white.
+	hdrColor += bloomColor * u_BloomIntensity;
+
+	// Exposure tone mapping so bright highlights (including bloom) roll off
+	// instead of clipping to flat white.
 	vec3 mapped = vec3(1.0) - exp(-hdrColor * u_Exposure);
 
 	// Gamma-correct back to display space.

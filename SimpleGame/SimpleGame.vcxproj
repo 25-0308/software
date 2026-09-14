@@ -180,8 +180,10 @@
   <ItemGroup>
     <None Include="Shaders\SolidRect.fs" />
     <None Include="Shaders\SolidRect.vs" />
-    <None Include="Shaders\PostProcess.fs" />
     <None Include="Shaders\PostProcess.vs" />
+    <None Include="Shaders\BrightExtract.fs" />
+    <None Include="Shaders\Blur.fs" />
+    <None Include="Shaders\Composite.fs" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

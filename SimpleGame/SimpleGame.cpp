@@ -31,9 +31,12 @@ float g_ElapsedSeconds = 0.f;
 
 // Mood tuning for the post-process pass: exposure controls how quickly
 // highlights roll off (tone mapping), vignetteStrength controls how much
-// the screen edges darken.
-float g_Exposure = 1.2f;
+// the screen edges darken, bloomThreshold is the minimum luminance that
+// starts glowing, bloomIntensity controls how strong that glow looks.
+float g_Exposure = 1.0f;
 float g_VignetteStrength = 0.6f;
+float g_BloomThreshold = 0.9f;
+float g_BloomIntensity = 0.8f;
 
 void RenderScene(void)
 {
@@ -59,7 +62,7 @@ void RenderScene(void)
 		g_Renderer->DrawObject(mvp, obj.r, obj.g, obj.b, obj.a);
 	}
 
-	g_PostProcess->EndCaptureAndPresent(g_Exposure, g_VignetteStrength);
+	g_PostProcess->EndCaptureAndPresent(g_Exposure, g_VignetteStrength, g_BloomThreshold, g_BloomIntensity);
 
 	glutSwapBuffers();
 }
@@ -129,9 +132,9 @@ int main(int argc, char **argv)
 
 	// Prototype scene: a few objects spread across world X/Y/Z so the
 	// quarter-view projection and back-to-front depth sort are both visible.
-	// The first object's color goes above 1.0 to demonstrate HDR: it stays a
-	// bright, non-clipped highlight after tone mapping instead of flat white.
-	g_Objects.push_back({ 0.f, 0.f, 0.f, 1.f, 2.5f, 0.6f, 0.4f, 1.f });
+	// The first object's color/luminance sits above g_BloomThreshold so it
+	// reads as a glowing, self-lit object rather than a flat bright color.
+	g_Objects.push_back({ 0.f, 0.f, 0.f, 1.f, 4.f, 0.8f, 0.5f, 1.f });
 	g_Objects.push_back({ 1.5f, 1.f, 0.f, 1.f, 0.3f, 1.f, 0.3f, 1.f });
 	g_Objects.push_back({ -1.5f, 1.f, 0.f, 1.f, 0.3f, 0.3f, 1.f, 1.f });
 	g_Objects.push_back({ 0.f, 2.f, 0.f, 2.f, 0.6f, 0.6f, 0.6f, 1.f });
