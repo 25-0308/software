@@ -9,17 +9,23 @@ Renderer::Renderer(int windowSizeX, int windowSizeY)
 
 Renderer::~Renderer()
 {
+	if (m_SolidRectShader != 0)
+	{
+		glDeleteProgram(m_SolidRectShader);
+	}
+	if (m_VBORect != 0)
+	{
+		glDeleteBuffers(1, &m_VBORect);
+	}
 }
 
 void Renderer::Initialize(int windowSizeX, int windowSizeY)
 {
-	//Set window size
-	m_WindowSizeX = windowSizeX;
-	m_WindowSizeY = windowSizeY;
+	glViewport(0, 0, windowSizeX, windowSizeY);
 
 	//Load shaders
 	m_SolidRectShader = CompileShaders("./Shaders/SolidRect.vs", "./Shaders/SolidRect.fs");
-	
+
 	//Create VBOs
 	CreateVertexBufferObjects();
 
@@ -36,11 +42,13 @@ bool Renderer::IsInitialized()
 
 void Renderer::CreateVertexBufferObjects()
 {
+	// Unit quad centered on the origin; world position/size/orientation are
+	// applied entirely through the MVP matrix passed to DrawObject().
 	float rect[]
 		=
 	{
-		-1.f / m_WindowSizeX, -1.f / m_WindowSizeY, 0.f, -1.f / m_WindowSizeX, 1.f / m_WindowSizeY, 0.f, 1.f / m_WindowSizeX, 1.f / m_WindowSizeY, 0.f, //Triangle1
-		-1.f / m_WindowSizeX, -1.f / m_WindowSizeY, 0.f,  1.f / m_WindowSizeX, 1.f / m_WindowSizeY, 0.f, 1.f / m_WindowSizeX, -1.f / m_WindowSizeY, 0.f, //Triangle2
+		-0.5f, -0.5f, 0.f,  -0.5f, 0.5f, 0.f,  0.5f, 0.5f, 0.f, //Triangle1
+		-0.5f, -0.5f, 0.f,   0.5f, 0.5f, 0.f,  0.5f, -0.5f, 0.f, //Triangle2
 	};
 
 	glGenBuffers(1, &m_VBORect);
@@ -165,16 +173,11 @@ GLuint Renderer::CompileShaders(const char* filenameVS, const char* filenameFS)
 	return ShaderProgram;
 }
 
-void Renderer::DrawSolidRect(float x, float y, float z, float size, float r, float g, float b, float a)
+void Renderer::DrawObject(const Mat4& mvp, float r, float g, float b, float a)
 {
-	float newX, newY;
-
-	GetGLPosition(x, y, &newX, &newY);
-
-	//Program select
 	glUseProgram(m_SolidRectShader);
 
-	glUniform4f(glGetUniformLocation(m_SolidRectShader, "u_Trans"), newX, newY, 0, size);
+	glUniformMatrix4fv(glGetUniformLocation(m_SolidRectShader, "u_MVP"), 1, GL_FALSE, mvp.m);
 	glUniform4f(glGetUniformLocation(m_SolidRectShader, "u_Color"), r, g, b, a);
 
 	int attribPosition = glGetAttribLocation(m_SolidRectShader, "a_Position");
@@ -185,12 +188,4 @@ void Renderer::DrawSolidRect(float x, float y, float z, float size, float r, flo
 	glDrawArrays(GL_TRIANGLES, 0, 6);
 
 	glDisableVertexAttribArray(attribPosition);
-
-	glBindFramebuffer(GL_FRAMEBUFFER, 0);
-}
-
-void Renderer::GetGLPosition(float x, float y, float *newX, float *newY)
-{
-	*newX = x * 2.f / m_WindowSizeX;
-	*newY = y * 2.f / m_WindowSizeY;
 }
