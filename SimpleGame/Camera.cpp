@@ -7,6 +7,9 @@ namespace
 	const float kPitchRadians = 0.523598776f; // 30 degrees
 }
 
+const float Camera::kMinZoom = 0.25f;
+const float Camera::kMaxZoom = 4.0f;
+
 Camera::Camera(float viewWidth, float viewHeight, float zoom)
 	: m_ViewWidth(viewWidth)
 	, m_ViewHeight(viewHeight)
@@ -23,4 +26,18 @@ Mat4 Camera::GetViewProjection() const
 	Mat4 projection = Mat4::Ortho(-halfWidth, halfWidth, -halfHeight, halfHeight, -1000.f, 1000.f);
 
 	return projection * view;
+}
+
+void Camera::AdjustZoom(float factor)
+{
+	m_Zoom *= factor;
+
+	if (m_Zoom < kMinZoom)
+	{
+		m_Zoom = kMinZoom;
+	}
+	else if (m_Zoom > kMaxZoom)
+	{
+		m_Zoom = kMaxZoom;
+	}
 }

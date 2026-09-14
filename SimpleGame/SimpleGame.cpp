@@ -93,6 +93,13 @@ void MouseInput(int button, int state, int x, int y)
 {
 }
 
+void MouseWheel(int wheel, int direction, int x, int y)
+{
+	// direction is +1 for wheel-up (zoom in), -1 for wheel-down (zoom out).
+	const float kZoomStep = 1.1f;
+	g_Camera->AdjustZoom(direction > 0 ? kZoomStep : 1.f / kZoomStep);
+}
+
 void KeyInput(unsigned char key, int x, int y)
 {
 }
@@ -145,6 +152,7 @@ int main(int argc, char **argv)
 	glutIdleFunc(Idle);
 	glutKeyboardFunc(KeyInput);
 	glutMouseFunc(MouseInput);
+	glutMouseWheelFunc(MouseWheel);
 	glutSpecialFunc(SpecialKeyInput);
 
 	glutMainLoop();
