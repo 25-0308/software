@@ -6,8 +6,8 @@
 
 namespace
 {
-	// Number of horizontal+vertical blur pairs applied to the bright buffer;
-	// higher = wider, softer glow but more draw calls.
+	// 밝기 버퍼에 적용할 가로+세로 블러 쌍의 횟수. 클수록 더 넓고 부드러운
+	// 발광 효과가 나오지만 드로우 콜이 늘어난다.
 	const int kBlurPasses = 5;
 }
 
@@ -18,17 +18,19 @@ PostProcess::PostProcess(int width, int height)
 	, m_BlurHeight(height / 2)
 {
 	m_Scene = CreateColorFramebuffer(m_Width, m_Height);
-	// Bloom buffers run at half resolution: cheaper, and the blur softens the
-	// downsampling artifacts anyway.
+	// 블룸 버퍼는 절반 해상도로 처리한다: 비용이 싸고, 어차피 블러가 다운
+	// 샘플링 흔적을 가려준다.
 	m_Bright = CreateColorFramebuffer(m_BlurWidth, m_BlurHeight);
 	m_PingPong[0] = CreateColorFramebuffer(m_BlurWidth, m_BlurHeight);
 	m_PingPong[1] = CreateColorFramebuffer(m_BlurWidth, m_BlurHeight);
+	m_Graded = CreateColorFramebuffer(m_Width, m_Height);
 
 	CreateFullscreenQuad();
 
 	m_BrightExtractShader = ShaderUtil::CompileShaderProgram("./Shaders/PostProcess.vs", "./Shaders/BrightExtract.fs");
 	m_BlurShader = ShaderUtil::CompileShaderProgram("./Shaders/PostProcess.vs", "./Shaders/Blur.fs");
 	m_CompositeShader = ShaderUtil::CompileShaderProgram("./Shaders/PostProcess.vs", "./Shaders/Composite.fs");
+	m_GradeShader = ShaderUtil::CompileShaderProgram("./Shaders/PostProcess.vs", "./Shaders/Grade.fs");
 }
 
 PostProcess::~PostProcess()
@@ -45,6 +47,10 @@ PostProcess::~PostProcess()
 	{
 		glDeleteProgram(m_CompositeShader);
 	}
+	if (m_GradeShader != 0)
+	{
+		glDeleteProgram(m_GradeShader);
+	}
 	if (m_QuadVBO != 0)
 	{
 		glDeleteBuffers(1, &m_QuadVBO);
@@ -54,6 +60,7 @@ PostProcess::~PostProcess()
 	DestroyFramebuffer(m_Bright);
 	DestroyFramebuffer(m_PingPong[0]);
 	DestroyFramebuffer(m_PingPong[1]);
+	DestroyFramebuffer(m_Graded);
 }
 
 PostProcess::FrameBuffer PostProcess::CreateColorFramebuffer(int width, int height)
@@ -62,7 +69,7 @@ PostProcess::FrameBuffer PostProcess::CreateColorFramebuffer(int width, int heig
 
 	glGenTextures(1, &result.colorTexture);
 	glBindTexture(GL_TEXTURE_2D, result.colorTexture);
-	// RGBA16F so lighting/bloom can exceed 1.0 before tone mapping instead of clipping.
+	// 조명/블룸 값이 1.0을 넘어도 클리핑되지 않도록 RGBA16F 사용.
 	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, width, height, 0, GL_RGBA, GL_FLOAT, NULL);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
@@ -76,7 +83,7 @@ PostProcess::FrameBuffer PostProcess::CreateColorFramebuffer(int width, int heig
 
 	if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
 	{
-		std::cout << "PostProcess framebuffer is not complete.\n";
+		std::cout << "PostProcess 프레임버퍼 생성에 실패했습니다.\n";
 	}
 
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
@@ -142,9 +149,9 @@ void PostProcess::BeginCapture()
 	glViewport(0, 0, m_Width, m_Height);
 }
 
-void PostProcess::EndCaptureAndPresent(float exposure, float vignetteStrength, float bloomThreshold, float bloomIntensity)
+void PostProcess::EndCaptureAndPresent(float exposure, float vignetteStrength, float bloomThreshold, float bloomIntensity, float time)
 {
-	// 1) Extract pixels brighter than the threshold into a half-res buffer.
+	// 1) 임계값보다 밝은 픽셀만 절반 해상도 버퍼로 추출.
 	glBindFramebuffer(GL_FRAMEBUFFER, m_Bright.fbo);
 	glViewport(0, 0, m_BlurWidth, m_BlurHeight);
 	glUseProgram(m_BrightExtractShader);
@@ -154,7 +161,7 @@ void PostProcess::EndCaptureAndPresent(float exposure, float vignetteStrength, f
 	glUniform1i(glGetUniformLocation(m_BrightExtractShader, "u_Scene"), 0);
 	DrawFullscreenQuad(m_BrightExtractShader);
 
-	// 2) Ping-pong separable Gaussian blur on the bright buffer.
+	// 2) 밝기 버퍼에 핑퐁 방식으로 분리형 가우시안 블러 적용.
 	GLuint sourceTexture = m_Bright.colorTexture;
 	bool horizontal = true;
 	glUseProgram(m_BlurShader);
@@ -177,8 +184,10 @@ void PostProcess::EndCaptureAndPresent(float exposure, float vignetteStrength, f
 		horizontal = !horizontal;
 	}
 
-	// 3) Composite the sharp scene with the blurred bloom, then tone map + vignette to the screen.
-	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+	// 3) 원본 씬 + 블러된 블룸을 합성하고, 톤매핑 + 비네트를 적용해 중간
+	//    버퍼(m_Graded)에 기록한다. 화면에 바로 쓰지 않는 이유는 마지막
+	//    색보정/필름 그레인 단계에서 이 결과를 다시 읽어야 하기 때문.
+	glBindFramebuffer(GL_FRAMEBUFFER, m_Graded.fbo);
 	glViewport(0, 0, m_Width, m_Height);
 	glClear(GL_COLOR_BUFFER_BIT);
 
@@ -196,6 +205,20 @@ void PostProcess::EndCaptureAndPresent(float exposure, float vignetteStrength, f
 	glUniform1i(glGetUniformLocation(m_CompositeShader, "u_Bloom"), 1);
 
 	DrawFullscreenQuad(m_CompositeShader);
+
+	// 4) 마지막 단계: 색보정 + 필름 그레인을 적용해 실제 화면에 출력.
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+	glViewport(0, 0, m_Width, m_Height);
+	glClear(GL_COLOR_BUFFER_BIT);
+
+	glUseProgram(m_GradeShader);
+	glUniform1f(glGetUniformLocation(m_GradeShader, "u_Time"), time);
+
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, m_Graded.colorTexture);
+	glUniform1i(glGetUniformLocation(m_GradeShader, "u_Scene"), 0);
+
+	DrawFullscreenQuad(m_GradeShader);
 
 	glActiveTexture(GL_TEXTURE1);
 	glBindTexture(GL_TEXTURE_2D, 0);

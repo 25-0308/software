@@ -53,20 +53,51 @@
 
 한 번에 전체를 설계하지 않고 아래 순서로 점진적으로 확장합니다.
 
-1. 게임 루프 (델타 타임, 업데이트/렌더 분리)
-2. 카메라 + 쿼터뷰 월드→스크린 투영
-3. 다중 오브젝트 렌더링 + 그리기 순서(깊이) 정렬
-4. 타일맵/청크 기반 월드
-5. 엔티티(플레이어, NPC, 아이템) 구조
-6. 월드 스트리밍, 세이브 등 오픈월드 요소
+1. ✅ 게임 루프 (델타 타임, 업데이트/렌더 분리)
+2. ✅ 카메라 + 쿼터뷰 월드→스크린 투영
+3. ✅ 다중 오브젝트 렌더링 + 그리기 순서(깊이) 정렬
+4. 🟡 타일맵/청크 기반 월드 — 타일맵(랜덤 생성+연결성 보장)은 구현됨, 청크 스트리밍은 아직
+5. 🟡 엔티티(플레이어, NPC, 아이템) 구조 — Player/NPC/Item/Animal/Building 타입 구현, 정식 컴포넌트 시스템은 아님
+6. 🟡 월드 스트리밍, 세이브 등 오픈월드 요소 — 경험치/레벨업(간단한 스탯 저장)까지는 구현, 스트리밍/세이브 파일은 아직
 
-현재 `Renderer`는 사각형 하나를 NDC 좌표로 직접 그리는 최소 상태이며, 위 1~2단계(게임 루프, 투영)가 아직 구현되어 있지 않습니다.
+### 현재 구현 상태 (2026-09-14 기준, `dev` 브랜치)
+
+- **게임 루프**: `std::chrono` 기반 델타 타임, `Update()`/`RenderScene()` 분리 ([SimpleGame.cpp](SimpleGame/SimpleGame.cpp))
+- **카메라**: yaw 45°/pitch 30° 고정 쿼터뷰 + 직교 투영, MVP 행렬 기반 렌더링. `Camera::SetFocus()`로 플레이어를 따라다님 ([Camera.h](SimpleGame/Camera.h)/[.cpp](SimpleGame/Camera.cpp), [Math3D.h](SimpleGame/Math3D.h))
+- **조작**: WASD 이동(델타타임 기반, 대각선 정규화, 월드 경계 클램프), E 상호작용(반경 내 가장 가까운 대상), 마우스 휠 줌(`0.25~4.0` 배율)
+- **월드**: 16×16 타일맵 — 마을(돌바닥) / 길(다진 흙길) / 호수(물, 전용 셰이더로 일렁임) / 숲(잔디+나무) ([TileMap.h](SimpleGame/TileMap.h)/[.cpp](SimpleGame/TileMap.cpp))
+- **엔티티**: `GameObject`에 `EntityType`(Player/NPC/Item/Animal/Building/Prop/Water) 태그. 매 프레임 `(y+z)` 기준 정렬 후 페인터 알고리즘으로 그림 ([GameObject.h](SimpleGame/GameObject.h))
+- **캐릭터 렌더링**: Player/NPC/Animal은 몸통+머리+다리 여러 파츠로 조립해서 그림(`DrawCharacter`), 이동 중일 때 다리가 흔들리는 절차적 걷기 애니메이션 — 실제 스프라이트 이미지는 아직 없음(텍스처 에셋 없음)
+- **건물**: 벽+지붕 두 파츠로 조립(`DrawBuilding`), 색상으로 재질 구분(텍스처 매핑은 아직 없음)
+- **그림자**: 캐릭터/건물 발밑에 반투명 원형 그라데이션 블롭 섀도우 (`Renderer::DrawShadow`, `Shaders/Shadow.vs/.fs`) — 실시간 쉐도우맵은 아님
+- **물 이펙트**: 시간 기반 잔물결+반짝임 셰이더 (`Renderer::DrawWater`, `Shaders/Water.vs/.fs`)
+- **포스트프로세싱**: HDR(RGBA16F) 오프스크린 렌더 → 밝기 추출 → 가우시안 블러(블룸) → 톤매핑+비네트 합성 → 색보정(그림자/하이라이트 틴트)+필름 그레인, 4패스 파이프라인 ([PostProcess.h](SimpleGame/PostProcess.h)/[.cpp](SimpleGame/PostProcess.cpp), `Shaders/BrightExtract.fs`, `Shaders/Blur.fs`, `Shaders/Composite.fs`, `Shaders/Grade.fs`)
+- **공용 셰이더 유틸**: `Renderer`/`PostProcess`가 공유하는 셰이더 컴파일 로직을 [ShaderUtil.h](SimpleGame/ShaderUtil.h)/[.cpp](SimpleGame/ShaderUtil.cpp)로 분리
+- **튜토리얼 레벨**: 마을(장로+마을사람 7명)+숲(나무, 야생동물 3마리)+호수. 장로에게 말 걸기 → 호수 근처 퀘스트 아이템 습득 → 장로에게 전달 → 완료 시 플레이어가 빛나는 보상 효과. 콘솔(std::cout) 텍스트로 대사 출력 (화면 텍스트 UI는 아직 없음)
+- **랜덤 레벨 생성**: 마을/호수 위치·크기를 매 실행 무작위로 배치하고, 호수 때문에 갈 수 없는 영역이 생기면 BFS로 검증해 길(Path)을 뚫어 전체 맵이 항상 하나로 연결되도록 보장 ([LevelGenerator.h](SimpleGame/LevelGenerator.h)/[.cpp](SimpleGame/LevelGenerator.cpp))
+- **이동 충돌**: 플레이어는 물 타일 위로 이동할 수 없음(축별 슬라이딩 충돌), `TileMap::IsWorldPositionWalkable()`로 판정
+- **모델 캐싱**: 원/타원 등 절차적 메시를 생성해 `./Cache/*.mesh` 파일로 저장하고, 다음 실행부터는 파일에서 로딩만 함 ([Mesh.h](SimpleGame/Mesh.h)/[.cpp](SimpleGame/Mesh.cpp), [MeshCache.h](SimpleGame/MeshCache.h)/[.cpp](SimpleGame/MeshCache.cpp)) — 현재는 캐릭터 머리에 원형 메시 적용
+- **불 이펙트**: 횃불이 시간 기반으로 일렁이는 전용 셰이더로 렌더링 (`Renderer::DrawFire`, `Shaders/Fire.fs`, `EntityType::Fire`)
+- **전투/성장**: Space로 근접 공격, 야생 짐승 처치 시 경험치 획득, 레벨업 시 공격력/최대체력 상승(레벨1에서 즉시 적용). 약초 아이템 습득으로도 경험치 획득
+- 아직 없음: 실제 이미지 스프라이트/텍스처 파이프라인, 청크 스트리밍, 세이브/로드 파일, 축복(블레싱) 시스템 실제 구현, 화면 내 텍스트/대화 UI
+
+이 항목들은 실제 구현이 진행될 때마다 이 섹션을 갱신합니다. (문서만 보고 "아직 구현 안 됨"으로 오해하지 않도록, 이 절이 항상 최신 상태를 반영해야 함)
 
 ## 저장소/빌드 관리 방침
 
+- **활성 개발 브랜치는 `dev`** — 프로토타입/포스트프로세싱/줌 등 신규 구현은 모두 `dev`에서 진행하며 `origin/dev`에 푸시되어 있음. `main`은 `dev` 분기 이전 상태(초기 코드 정리 시점)에 멈춰 있으므로, 최신 구현 여부를 확인할 때는 반드시 `dev` 브랜치 기준으로 볼 것
 - 빌드 산출물(`.obj`, `.pdb`, `.tlog`, `.exe`, `.pch`, `.ilk`, `.idb`, `.log` 등, `x64/` 폴더 하위)은 git에 커밋하지 않음 — `.gitignore`로 관리
 - 단, `x64/Debug`·`x64/Release`의 `freeglut.dll`, `glew32.dll`은 예외적으로 계속 추적함 — 빌드 후 자동 복사(post-build copy) 단계가 없어서, 추적하지 않으면 새로 클론한 환경에서 실행 파일이 DLL을 찾지 못해 실행되지 않기 때문. 추후 post-build 복사 단계나 vcpkg를 도입하면 이 예외는 제거 가능
 
+## 코드 컨벤션
+
+- 클래스/함수/메서드: PascalCase (`Renderer`, `DrawObject`, `GenerateVillageLevel`)
+- 멤버 변수: `m_` 접두사 (`m_Width`), 전역 변수: `g_` 접두사 (`g_Player`), 상수: `k` 접두사 (`kInteractElder`)
+- 들여쓰기는 탭(tab) 사용, 중괄호는 다음 줄에 (Allman 스타일)
+- 주석/로그/콘솔 출력 문자열은 한글로 작성 (원본 라이선스 헤더 등 법적 텍스트는 예외)
+- 셰이더 컴파일처럼 여러 클래스가 공유하는 로직은 `ShaderUtil` 같은 네임스페이스 유틸로 분리
+- 파일 하나에만 쓰이는 헬퍼 함수/상수는 `namespace { ... }` (익명 네임스페이스)로 감싸서 외부 노출을 막음
+
 ## 작업 스타일
 
-- 빌드/실행 확인은 사용자가 직접 하는 것을 기본으로 함 — 특별한 이유가 없으면 앱을 직접 실행해 결과를 확인하지 않음 (코드 변경 후 컴파일 성공 여부 정도만 확인하는 것은 무방)
+- **빌드/실행은 전적으로 사용자가 직접 함.** 코드 수정 후 컴파일 확인 삼아 MSBuild를 돌리는 것도 하지 않음 — 명시적으로 요청받거나 정적으로 도저히 확인할 수 없는 특별한 이유가 있을 때만 예외적으로 진행하며, 그 경우도 먼저 물어보는 것을 우선함

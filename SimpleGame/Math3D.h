@@ -2,8 +2,8 @@
 
 #include <cmath>
 
-// Minimal column-major 4x4 matrix, matching OpenGL's expected memory layout
-// (m[col*4+row]) so Mat4::m can be passed directly to glUniformMatrix4fv.
+// OpenGL이 기대하는 메모리 레이아웃(m[col*4+row])을 따르는 최소한의
+// column-major 4x4 행렬. Mat4::m을 glUniformMatrix4fv에 그대로 넘길 수 있다.
 struct Mat4
 {
 	float m[16] = { 0 };
@@ -58,7 +58,7 @@ struct Mat4
 	}
 };
 
-// a * b : applies b first, then a (standard column-major composition).
+// a * b : b를 먼저 적용한 뒤 a를 적용한다 (표준 column-major 합성).
 inline Mat4 operator*(const Mat4& a, const Mat4& b)
 {
 	Mat4 r;

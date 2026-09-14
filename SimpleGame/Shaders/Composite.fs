@@ -16,14 +16,13 @@ void main()
 
 	hdrColor += bloomColor * u_BloomIntensity;
 
-	// Exposure tone mapping so bright highlights (including bloom) roll off
-	// instead of clipping to flat white.
+	// 노출 톤매핑: 밝은 부분(블룸 포함)이 그냥 하얗게 날아가지 않고 부드럽게 눌린다.
 	vec3 mapped = vec3(1.0) - exp(-hdrColor * u_Exposure);
 
-	// Gamma-correct back to display space.
+	// 디스플레이 공간으로 감마 보정.
 	mapped = pow(mapped, vec3(1.0 / 2.2));
 
-	// Vignette: darken toward the screen edges based on distance from center.
+	// 비네트: 화면 중심에서 멀어질수록 어두워짐.
 	vec2 centered = v_UV - vec2(0.5);
 	float vignette = 1.0 - u_VignetteStrength * dot(centered, centered) * 2.0;
 	mapped *= clamp(vignette, 0.0, 1.0);

@@ -13,7 +13,7 @@ namespace
 		std::ifstream file(filename);
 		if (file.fail())
 		{
-			std::cout << filename << " file loading failed.. \n";
+			std::cout << filename << " 파일을 불러오지 못했습니다.\n";
 			file.close();
 			return false;
 		}
@@ -32,7 +32,7 @@ namespace
 
 		if (shaderObj == 0)
 		{
-			fprintf(stderr, "Error creating shader type %d\n", shaderType);
+			fprintf(stderr, "셰이더 타입 %d 생성 실패\n", shaderType);
 		}
 
 		const GLchar* p[1];
@@ -49,7 +49,7 @@ namespace
 		{
 			GLchar infoLog[1024];
 			glGetShaderInfoLog(shaderObj, sizeof(infoLog), NULL, infoLog);
-			fprintf(stderr, "Error compiling shader type %d: '%s'\n", shaderType, infoLog);
+			fprintf(stderr, "셰이더 타입 %d 컴파일 오류: '%s'\n", shaderType, infoLog);
 			printf("%s \n", shaderText);
 		}
 
@@ -63,20 +63,20 @@ GLuint ShaderUtil::CompileShaderProgram(const char* filenameVS, const char* file
 
 	if (shaderProgram == 0)
 	{
-		fprintf(stderr, "Error creating shader program\n");
+		fprintf(stderr, "셰이더 프로그램 생성 실패\n");
 	}
 
 	std::string vs, fs;
 
 	if (!ReadFile(filenameVS, &vs))
 	{
-		printf("Error compiling vertex shader\n");
+		printf("버텍스 셰이더 컴파일 실패\n");
 		return 0;
 	}
 
 	if (!ReadFile(filenameFS, &fs))
 	{
-		printf("Error compiling fragment shader\n");
+		printf("프래그먼트 셰이더 컴파일 실패\n");
 		return 0;
 	}
 
@@ -91,7 +91,7 @@ GLuint ShaderUtil::CompileShaderProgram(const char* filenameVS, const char* file
 	if (success == 0)
 	{
 		glGetProgramInfoLog(shaderProgram, sizeof(errorLog), NULL, errorLog);
-		std::cout << filenameVS << ", " << filenameFS << " Error linking shader program\n" << errorLog;
+		std::cout << filenameVS << ", " << filenameFS << " 셰이더 프로그램 링크 오류\n" << errorLog;
 		return 0;
 	}
 
@@ -100,12 +100,12 @@ GLuint ShaderUtil::CompileShaderProgram(const char* filenameVS, const char* file
 	if (!success)
 	{
 		glGetProgramInfoLog(shaderProgram, sizeof(errorLog), NULL, errorLog);
-		std::cout << filenameVS << ", " << filenameFS << " Error validating shader program\n" << errorLog;
+		std::cout << filenameVS << ", " << filenameFS << " 셰이더 프로그램 검증 오류\n" << errorLog;
 		return 0;
 	}
 
 	glUseProgram(shaderProgram);
-	std::cout << filenameVS << ", " << filenameFS << " Shader compiling is done.\n";
+	std::cout << filenameVS << ", " << filenameFS << " 셰이더 컴파일 완료.\n";
 
 	return shaderProgram;
 }

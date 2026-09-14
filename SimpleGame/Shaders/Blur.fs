@@ -9,8 +9,8 @@ uniform vec2 u_Direction;
 
 void main()
 {
-	// 9-tap separable Gaussian; weights sum to 1.0. Called once for the
-	// horizontal pass and once for the vertical pass (see u_Direction).
+	// 9탭 분리형 가우시안. 가중치 합은 1.0. 가로 패스와 세로 패스에 한 번씩
+	// 호출된다 (u_Direction 참고).
 	float weights[5] = float[](0.227027, 0.1945946, 0.1216216, 0.054054, 0.016216);
 
 	vec3 result = texture(u_Scene, v_UV).rgb * weights[0];

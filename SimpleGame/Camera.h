@@ -2,9 +2,8 @@
 
 #include "Math3D.h"
 
-// Fixed quarter-view (dimetric) camera: the world is rotated into a
-// 45-degree yaw / 30-degree pitch orientation and projected with an
-// orthographic projection, producing the classic 2.5D isometric-style look.
+// 고정 쿼터뷰(디메트릭) 카메라: 월드를 yaw 45도 / pitch 30도로 회전시킨 뒤
+// 직교 투영하여 전형적인 2.5D 아이소메트릭 느낌을 만든다.
 class Camera
 {
 public:
@@ -12,16 +11,22 @@ public:
 
 	Mat4 GetViewProjection() const;
 
-	// Multiplies the current zoom by `factor` (>1 zooms in, <1 zooms out),
-	// clamped to a sane range. Zoom is centered on the world origin, which is
-	// also the screen center today; once the camera follows the main
-	// character, centering will naturally follow that character instead.
+	// 현재 줌 배율에 `factor`를 곱한다 (>1이면 확대, <1이면 축소), 적정 범위로
+	// 클램프됨. 줌의 중심은 현재 포커스 지점(SetFocus 참고)이며 화면 중앙이다.
 	void AdjustZoom(float factor);
+
+	// 카메라가 중심으로 삼는 월드 좌표를 설정한다. 매 프레임 플레이어 위치로
+	// 호출하면 카메라가 플레이어를 따라간다.
+	void SetFocus(float x, float y, float z);
 
 private:
 	float m_ViewWidth;
 	float m_ViewHeight;
 	float m_Zoom;
+
+	float m_FocusX = 0.f;
+	float m_FocusY = 0.f;
+	float m_FocusZ = 0.f;
 
 	static const float kMinZoom;
 	static const float kMaxZoom;

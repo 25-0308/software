@@ -141,6 +141,8 @@
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <SDLCheck>true</SDLCheck>
+      <LanguageStandard>stdcpplatest</LanguageStandard>
+      <LanguageStandard_C>stdclatest</LanguageStandard_C>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -157,18 +159,26 @@
   <ItemGroup>
     <ClInclude Include="Camera.h" />
     <ClInclude Include="GameObject.h" />
+    <ClInclude Include="LevelGenerator.h" />
     <ClInclude Include="Math3D.h" />
+    <ClInclude Include="Mesh.h" />
+    <ClInclude Include="MeshCache.h" />
     <ClInclude Include="PostProcess.h" />
     <ClInclude Include="Renderer.h" />
     <ClInclude Include="ShaderUtil.h" />
+    <ClInclude Include="TileMap.h" />
     <ClInclude Include="stdafx.h" />
     <ClInclude Include="targetver.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Camera.cpp" />
+    <ClCompile Include="LevelGenerator.cpp" />
+    <ClCompile Include="Mesh.cpp" />
+    <ClCompile Include="MeshCache.cpp" />
     <ClCompile Include="PostProcess.cpp" />
     <ClCompile Include="Renderer.cpp" />
     <ClCompile Include="ShaderUtil.cpp" />
+    <ClCompile Include="TileMap.cpp" />
     <ClCompile Include="SimpleGame.cpp" />
     <ClCompile Include="stdafx.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Create</PrecompiledHeader>
@@ -184,6 +194,12 @@
     <None Include="Shaders\BrightExtract.fs" />
     <None Include="Shaders\Blur.fs" />
     <None Include="Shaders\Composite.fs" />
+    <None Include="Shaders\Grade.fs" />
+    <None Include="Shaders\Shadow.vs" />
+    <None Include="Shaders\Shadow.fs" />
+    <None Include="Shaders\Water.vs" />
+    <None Include="Shaders\Water.fs" />
+    <None Include="Shaders\Fire.fs" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
