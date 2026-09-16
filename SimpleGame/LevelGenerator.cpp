@@ -162,11 +162,11 @@ LevelLayout GenerateVillageLevel(TileMap& tileMap)
 		}
 	}
 
-	std::uniform_real_distribution<float> villagePosDist(-2.f, 2.f);
+	std::uniform_real_distribution<float> villagePosDist(-3.f, 3.f);
 	std::uniform_real_distribution<float> villageRadiusDist(2.2f, 2.6f);
 	std::uniform_real_distribution<float> angleDist(0.f, 6.2831853f);
-	std::uniform_real_distribution<float> lakeDistDist(4.f, 6.f);
-	std::uniform_real_distribution<float> lakeRadiusDist(1.6f, 2.3f);
+	std::uniform_real_distribution<float> lakeDistDist(6.f, 10.f); // 맵이 커진 만큼 호수를 마을에서 더 떨어뜨려 배치.
+	std::uniform_real_distribution<float> lakeRadiusDist(1.8f, 2.6f);
 
 	LevelLayout layout;
 	layout.villageCenterX = villagePosDist(rng);

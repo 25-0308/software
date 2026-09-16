@@ -45,6 +45,14 @@ struct Mat4
 		return r;
 	}
 
+	static Mat4 RotateZ(float radians)
+	{
+		Mat4 r = Identity();
+		float c = cosf(radians), s = sinf(radians);
+		r.m[0] = c; r.m[1] = s; r.m[4] = -s; r.m[5] = c;
+		return r;
+	}
+
 	static Mat4 Ortho(float left, float right, float bottom, float top, float nearZ, float farZ)
 	{
 		Mat4 r = Identity();
@@ -75,4 +83,13 @@ inline Mat4 operator*(const Mat4& a, const Mat4& b)
 		}
 	}
 	return r;
+}
+
+// 월드 좌표(x,y,z)를 m으로 변환해 NDC의 x,y만 뽑아낸다(-1~1 범위). 이 엔진의
+// 모든 행렬은 아핀 변환(원근 나눗셈 없는 Ortho)이라 w는 항상 1이므로 생략한다.
+// 이름표처럼 셰이더가 아니라 CPU 쪽에서 화면 위치가 필요할 때 쓴다.
+inline void TransformToNDC(const Mat4& m, float x, float y, float z, float& outNdcX, float& outNdcY)
+{
+	outNdcX = m.m[0] * x + m.m[4] * y + m.m[8] * z + m.m[12];
+	outNdcY = m.m[1] * x + m.m[5] * y + m.m[9] * z + m.m[13];
 }

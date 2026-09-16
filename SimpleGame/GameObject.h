@@ -24,4 +24,12 @@ struct GameObject
 	float r = 1.f, g = 1.f, b = 1.f, a = 1.f;
 	EntityType type = EntityType::Prop;
 	int interactId = 0;
+
+	// 바라보는 방향(라디안, atan2 규약: 0=+x, 90도=+y). 캐릭터가 이동/공격할 때
+	// 갱신되며, DrawCharacter가 팔다리·얼굴 방향을 이 값 기준으로 그린다.
+	float facing = -1.5707963f;
+
+	// 머리 위 이름표에 쓰는 표시 이름. 정적 문자열 리터럴만 가리키므로 소유권
+	// 관리가 필요 없다. nullptr면 이름표를 그리지 않음(건물/아이템 등).
+	const char* name = nullptr;
 };

@@ -63,23 +63,30 @@
 ### 현재 구현 상태 (2026-09-14 기준, `dev` 브랜치)
 
 - **게임 루프**: `std::chrono` 기반 델타 타임, `Update()`/`RenderScene()` 분리 ([SimpleGame.cpp](SimpleGame/SimpleGame.cpp))
-- **카메라**: yaw 45°/pitch 30° 고정 쿼터뷰 + 직교 투영, MVP 행렬 기반 렌더링. `Camera::SetFocus()`로 플레이어를 따라다님 ([Camera.h](SimpleGame/Camera.h)/[.cpp](SimpleGame/Camera.cpp), [Math3D.h](SimpleGame/Math3D.h))
+- **카메라**: yaw 45°/pitch 55° 고정 쿼터뷰 + 직교 투영, MVP 행렬 기반 렌더링. `Camera::SetFocus()`로 플레이어를 따라다님 ([Camera.h](SimpleGame/Camera.h)/[.cpp](SimpleGame/Camera.cpp), [Math3D.h](SimpleGame/Math3D.h)). 이 월드는 Z축이 높이이므로 yaw는 `RotateZ`로 회전시킴 — 이전엔 `RotateY`를 써서 높이가 화면 가로 위치에 섞여 들어가고 Y축 이동이 대각선으로 투영되지 않는 비대칭 왜곡이 있었음
 - **조작**: WASD 이동(델타타임 기반, 대각선 정규화, 월드 경계 클램프), E 상호작용(반경 내 가장 가까운 대상), 마우스 휠 줌(`0.25~4.0` 배율)
-- **월드**: 16×16 타일맵 — 마을(돌바닥) / 길(다진 흙길) / 호수(물, 전용 셰이더로 일렁임) / 숲(잔디+나무) ([TileMap.h](SimpleGame/TileMap.h)/[.cpp](SimpleGame/TileMap.cpp))
+- **월드**: 32×32 타일맵(면적 기준 4배로 확장, 기존 16×16) — 마을(돌바닥) / 길(다진 흙길) / 호수(물, 전용 셰이더로 일렁임) / 숲(잔디+나무) ([TileMap.h](SimpleGame/TileMap.h)/[.cpp](SimpleGame/TileMap.cpp)). 플레이어 이동 클램프(`kWorldHalfExtent`)와 카메라 최소 줌(0.25배로 32칸 전체를 화면에 담을 수 있음)도 맵 크기에 맞춰져 있음
 - **엔티티**: `GameObject`에 `EntityType`(Player/NPC/Item/Animal/Building/Prop/Water) 태그. 매 프레임 `(y+z)` 기준 정렬 후 페인터 알고리즘으로 그림 ([GameObject.h](SimpleGame/GameObject.h))
-- **캐릭터 렌더링**: Player/NPC/Animal은 몸통+머리+다리 여러 파츠로 조립해서 그림(`DrawCharacter`), 이동 중일 때 다리가 흔들리는 절차적 걷기 애니메이션 — 실제 스프라이트 이미지는 아직 없음(텍스처 에셋 없음)
+- **캐릭터 렌더링**: Player/NPC/Animal은 몸통+머리+팔+다리 파츠로 조립해서 그림(`DrawCharacter`). `GameObject::facing`(이동/공격 방향)을 기준으로 팔다리가 회전 배치되어 실제로 바라보는 방향을 알 수 있음. 이동 중엔 팔다리가 반대 위상으로 흔들리는 걷기 애니메이션 + 상하 바운스, 플레이어 공격(Space) 시 오른팔이 `facing` 방향으로 휘둘러지는 모션 재생 — 실제 스프라이트 이미지는 아직 없음(텍스처 에셋 없음). 사람(Player/NPC)은 옷 색(`obj.r/g/b`)과 무관하게 머리·팔은 고정 피부색, 다리는 고정 중립 바지색으로 통일해 파츠 구분이 단순하고 직관적으로 보이게 함 — 이전엔 옷 색의 명암 변형(예: `obj.r*0.6`)만 써서 파츠가 잘 구분되지 않았음. 짐승(Animal)은 지금도 몸통 색에서 파생된 밝은 머리/어두운 다리 톤(털 색 느낌) 유지. 예전엔 머리에 facing 방향을 가리키는 작은 "코" 돌기가 있었으나 시각적 잡음이라 판단해 제거함(이름표로 식별 가능해졌으므로)
 - **건물**: 벽+지붕 두 파츠로 조립(`DrawBuilding`), 색상으로 재질 구분(텍스처 매핑은 아직 없음)
 - **그림자**: 캐릭터/건물 발밑에 반투명 원형 그라데이션 블롭 섀도우 (`Renderer::DrawShadow`, `Shaders/Shadow.vs/.fs`) — 실시간 쉐도우맵은 아님
 - **물 이펙트**: 시간 기반 잔물결+반짝임 셰이더 (`Renderer::DrawWater`, `Shaders/Water.vs/.fs`)
 - **포스트프로세싱**: HDR(RGBA16F) 오프스크린 렌더 → 밝기 추출 → 가우시안 블러(블룸) → 톤매핑+비네트 합성 → 색보정(그림자/하이라이트 틴트)+필름 그레인, 4패스 파이프라인 ([PostProcess.h](SimpleGame/PostProcess.h)/[.cpp](SimpleGame/PostProcess.cpp), `Shaders/BrightExtract.fs`, `Shaders/Blur.fs`, `Shaders/Composite.fs`, `Shaders/Grade.fs`)
 - **공용 셰이더 유틸**: `Renderer`/`PostProcess`가 공유하는 셰이더 컴파일 로직을 [ShaderUtil.h](SimpleGame/ShaderUtil.h)/[.cpp](SimpleGame/ShaderUtil.cpp)로 분리
-- **튜토리얼 레벨**: 마을(장로+마을사람 7명)+숲(나무, 야생동물 3마리)+호수. 장로에게 말 걸기 → 호수 근처 퀘스트 아이템 습득 → 장로에게 전달 → 완료 시 플레이어가 빛나는 보상 효과. 콘솔(std::cout) 텍스트로 대사 출력 (화면 텍스트 UI는 아직 없음)
-- **랜덤 레벨 생성**: 마을/호수 위치·크기를 매 실행 무작위로 배치하고, 호수 때문에 갈 수 없는 영역이 생기면 BFS로 검증해 길(Path)을 뚫어 전체 맵이 항상 하나로 연결되도록 보장 ([LevelGenerator.h](SimpleGame/LevelGenerator.h)/[.cpp](SimpleGame/LevelGenerator.cpp))
-- **이동 충돌**: 플레이어는 물 타일 위로 이동할 수 없음(축별 슬라이딩 충돌), `TileMap::IsWorldPositionWalkable()`로 판정
-- **모델 캐싱**: 원/타원 등 절차적 메시를 생성해 `./Cache/*.mesh` 파일로 저장하고, 다음 실행부터는 파일에서 로딩만 함 ([Mesh.h](SimpleGame/Mesh.h)/[.cpp](SimpleGame/Mesh.cpp), [MeshCache.h](SimpleGame/MeshCache.h)/[.cpp](SimpleGame/MeshCache.cpp)) — 현재는 캐릭터 머리에 원형 메시 적용
+- **튜토리얼 레벨**: 마을(장로+마을사람 7명)+숲(나무 36그루, 야생동물 7마리: 사슴 4+늑대 3)+호수+아이템 9개(퀘스트 아이템 1+약초 8). 장로에게 말 걸기 → 호수 근처 퀘스트 아이템 습득 → 장로에게 전달 → 완료 시 플레이어가 빛나는 보상 효과. 콘솔(std::cout) 텍스트로 대사 출력 (대화창 같은 화면 내 텍스트 UI는 아직 없음)
+- **랜덤 레벨 생성**: 마을/호수 위치·크기를 매 실행 무작위로 배치하고(호수는 마을에서 6~10칸 거리), 호수 때문에 갈 수 없는 영역이 생기면 BFS로 검증해 길(Path)을 뚫어 전체 맵이 항상 하나로 연결되도록 보장 ([LevelGenerator.h](SimpleGame/LevelGenerator.h)/[.cpp](SimpleGame/LevelGenerator.cpp))
+- **이동 충돌**: 플레이어는 물 타일(`TileMap::IsWorldPositionWalkable()`) 위로도, 건물·나무 몸통(`IsBlockedByObstacle()`, 원-원 근사 판정)으로도 이동할 수 없음 — 둘 다 축별 슬라이딩 충돌이라 벽/물가에 붙어 미끄러지듯 이동함. 화면에 덩어리로 보이는 오브젝트는 실제로도 막히도록(시각-충돌 불일치 방지) 의도적으로 맞춤
+- **모델 캐싱**: 원/타원 등 절차적 메시를 생성해 `./Cache/*.mesh` 파일로 저장하고, 다음 실행부터는 파일에서 로딩만 함 ([Mesh.h](SimpleGame/Mesh.h)/[.cpp](SimpleGame/Mesh.cpp), [MeshCache.h](SimpleGame/MeshCache.h)/[.cpp](SimpleGame/MeshCache.cpp)) — 캐릭터 머리엔 원형 메시, 나무 수관·아이템엔 타원 메시 적용
+- **에셋 구성 원칙**: 모든 오브젝트는 사각형(`DrawObject`)/원·타원(`DrawMesh` + 캐시된 메시)의 조합으로만 구성 — 나무는 사각 기둥(몸통)+타원 두 겹(수관, 바람에 살짝 흔들림), 아이템(약초/퀘스트템)은 위아래로 떠다니는 작은 타원, 건물은 사각 벽+사각 지붕, 캐릭터는 사각 몸통·팔·다리+원형 머리 조합 ([SimpleGame.cpp](SimpleGame/SimpleGame.cpp)의 `DrawCharacter`/`DrawBuilding`/`DrawTree`/`DrawItem`)
 - **불 이펙트**: 횃불이 시간 기반으로 일렁이는 전용 셰이더로 렌더링 (`Renderer::DrawFire`, `Shaders/Fire.fs`, `EntityType::Fire`)
 - **전투/성장**: Space로 근접 공격, 야생 짐승 처치 시 경험치 획득, 레벨업 시 공격력/최대체력 상승(레벨1에서 즉시 적용). 약초 아이템 습득으로도 경험치 획득
-- 아직 없음: 실제 이미지 스프라이트/텍스처 파이프라인, 청크 스트리밍, 세이브/로드 파일, 축복(블레싱) 시스템 실제 구현, 화면 내 텍스트/대화 UI
+- **몬스터 AI**: 짐승은 `Animal::isAggressive`로 사슴(비공격, 배회만 함)과 늑대(공격형)를 구분. 늑대는 감지 반경(`kMonsterDetectRadius`) 안에 플레이어가 들어오면 추적을 시작해 직선으로 쫓아오고(`UpdateMonsterAI`, 물/건물/나무는 피해서 이동 — 우회 경로탐색은 아님), 공격 사거리에 닿으면 쿨다운마다 데미지를 입힘(`DamagePlayer`). 플레이어보다 느려서(2.3 vs 4.0) 도망칠 여지가 있고, 너무 멀어지거나(`kMonsterGiveUpRadius`) 자기 anchor에서 너무 벗어나면(`kMonsterLeashRadius`) 추적을 포기하고 배회로 복귀. 플레이어 체력이 0 이하가 되면 페널티 없이 마을 스폰 지점으로 리스폰(`RespawnPlayer`, 세이브/로드가 없는 프로토타입이라 단순하게 처리)
+- **콘솔 한글 출력**: `main()` 시작 시 `SetConsoleOutputCP`/`SetConsoleCP`(windows.h)로 콘솔 코드페이지를 UTF-8(65001)로 맞추고, 프로젝트 전체에 `/utf-8` 컴파일 옵션을 추가해 소스 인코딩(UTF-8)과 실행 문자셋을 일치시킴 — 이전엔 콘솔 로그의 한글이 깨졌음
+- **HUD**: 화면 왼쪽 위에 레벨 배지(원형 메시+숫자)·체력바(빨강)·경험치바(하늘색) 표시. 아직 폰트/텍스트 렌더링이 없어 숫자는 계산기 표시창처럼 사각형 세그먼트 조각(7세그먼트 방식)으로 그림. 월드 카메라와 별개인 화면 고정 좌표계(`Mat4::Ortho(0,800,0,600,...)`)를 써서 카메라 줌/회전이나 후처리(블룸 등)와 무관하게 항상 또렷하게 보이고, `PostProcess::EndCaptureAndPresent()` 이후(기본 프레임버퍼)에 그려서 후처리 영향을 받지 않음 (`DrawHUD`/`DrawBar`/`DrawDigit`/`DrawNumber`, [SimpleGame.cpp](SimpleGame/SimpleGame.cpp))
+- **전투 연출**: 짐승이 피격당하면 잠깐 하얗게 번쩍이는 히트플래시(`Animal::hitFlashTimer`), 플레이어가 몬스터에게 맞으면 붉게 번쩍임(`g_PlayerHitFlashTimer`, 동물의 흰색과 구분되는 톤). 플레이어 발밑엔 위치를 짚어주는 은은하게 펄스하는 타원 마커(`DrawPlayerMarker`)
+- **조준 하이라이트**: 공격 사거리 안에 짐승이 들어오면 발밑에 붉은 펄스 링, 상호작용 사거리 안에 NPC/아이템이 들어오면 하늘색 펄스 링이 표시됨(`DrawTargetHighlights`) — Space/E를 누르기 전에 "지금 뭐가 맞을지/상호작용될지"를 미리 보여줌. `FindNearestAttackTarget()`/`FindNearestInteractableIndex()`를 실제 `TryAttack()`/`TryInteract()`와 그대로 공유해서, 링이 보이면 반드시 그 판정이 성공하도록 보장
+- **이름표**: Player/NPC/Animal 머리 위에 영문 이름(Player/Elder/Villager/Deer/Wolf, `GameObject::name`)을 표시. 이 프로젝트엔 자체 폰트가 없어서 freeglut 내장 비트맵 폰트(`glutBitmapCharacter`, `GLUT_BITMAP_HELVETICA_10`)를 그대로 씀 — 셰이더가 아니라 레거시 고정기능 래스터 경로라 한글 글리프는 없음(그래서 영문 라벨만 가능). 화면 위치는 `Math3D.h`의 `TransformToNDC()`로 월드 좌표를 직접 NDC로 계산해 `glRasterPos`에 넘김(레거시 모델뷰/프로젝션 행렬을 이 프로젝트에서 전혀 건드리지 않아 항등행렬 상태이므로 가능). HUD와 마찬가지로 후처리 이후 기본 프레임버퍼에 그려서 블룸 등의 영향을 받지 않음(`DrawNameTags`)
+- 아직 없음: 실제 이미지 스프라이트/텍스처 파이프라인, 청크 스트리밍, 세이브/로드 파일, 축복(블레싱) 시스템 실제 구현, 화면 내 대화창 텍스트 UI(한글 다이얼로그는 여전히 콘솔 출력)
 
 이 항목들은 실제 구현이 진행될 때마다 이 섹션을 갱신합니다. (문서만 보고 "아직 구현 안 됨"으로 오해하지 않도록, 이 절이 항상 최신 상태를 반영해야 함)
 
@@ -94,6 +101,7 @@
 - 클래스/함수/메서드: PascalCase (`Renderer`, `DrawObject`, `GenerateVillageLevel`)
 - 멤버 변수: `m_` 접두사 (`m_Width`), 전역 변수: `g_` 접두사 (`g_Player`), 상수: `k` 접두사 (`kInteractElder`)
 - 들여쓰기는 탭(tab) 사용, 중괄호는 다음 줄에 (Allman 스타일)
+- 함수/블록 내부에서도 의미 단위가 바뀌는 지점(변수 선언부 이후, 반복문/조건 분기 앞뒤 등)에는 빈 줄을 넣어 가독성을 확보
 - 주석/로그/콘솔 출력 문자열은 한글로 작성 (원본 라이선스 헤더 등 법적 텍스트는 예외)
 - 셰이더 컴파일처럼 여러 클래스가 공유하는 로직은 `ShaderUtil` 같은 네임스페이스 유틸로 분리
 - 파일 하나에만 쓰이는 헬퍼 함수/상수는 `namespace { ... }` (익명 네임스페이스)로 감싸서 외부 노출을 막음
