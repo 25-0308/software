@@ -162,8 +162,20 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Camera.h" />
-    <ClInclude Include="GameObject.h" />
+    <ClInclude Include="Actor.h" />
+    <ClInclude Include="Bounds.h" />
+    <ClInclude Include="ChatWindow.h" />
+    <ClInclude Include="CharacterActors.h" />
+    <ClInclude Include="DrawCallHook.h" />
+    <ClInclude Include="GameLog.h" />
+    <ClInclude Include="Hud.h" />
+    <ClInclude Include="LevelBuilder.h" />
     <ClInclude Include="LevelGenerator.h" />
+    <ClInclude Include="MiniMap.h" />
+    <ClInclude Include="SceneGraph.h" />
+    <ClInclude Include="Shapes.h" />
+    <ClInclude Include="TextRasterizer.h" />
+    <ClInclude Include="WorldActors.h" />
     <ClInclude Include="Math3D.h" />
     <ClInclude Include="Mesh.h" />
     <ClInclude Include="MeshCache.h" />
@@ -175,8 +187,20 @@
     <ClInclude Include="targetver.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="Actor.cpp" />
     <ClCompile Include="Camera.cpp" />
+    <ClCompile Include="ChatWindow.cpp" />
+    <ClCompile Include="CharacterActors.cpp" />
+    <ClCompile Include="DrawCallHook.cpp" />
+    <ClCompile Include="GameLog.cpp" />
+    <ClCompile Include="Hud.cpp" />
+    <ClCompile Include="LevelBuilder.cpp" />
     <ClCompile Include="LevelGenerator.cpp" />
+    <ClCompile Include="MiniMap.cpp" />
+    <ClCompile Include="SceneGraph.cpp" />
+    <ClCompile Include="Shapes.cpp" />
+    <ClCompile Include="TextRasterizer.cpp" />
+    <ClCompile Include="WorldActors.cpp" />
     <ClCompile Include="Mesh.cpp" />
     <ClCompile Include="MeshCache.cpp" />
     <ClCompile Include="PostProcess.cpp" />
@@ -204,6 +228,8 @@
     <None Include="Shaders\Water.vs" />
     <None Include="Shaders\Water.fs" />
     <None Include="Shaders\Fire.fs" />
+    <None Include="Shaders\Text.vs" />
+    <None Include="Shaders\Text.fs" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

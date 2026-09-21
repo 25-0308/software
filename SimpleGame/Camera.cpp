@@ -28,7 +28,22 @@ Mat4 Camera::GetViewProjection() const
 	Mat4 view = Mat4::RotateX(kPitchRadians) * Mat4::RotateZ(kYawRadians) * Mat4::Translate(-m_FocusX, -m_FocusY, -m_FocusZ);
 	Mat4 projection = Mat4::Ortho(-halfWidth, halfWidth, -halfHeight, halfHeight, -1000.f, 1000.f);
 
-	return projection * view;
+	// 좌우/상하 반전: 투영이 끝난 NDC의 x, y 부호를 뒤집는다(z는 그대로라서 깊이는 변함 없음).
+	// 화면 중심(=포커스)을 기준으로 뒤집히므로 플레이어는 계속 화면 가운데에 있다.
+	Mat4 flip = Mat4::Scale(m_FlipHorizontal ? -1.f : 1.f, m_FlipVertical ? -1.f : 1.f, 1.f);
+
+	return flip * projection * view;
+}
+
+void Camera::SetFlip(bool horizontal, bool vertical)
+{
+	m_FlipHorizontal = horizontal;
+	m_FlipVertical = vertical;
+}
+
+float Camera::GetYawRadians() const
+{
+	return kYawRadians;
 }
 
 void Camera::SetFocus(float x, float y, float z)

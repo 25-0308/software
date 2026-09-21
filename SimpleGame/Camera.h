@@ -19,10 +19,23 @@ public:
 	// 호출하면 카메라가 플레이어를 따라간다.
 	void SetFocus(float x, float y, float z);
 
+	// 화면 이미지를 좌우(horizontal) / 상하(vertical)로 뒤집는다. 투영 뒤의 NDC x, y 부호만
+	// 바꾸므로 카메라가 보는 방향은 그대로다 — 보이는 면, 깊이 순서(앞뒤), 컬링 판정은 그대로이고
+	// 그려진 그림만 뒤집힌다. 둘 다 켜면 그림이 180도 돌아간 것과 같다(월드의 위쪽이 화면 아래로 향함).
+	void SetFlip(bool horizontal, bool vertical);
+	bool IsFlippedHorizontally() const { return m_FlipHorizontal; }
+	bool IsFlippedVertically() const { return m_FlipVertical; }
+
+	// 지면을 회전시키는 yaw(라디안). 미니맵처럼 "카메라와 같은 방향으로 놓인 지도"를 그릴 때 쓴다.
+	float GetYawRadians() const;
+
 private:
 	float m_ViewWidth;
 	float m_ViewHeight;
 	float m_Zoom;
+
+	bool m_FlipHorizontal = false;
+	bool m_FlipVertical = false;
 
 	float m_FocusX = 0.f;
 	float m_FocusY = 0.f;
