@@ -3,12 +3,41 @@
 
 #include <cmath>
 #include <random>
+#include <vector>
 
 #include "CharacterActors.h"
+#include "Renderer.h"
 #include "WorldActors.h"
 
 namespace
 {
+	// 타일 하나(중심 cx,cy, 높이 z)를 배치 정점 목록에 사각형(삼각형 2개, 6정점)으로 추가한다.
+	// Renderer::kTileBatchFloatsPerVertex(월드좌표3+로컬좌표2+색4=9) 형식에 맞춘다. 정점 순서와
+	// 로컬(-0.5~0.5) 오프셋은 Renderer가 예전에 쓰던 단위 사각형과 동일하다.
+	void AppendTileQuad(std::vector<float>& out, float cx, float cy, float z, float r, float g, float b, float a)
+	{
+		const float offsets[6][2] =
+		{
+			{ -0.5f, -0.5f }, { -0.5f, 0.5f }, { 0.5f, 0.5f },
+			{ -0.5f, -0.5f }, { 0.5f, 0.5f }, { 0.5f, -0.5f },
+		};
+
+		for (int i = 0; i < 6; ++i)
+		{
+			float lx = offsets[i][0];
+			float ly = offsets[i][1];
+			out.push_back(cx + lx);
+			out.push_back(cy + ly);
+			out.push_back(z);
+			out.push_back(lx);
+			out.push_back(ly);
+			out.push_back(r);
+			out.push_back(g);
+			out.push_back(b);
+			out.push_back(a);
+		}
+	}
+
 	// 약초(획득 아이템) 하나를 (x, y)에 생성한다.
 	void SpawnHerb(SceneGraph& scene, float x, float y)
 	{
@@ -31,11 +60,16 @@ namespace
 	}
 }
 
-void SpawnTileActors(SceneGraph& scene, const TileMap& tileMap)
+void SpawnTileActors(SceneGraph& scene, Renderer& renderer, const TileMap& tileMap)
 {
-	// 타일을 8x8칸씩 그룹 노드(청크) 밑에 묶는다. 그룹이 자손 64칸을 감싸는 경계 구를 캐시하므로,
-	// 화면 밖 청크는 검사 한 번으로 타일 64개를 통째로 건너뛴다(뷰 컬링).
+	// 타일을 8x8칸씩 청크로 나누고, 청크마다 정점 색상 메시 하나(지형용, 물이 있으면 물용까지
+	// 최대 2개)로 구워서 드로우콜 1~2번으로 그린다. 예전엔 타일 하나하나가 독립된 액터라 청크
+	// 하나(최대 64칸)를 그리는 데 드로우콜이 최대 64번 나갔는데, 32x32=1024칸 전체가 화면에
+	// 걸리면 그것만으로 드로우콜 1024번이 나가는 게 성능 분석에서 가장 큰 병목으로 확인되어
+	// 이 방식으로 바꿨다. 배치 액터의 위치/경계 구는 청크 범위를 그대로 써서, 화면 밖 청크는
+	// 여전히 검사 한 번으로 통째로 건너뛴다(뷰 컬링 — 이전과 동일한 이점).
 	const int kChunkSize = 8;
+	const float kTileZ = -0.5f;
 
 	int width = tileMap.GetWidth();
 	int height = tileMap.GetHeight();
@@ -47,18 +81,16 @@ void SpawnTileActors(SceneGraph& scene, const TileMap& tileMap)
 			int endX = (chunkX + kChunkSize < width) ? chunkX + kChunkSize : width;
 			int endY = (chunkY + kChunkSize < height) ? chunkY + kChunkSize : height;
 
-			// 청크 노드는 청크 한가운데에 두고, 타일은 그 기준의 로컬 좌표로 붙인다
-			// (월드 위치는 부모 이동을 상속해서 얻는다).
-			float centerX = (tileMap.GetWorldX(chunkX) + tileMap.GetWorldX(endX - 1)) * 0.5f;
-			float centerY = (tileMap.GetWorldY(chunkY) + tileMap.GetWorldY(endY - 1)) * 0.5f;
-
-			Actor* chunk = scene.Spawn<Actor>(ActorType::Group);
-			chunk->SetPosition(centerX, centerY, 0.f);
+			std::vector<float> solidVertices;
+			std::vector<float> waterVertices;
 
 			for (int gy = chunkY; gy < endY; ++gy)
 			{
 				for (int gx = chunkX; gx < endX; ++gx)
 				{
+					float wx = tileMap.GetWorldX(gx);
+					float wy = tileMap.GetWorldY(gy);
+
 					float r, g, b;
 					bool isWater = false;
 					switch (tileMap.GetTile(gx, gy))
@@ -69,10 +101,34 @@ void SpawnTileActors(SceneGraph& scene, const TileMap& tileMap)
 					default:              r = 0.18f; g = 0.32f; b = 0.16f; break; // 잔디
 					}
 
-					float localX = tileMap.GetWorldX(gx) - centerX;
-					float localY = tileMap.GetWorldY(gy) - centerY;
-					chunk->AddChild(std::unique_ptr<Actor>(new TileActor(localX, localY, r, g, b, isWater)));
+					AppendTileQuad(isWater ? waterVertices : solidVertices, wx, wy, kTileZ, r, g, b, 1.f);
 				}
+			}
+
+			// 청크 중심과, 중심에서 청크 모서리까지의 반지름(대각선의 절반 + 약간의 여유).
+			float centerX = (tileMap.GetWorldX(chunkX) + tileMap.GetWorldX(endX - 1)) * 0.5f;
+			float centerY = (tileMap.GetWorldY(chunkY) + tileMap.GetWorldY(endY - 1)) * 0.5f;
+			float tilesWide = (float)(endX - chunkX);
+			float tilesHigh = (float)(endY - chunkY);
+			float chunkRadius = sqrtf(tilesWide * tilesWide + tilesHigh * tilesHigh) * 0.5f + 0.1f;
+
+			// 배치 액터의 정점은 이미 월드 좌표로 구워져 있어서(AppendTileQuad) 그리기 자체엔
+			// 위치가 안 쓰이지만, 뷰 컬링은 액터의 월드 위치+경계 구로 판정하므로 여기서
+			// 청크 위치를 정확히 지정해 둬야 한다.
+			if (!solidVertices.empty())
+			{
+				TileBatchActor* solidBatch = scene.Spawn<TileBatchActor>(false);
+				solidBatch->SetPosition(centerX, centerY, kTileZ);
+				solidBatch->SetBoundingSphere(chunkRadius);
+				solidBatch->Build(renderer, solidVertices);
+			}
+
+			if (!waterVertices.empty())
+			{
+				TileBatchActor* waterBatch = scene.Spawn<TileBatchActor>(true);
+				waterBatch->SetPosition(centerX, centerY, kTileZ);
+				waterBatch->SetBoundingSphere(chunkRadius);
+				waterBatch->Build(renderer, waterVertices);
 			}
 		}
 	}

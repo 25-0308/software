@@ -177,6 +177,7 @@
     <ClInclude Include="TextRasterizer.h" />
     <ClInclude Include="WorldActors.h" />
     <ClInclude Include="Math3D.h" />
+    <ClInclude Include="Profiler.h" />
     <ClInclude Include="Mesh.h" />
     <ClInclude Include="MeshCache.h" />
     <ClInclude Include="PostProcess.h" />
@@ -203,6 +204,7 @@
     <ClCompile Include="WorldActors.cpp" />
     <ClCompile Include="Mesh.cpp" />
     <ClCompile Include="MeshCache.cpp" />
+    <ClCompile Include="Profiler.cpp" />
     <ClCompile Include="PostProcess.cpp" />
     <ClCompile Include="Renderer.cpp" />
     <ClCompile Include="ShaderUtil.cpp" />
@@ -225,9 +227,10 @@
     <None Include="Shaders\Grade.fs" />
     <None Include="Shaders\Shadow.vs" />
     <None Include="Shaders\Shadow.fs" />
-    <None Include="Shaders\Water.vs" />
-    <None Include="Shaders\Water.fs" />
     <None Include="Shaders\Fire.fs" />
+    <None Include="Shaders\TileBatch.vs" />
+    <None Include="Shaders\TileBatchSolid.fs" />
+    <None Include="Shaders\TileBatchWater.fs" />
     <None Include="Shaders\Text.vs" />
     <None Include="Shaders\Text.fs" />
   </ItemGroup>

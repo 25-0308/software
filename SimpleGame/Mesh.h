@@ -10,10 +10,12 @@ struct MeshData
 	GLenum primitiveType = GL_TRIANGLES;
 };
 
-// GPU에 업로드된 메시에 대한 핸들.
+// GPU에 업로드된 메시에 대한 핸들. vao는 정점 속성 설정을 미리 담아 둔 것으로,
+// Renderer::CreateMesh가 만들 때 한 번만 설정해서 그리기 직전마다 다시 설정할 필요가 없다.
 struct MeshHandle
 {
 	GLuint vbo = 0;
+	GLuint vao = 0;
 	int vertexCount = 0;
 	GLenum primitiveType = GL_TRIANGLES;
 };

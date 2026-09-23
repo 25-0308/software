@@ -3,34 +3,42 @@
 
 #include <cmath>
 
-#include "Renderer.h"
 #include "Shapes.h"
 
-// ---------------------------------------------------------------- TileActor
+// ------------------------------------------------------------ TileBatchActor
 
-TileActor::TileActor(float x, float y, float r, float g, float b, bool isWater)
-	: Actor(isWater ? ActorType::Water : ActorType::Tile, RenderLayer::Ground)
+TileBatchActor::TileBatchActor(bool isWater)
+	: Actor(ActorType::TileBatch, RenderLayer::Ground)
+	, m_IsWater(isWater)
 {
-	SetPosition(x, y, -0.5f);
-	SetColor(r, g, b);
-
-	// 1x1 타일의 반대각선 절반(약 0.71)을 감싸는 구.
-	SetBoundingSphere(0.75f);
 }
 
-void TileActor::OnRender(const RenderContext& ctx)
+TileBatchActor::~TileBatchActor()
 {
-	Mat4 model = Mat4::Translate(GetWorldX(), GetWorldY(), GetWorldZ()) * Mat4::Scale(GetSize(), GetSize(), GetSize());
-	Mat4 mvp = ctx.viewProjection * model;
-
-	if (GetType() == ActorType::Water)
+	if (m_Renderer != nullptr)
 	{
-		float phase = GetWorldX() * 1.7f + GetWorldY() * 2.3f;
-		ctx.renderer.DrawWater(mvp, GetR(), GetG(), GetB(), GetA(), ctx.time, phase);
+		m_Renderer->DestroyTileBatch(m_Batch);
+	}
+}
+
+void TileBatchActor::Build(Renderer& renderer, const std::vector<float>& vertices)
+{
+	m_Renderer = &renderer;
+	int vertexCount = (int)(vertices.size() / Renderer::kTileBatchFloatsPerVertex);
+	m_Batch = renderer.CreateTileBatch(vertices.data(), vertexCount);
+}
+
+void TileBatchActor::OnRender(const RenderContext& ctx)
+{
+	// 정점이 이미 월드 좌표로 구워져 있어서(LevelBuilder 참고) 오브젝트별 모델 행렬이 필요
+	// 없다 — 카메라의 view-projection만 곱하면 된다.
+	if (m_IsWater)
+	{
+		ctx.renderer.DrawTileBatchWater(m_Batch, ctx.viewProjection, ctx.time);
 	}
 	else
 	{
-		ctx.renderer.DrawObject(mvp, GetR(), GetG(), GetB(), GetA());
+		ctx.renderer.DrawTileBatchSolid(m_Batch, ctx.viewProjection);
 	}
 }
 

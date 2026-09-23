@@ -34,6 +34,7 @@ but WITHOUT ANY WARRANTY.
 #include "MeshCache.h"
 #include "MiniMap.h"
 #include "PostProcess.h"
+#include "Profiler.h"
 #include "Renderer.h"
 #include "SceneGraph.h"
 #include "TileMap.h"
@@ -257,32 +258,57 @@ void RenderScene(void)
 	RenderContext renderContext = { *g_Renderer, viewProjection, g_ElapsedSeconds, g_CircleMesh, g_EllipseMesh };
 	g_Scene->Render(renderContext);
 
-	g_PostProcess->EndCaptureAndPresent(g_Exposure, g_VignetteStrength, g_BloomThreshold, g_BloomIntensity, g_ElapsedSeconds);
+	{
+		Profiler::ScopedTimer timer(Profiler::Section::PostProcess);
+		g_PostProcess->EndCaptureAndPresent(g_Exposure, g_VignetteStrength, g_BloomThreshold, g_BloomIntensity, g_ElapsedSeconds);
+	}
 
 	// HUD/이름표는 후처리(블룸/비네트/그레인)가 이미 끝난 기본 프레임버퍼 위에
 	// 그대로 덧그려서, 화면 흔들림/줌/색보정의 영향을 받지 않고 항상 또렷하게
 	// 보이게 한다.
-	Hud::DrawNameTags(*g_Scene, viewProjection);
-	// 쿨타임이 얼마나 충전됐는지(1이면 바로 행동 가능)를 HUD 막대로 보여준다.
-	float actionReadiness = (g_ActionCooldown > 0.f) ? 1.f - g_ActionCooldown / kActionCooldownSeconds : 1.f;
-	Hud::DrawStatus(*g_Renderer, g_CircleMesh, g_Player->GetStats(), actionReadiness);
+	{
+		// 이름표는 레거시 glRasterPos/glutBitmapCharacter 경로라 드로우콜 카운터엔 안
+		// 잡히지만 실제 비용은 있으므로, 여기서 따로 재서 눈에 보이게 한다.
+		Profiler::ScopedTimer timer(Profiler::Section::NameTags);
+		Hud::DrawNameTags(*g_Scene, viewProjection);
+	}
+	{
+		Profiler::ScopedTimer timer(Profiler::Section::Hud);
+		// 쿨타임이 얼마나 충전됐는지(1이면 바로 행동 가능)를 HUD 막대로 보여준다.
+		float actionReadiness = (g_ActionCooldown > 0.f) ? 1.f - g_ActionCooldown / kActionCooldownSeconds : 1.f;
+		Hud::DrawStatus(*g_Renderer, g_CircleMesh, g_Player->GetStats(), actionReadiness);
+	}
 
-	// 오른쪽 위 미니맵도 HUD처럼 후처리 이후 화면 고정 좌표계로 그린다.
-	g_MiniMap->Draw(*g_Renderer, *g_Scene, *g_TileMap, *g_Camera);
+	{
+		// 오른쪽 위 미니맵도 HUD처럼 후처리 이후 화면 고정 좌표계로 그린다.
+		Profiler::ScopedTimer timer(Profiler::Section::MiniMap);
+		g_MiniMap->Draw(*g_Renderer, *g_Scene, *g_TileMap, *g_Camera);
+	}
 
-	// 왼쪽 아래 채팅창(NPC 대사와 전투/보상/알림 로그). 3초가 지나면 각 줄이 사라진다.
-	g_ChatWindow->Draw(*g_Renderer);
+	{
+		// 왼쪽 아래 채팅창(NPC 대사와 전투/보상/알림 로그). 3초가 지나면 각 줄이 사라진다.
+		Profiler::ScopedTimer timer(Profiler::Section::ChatWindow);
+		g_ChatWindow->Draw(*g_Renderer);
+	}
 
-	glutSwapBuffers();
+	{
+		// 수직동기화가 켜져 있으면 다음 화면 갱신 시점까지 여기서 기다리므로, 이 구간이
+		// 유난히 크게 나온다고 해서 우리 코드가 그만큼 느린 건 아닐 수 있다(구간 이름에
+		// 그 가능성을 남겨 둔 이유).
+		Profiler::ScopedTimer timer(Profiler::Section::Present);
+		glutSwapBuffers();
+	}
 
 	// 이 프레임에서 센 드로우 콜 수와 씬의 컬링 결과를 집계하고, 정해진 간격마다
-	// 콘솔에 출력한다.
+	// 콘솔에 출력한다. 같은 note를 프로파일러 보고 줄에도 그대로 붙여서, 두 로그를
+	// 따로 짜맞추지 않아도 한 줄만 봐도 맥락이 보이게 한다.
 	const SceneRenderStats& sceneStats = g_Scene->GetLastRenderStats();
 	char note[128];
 	snprintf(note, sizeof(note), "씬 액터 %u개 중 %u개 렌더, %u개 컬링 (컬링 %s)",
 		sceneStats.totalActors, sceneStats.renderedActors, sceneStats.culledActors,
 		g_Scene->IsCullingEnabled() ? "켬" : "끔");
 	DrawCallHook::EndFrame(note);
+	Profiler::EndFrame(note);
 }
 
 void Update(float deltaSeconds)
@@ -298,35 +324,49 @@ void Update(float deltaSeconds)
 		}
 	}
 
-	// 좌우(A/D) 이동 입력을 반대로 뒤집는다: A는 월드 +x, D는 월드 -x 방향으로 간다. 카메라 화면을
-	// 좌우/상하 반전한 상태에서 A가 화면 왼쪽, D가 화면 오른쪽으로 가도록 맞춘 것이다. 원래대로
-	// 되돌리려면 kInvertHorizontalInput을 false로 바꾼다. (W/S는 그대로)
+	// 좌우(A/D)와 상하(W/S) 이동 입력을 모두 반대로 뒤집는다: A는 월드 +x, D는 월드 -x,
+	// W는 월드 -y, S는 월드 +y 방향으로 간다. 카메라 화면을 좌우/상하 반전한 상태에서
+	// 키를 눌렀을 때 화면에 보이는 방향과 실제로 맞도록 맞춘 것이다. 원래대로 되돌리려면
+	// 각각 false로 바꾼다.
 	const bool kInvertHorizontalInput = true;
+	const bool kInvertVerticalInput = true;
 	float horizontalStep = kInvertHorizontalInput ? -1.f : 1.f;
+	float verticalStep = kInvertVerticalInput ? -1.f : 1.f;
 
 	float moveX = 0.f, moveY = 0.f;
-	if (g_KeyW) moveY += 1.f;
-	if (g_KeyS) moveY -= 1.f;
+	if (g_KeyW) moveY += verticalStep;
+	if (g_KeyS) moveY -= verticalStep;
 	if (g_KeyA) moveX -= horizontalStep;
 	if (g_KeyD) moveX += horizontalStep;
 	g_Player->SetMoveInput(moveX, moveY);
 
-	// 플레이어 이동, 짐승 AI, 애니메이션 타이머 등 모든 액터 갱신은 씬 그래프가 한다.
-	g_Scene->Update(deltaSeconds, g_ElapsedSeconds, *g_TileMap);
+	{
+		Profiler::ScopedTimer timer(Profiler::Section::Update);
 
-	// 파괴 예약된 액터가 정리된 뒤에, 지금 Space/E를 누르면 뭐가 맞을지/
-	// 상호작용될지 미리 보여주는 조준 링의 대상을 갱신한다.
-	g_AttackRing->SetTarget(FindNearestAttackTarget());
-	g_InteractRing->SetTarget(FindNearestInteractable());
+		// 플레이어 이동, 짐승 AI, 애니메이션 타이머 등 모든 액터 갱신은 씬 그래프가 한다.
+		g_Scene->Update(deltaSeconds, g_ElapsedSeconds, *g_TileMap);
 
-	// 이번 프레임까지 쌓인 메시지를 채팅창에 올리고, 시간이 지난 줄을 지운다.
-	g_ChatWindow->Update(deltaSeconds);
+		// 파괴 예약된 액터가 정리된 뒤에, 지금 Space/E를 누르면 뭐가 맞을지/
+		// 상호작용될지 미리 보여주는 조준 링의 대상을 갱신한다.
+		g_AttackRing->SetTarget(FindNearestAttackTarget());
+		g_InteractRing->SetTarget(FindNearestInteractable());
+	}
+
+	{
+		// 채팅 메시지가 몰리면 GDI로 텍스처를 새로 굽는 비용이 튈 수 있어서 따로 잰다.
+		Profiler::ScopedTimer timer(Profiler::Section::ChatWindow);
+		g_ChatWindow->Update(deltaSeconds);
+	}
 
 	g_Camera->SetFocus(g_Player->GetWorldX(), g_Player->GetWorldY(), 0.f);
 }
 
 void Idle(void)
 {
+	// 이번 프레임의 프로파일러 구간별 누적치를 0으로 돌린다. Update()/RenderScene() 안의
+	// ScopedTimer들이 여기부터 EndFrame까지의 구간을 잰다.
+	Profiler::BeginFrame();
+
 	std::chrono::steady_clock::time_point now = std::chrono::steady_clock::now();
 	float deltaSeconds = std::chrono::duration<float>(now - g_LastFrameTime).count();
 	g_LastFrameTime = now;
@@ -437,7 +477,7 @@ int main(int argc, char **argv)
 
 	// 화면에 배치되는 모든 것을 액터로 만들어 씬 그래프에 올린다.
 	g_Scene = new SceneGraph();
-	SpawnTileActors(*g_Scene, *g_TileMap);
+	SpawnTileActors(*g_Scene, *g_Renderer, *g_TileMap);
 	LevelActors level = SpawnLevelActors(*g_Scene, layout);
 	g_Player = level.player;
 	g_AttackRing = level.attackRing;

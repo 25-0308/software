@@ -1,6 +1,6 @@
 #version 330
 
-in vec3 a_Position;
+layout(location = 0) in vec3 a_Position; // 다른 셰이더와 위치를 통일해 VAO를 공유(SolidRect.vs 주석 참고)
 uniform mat4 u_MVP;
 
 out vec2 v_UV;

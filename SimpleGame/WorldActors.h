@@ -1,14 +1,32 @@
 #pragma once
 
-#include "Actor.h"
+#include <vector>
 
-// 바닥 타일 한 칸. 물 타일은 시간에 따라 일렁이는 전용 셰이더로 그린다.
-class TileActor : public Actor
+#include "Actor.h"
+#include "Renderer.h"
+
+// 청크 하나(예: 8x8칸)의 정적 바닥 타일들을 정점 색상 메시 하나로 구워서 드로우콜 1번에
+// 그리는 배치. 예전엔 타일 하나하나가 독립된 액터(1칸=드로우콜 1번)였는데, 32x32=1024칸
+// 전체가 화면에 걸리면 그것만으로 드로우콜 1024번이 나가는 게 성능 분석에서 가장 큰
+// 병목으로 확인되어 이 방식으로 바꿨다. 물 타일은 시간 기반 잔물결 셰이더가 필요해서
+// 일반 지형과는 별도의 배치로 나눈다(청크당 최대 2개: 지형 1개 + 물 1개).
+class TileBatchActor : public Actor
 {
 public:
-	TileActor(float x, float y, float r, float g, float b, bool isWater);
+	explicit TileBatchActor(bool isWater);
+	~TileBatchActor() override;
+
+	// vertices는 Renderer::kTileBatchFloatsPerVertex(9: 월드좌표3+타일 내부 로컬좌표2+색4)
+	// 단위로 채워진 정점 목록이고, 위치는 이미 월드 좌표로 구워져 있다(LevelBuilder가 채움).
+	// 액터를 만든 직후 딱 한 번만 부른다.
+	void Build(Renderer& renderer, const std::vector<float>& vertices);
 
 	void OnRender(const RenderContext& ctx) override;
+
+private:
+	bool m_IsWater;
+	Renderer* m_Renderer = nullptr; // 소멸자에서 GPU 버퍼를 정리하려고 Build 시점에 기억해 둠
+	Renderer::TileBatchHandle m_Batch;
 };
 
 // 나무: 원기둥 줄기 + 세운 타원 수관(큰 타원 + 밝은 하이라이트 타원, 바람에 살짝 흔들림).

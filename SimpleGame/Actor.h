@@ -13,17 +13,16 @@ class TileMap;
 
 enum class ActorType
 {
-	Group,    // 자식들을 묶기만 하는 빈 노드 (씬 그래프의 루트 등)
-	Tile,     // 바닥 타일
-	Water,    // 물 타일 (렌더링 시 물 셰이더로 분기)
-	Prop,     // 나무 같은 장식/장애물
-	Building, // 건물
-	Item,     // 획득 가능한 아이템
-	Fire,     // 횃불 (렌더링 시 불 셰이더로 분기)
-	Marker,   // 발밑 링 같은 바닥 표시
+	Group,     // 자식들을 묶기만 하는 빈 노드 (씬 그래프의 루트 등)
+	TileBatch, // 청크 하나(예: 8x8칸)의 바닥 타일들을 정점 색상 메시 하나로 구워 그리는 배치
+	Prop,      // 나무 같은 장식/장애물
+	Building,  // 건물
+	Item,      // 획득 가능한 아이템
+	Fire,      // 횃불 (렌더링 시 불 셰이더로 분기)
+	Marker,    // 발밑 링 같은 바닥 표시
 	Player,
 	NPC,
-	Animal,   // 야생 짐승 (사슴/늑대)
+	Animal,    // 야생 짐승 (사슴/늑대)
 };
 
 // 그리기 순서 그룹. 씬 그래프는 Ground → Decal → Object 순서로 그리고,

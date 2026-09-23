@@ -4,6 +4,8 @@
 #include <algorithm>
 #include <cmath>
 
+#include "Profiler.h"
+
 namespace
 {
 	// 뷰 볼륨에 걸치는 액터만 레이어별로 모은다. 경계 계층 덕분에, 자신과 자손 전체가 화면 밖인
@@ -158,42 +160,57 @@ void SceneGraph::Render(const RenderContext& ctx)
 	SceneRenderStats stats;
 	stats.totalActors = m_Root->GetSubtreeRenderableCount();
 
-	std::vector<Actor*> ground;
-	std::vector<Actor*> decal;
-	std::vector<Actor*> objects;
-	CollectVisible(*m_Root, view, m_CullingEnabled, stats, ground, decal, objects);
+	// m_RenderGround/Decal/Objects는 SceneGraph가 계속 들고 있는 멤버라(Render()의 지역
+	// 변수가 아님), 매 프레임 clear()만 하고 용량은 그대로 재사용한다 — 예전엔 프레임마다
+	// 새로 만들어서(특히 타일 배치로 바꾸기 전엔 최대 1024개까지) 재할당이 반복됐었다.
+	m_RenderGround.clear();
+	m_RenderDecal.clear();
+	m_RenderObjects.clear();
+	CollectVisible(*m_Root, view, m_CullingEnabled, stats, m_RenderGround, m_RenderDecal, m_RenderObjects);
 
 	m_LastStats = stats;
 
-	for (Actor* actor : ground)
 	{
-		actor->OnRender(ctx);
+		Profiler::ScopedTimer timer(Profiler::Section::RenderGround);
+		for (Actor* actor : m_RenderGround)
+		{
+			actor->OnRender(ctx);
+		}
 	}
-	for (Actor* actor : decal)
 	{
-		actor->OnRender(ctx);
+		Profiler::ScopedTimer timer(Profiler::Section::RenderDecal);
+		for (Actor* actor : m_RenderDecal)
+		{
+			actor->OnRender(ctx);
+		}
 	}
 
 	// 이 씬은 2.5D이고 실제 3D 깊이버퍼가 아니므로, 월드 깊이(y + z) 기준으로
 	// 정렬한 뒤 뒤에서 앞 순서로 그린다 (페인터 알고리즘). 컬링 후에 정렬하므로
 	// 화면 밖 액터는 정렬 비용도 들지 않는다.
-	std::stable_sort(objects.begin(), objects.end(), [](const Actor* lhs, const Actor* rhs)
+	std::stable_sort(m_RenderObjects.begin(), m_RenderObjects.end(), [](const Actor* lhs, const Actor* rhs)
 	{
 		return (lhs->GetWorldY() + lhs->GetWorldZ()) < (rhs->GetWorldY() + rhs->GetWorldZ());
 	});
 
-	// 그림자를 먼저 그려 캐릭터/건물 발밑에 깔리도록 한다.
-	for (Actor* actor : objects)
 	{
-		if (actor->CastsShadow())
+		// 그림자를 먼저 그려 캐릭터/건물 발밑에 깔리도록 한다.
+		Profiler::ScopedTimer timer(Profiler::Section::RenderShadow);
+		for (Actor* actor : m_RenderObjects)
 		{
-			actor->OnRenderShadow(ctx);
+			if (actor->CastsShadow())
+			{
+				actor->OnRenderShadow(ctx);
+			}
 		}
 	}
 
-	for (Actor* actor : objects)
 	{
-		actor->OnRender(ctx);
+		Profiler::ScopedTimer timer(Profiler::Section::RenderObject);
+		for (Actor* actor : m_RenderObjects)
+		{
+			actor->OnRender(ctx);
+		}
 	}
 }
 

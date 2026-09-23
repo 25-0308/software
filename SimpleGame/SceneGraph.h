@@ -77,4 +77,12 @@ private:
 
 	bool m_CullingEnabled = true;
 	SceneRenderStats m_LastStats;
+
+	// Render()가 매 프레임 쓰는 작업용 목록들. 함수 지역 변수로 두면 프레임마다 새로
+	// 할당되고(성능 분석에서 확인된 문제 중 하나), 특히 ground는 타일 배치로 바꾸기 전엔
+	// 최대 1024개까지 채워졌었다. 멤버로 옮기고 매 프레임 clear()만 해서(용량은 유지) 이
+	// 재할당을 없앤다.
+	std::vector<Actor*> m_RenderGround;
+	std::vector<Actor*> m_RenderDecal;
+	std::vector<Actor*> m_RenderObjects;
 };

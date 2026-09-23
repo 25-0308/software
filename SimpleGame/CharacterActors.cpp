@@ -7,6 +7,7 @@
 #include "GameLog.h"
 #include "Renderer.h"
 #include "SceneGraph.h"
+#include "Shapes.h"
 #include "TileMap.h"
 
 namespace
@@ -121,38 +122,56 @@ void CharacterActor::OnRender(const RenderContext& ctx)
 	float legG = m_IsHumanoid ? kPantsG : (g * 0.6f);
 	float legB = m_IsHumanoid ? kPantsB : (b * 0.6f);
 
-	float alpha = GetA();
-	const Mat4& vp = ctx.viewProjection;
+	// 예전엔 몸통·팔다리가 전부 납작한 카드 한 장이라 입체감이 없었다. 건물/나무에 쓰던
+	// Shapes.h의 상자/원기둥(면마다 밝기를 달리해 카메라 쪽에서 입체로 보이게 하는 기법)를
+	// 그대로 재사용해서 실제 부피가 있는 것처럼 보이게 한다. 각 파츠의 중심 높이/두께는
+	// 예전 값을 그대로 물려받아(중심 = 아래끝 + 높이/2) 전체 실루엣과 비율은 유지했다.
+	Shapes::Rgb bodyColor = { r, g, b };
+	Shapes::Rgb headColor = { headR, headG, headB };
+	Shapes::Rgb limbColor = { limbR, limbG, limbB };
+	Shapes::Rgb legColor = { legR, legG, legB };
 
-	// 몸통
-	Mat4 body = Mat4::Translate(x, y, z + size * 0.5f + breathe + walkBob)
-		* Mat4::Scale(size * 0.55f, size * 0.35f, size * 0.7f);
-	ctx.renderer.DrawObject(vp * body, r, g, b, alpha);
-
-	// 머리 (원형 메시)
-	Mat4 head = Mat4::Translate(x, y, z + size * 0.95f + breathe + walkBob)
-		* Mat4::Scale(size * 0.4f, size * 0.4f, size * 0.4f);
-	ctx.renderer.DrawMesh(ctx.circleMesh, vp * head, headR, headG, headB, alpha);
+	// 이 렌더러는 실제 깊이버퍼가 없어서(그리기 순서로 깊이를 흉내), 겹친 픽셀은 "나중에
+	// 그린 것"이 화면에 보인다. 그래서 팔다리를 먼저 그려 깔아 두고, 몸통·머리를 맨 나중에
+	// 그려서 겹치는 자리에서는 항상 몸통·머리가 우선적으로 보이도록(팔다리가 가려지도록) 한다.
 
 	// 다리 2개: right축으로 벌리고, 걷는 동안 forward축으로 서로 반대로 흔들림.
-	Mat4 legLeft = Mat4::Translate(x - rightX * size * 0.15f + forwardX * legSwing, y - rightY * size * 0.15f + forwardY * legSwing, z + size * 0.15f)
-		* Mat4::Scale(size * 0.18f, size * 0.18f, size * 0.3f);
-	Mat4 legRight = Mat4::Translate(x + rightX * size * 0.15f - forwardX * legSwing, y + rightY * size * 0.15f - forwardY * legSwing, z + size * 0.15f)
-		* Mat4::Scale(size * 0.18f, size * 0.18f, size * 0.3f);
-	ctx.renderer.DrawObject(vp * legLeft, legR, legG, legB, alpha);
-	ctx.renderer.DrawObject(vp * legRight, legR, legG, legB, alpha);
+	float legBaseZ = z;
+	float legLeftX = x - rightX * size * 0.15f + forwardX * legSwing;
+	float legLeftY = y - rightY * size * 0.15f + forwardY * legSwing;
+	float legRightX = x + rightX * size * 0.15f - forwardX * legSwing;
+	float legRightY = y + rightY * size * 0.15f - forwardY * legSwing;
+	Shapes::DrawBox(ctx, legLeftX, legLeftY, legBaseZ, size * 0.18f, size * 0.18f, size * 0.3f,
+		Shapes::Shade(legColor, 1.0f), Shapes::Shade(legColor, 0.82f), Shapes::Shade(legColor, 0.62f));
+	Shapes::DrawBox(ctx, legRightX, legRightY, legBaseZ, size * 0.18f, size * 0.18f, size * 0.3f,
+		Shapes::Shade(legColor, 1.0f), Shapes::Shade(legColor, 0.82f), Shapes::Shade(legColor, 0.62f));
 
 	// 팔 2개: 걷는 동안은 다리와 반대 위상으로 흔들리고, 공격 중에는 오른팔이
 	// facing 방향으로 크게 휘둘러진다.
 	float armWalkSwing = m_Walking ? -legSwing : 0.f;
 	float attackSwing = (m_AttackProgress >= 0.f) ? sinf(m_AttackProgress * 3.14159265f) * size * 0.6f : 0.f;
+	float armBaseZ = z + size * 0.4f;
 
-	Mat4 armLeft = Mat4::Translate(x - rightX * size * 0.42f + forwardX * armWalkSwing, y - rightY * size * 0.42f + forwardY * armWalkSwing, z + size * 0.55f)
-		* Mat4::Scale(size * 0.14f, size * 0.14f, size * 0.3f);
-	Mat4 armRight = Mat4::Translate(x + rightX * size * 0.42f - forwardX * armWalkSwing + forwardX * attackSwing, y + rightY * size * 0.42f - forwardY * armWalkSwing + forwardY * attackSwing, z + size * 0.55f)
-		* Mat4::Scale(size * 0.14f, size * 0.14f, size * 0.3f);
-	ctx.renderer.DrawObject(vp * armLeft, limbR, limbG, limbB, alpha);
-	ctx.renderer.DrawObject(vp * armRight, limbR, limbG, limbB, alpha);
+	float armLeftX = x - rightX * size * 0.42f + forwardX * armWalkSwing;
+	float armLeftY = y - rightY * size * 0.42f + forwardY * armWalkSwing;
+	float armRightX = x + rightX * size * 0.42f - forwardX * armWalkSwing + forwardX * attackSwing;
+	float armRightY = y + rightY * size * 0.42f - forwardY * armWalkSwing + forwardY * attackSwing;
+	Shapes::DrawBox(ctx, armLeftX, armLeftY, armBaseZ, size * 0.14f, size * 0.14f, size * 0.3f,
+		Shapes::Shade(limbColor, 1.0f), Shapes::Shade(limbColor, 0.82f), Shapes::Shade(limbColor, 0.62f));
+	Shapes::DrawBox(ctx, armRightX, armRightY, armBaseZ, size * 0.14f, size * 0.14f, size * 0.3f,
+		Shapes::Shade(limbColor, 1.0f), Shapes::Shade(limbColor, 0.82f), Shapes::Shade(limbColor, 0.62f));
+
+	// 몸통: 위(1.0)>화면 왼쪽 면(0.82)>화면 오른쪽 면(0.62) — 건물 벽과 같은 명암비.
+	float bodyCenterZ = z + size * 0.5f + breathe + walkBob;
+	Shapes::DrawBox(ctx, x, y, bodyCenterZ - size * 0.35f, size * 0.55f, size * 0.35f, size * 0.7f,
+		Shapes::Shade(bodyColor, 1.0f), Shapes::Shade(bodyColor, 0.82f), Shapes::Shade(bodyColor, 0.62f));
+
+	// 머리: 납작한 원반 대신 낮은 원기둥으로 그려서 정수리가 둥글게 보이도록 한다. 맨 마지막에
+	// 그려서 팔이 휘둘러질 때도 항상 머리가 가장 우선적으로 보인다. 크기는 예전의 절반
+	// (반지름 0.4→0.2, 높이 0.5→0.25)으로 줄이되 중심 높이는 그대로 둬서 몸통 위에 자연스럽게 얹힌다.
+	float headCenterZ = z + size * 0.95f + breathe + walkBob;
+	Shapes::DrawCylinder(ctx, x, y, headCenterZ - size * 0.125f, size * 0.2f, size * 0.25f,
+		headColor, Shapes::Shade(headColor, 1.15f));
 }
 
 // ---------------------------------------------------------------- NpcActor
