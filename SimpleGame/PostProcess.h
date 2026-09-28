@@ -18,8 +18,13 @@ public:
 
 	// 씬을 다 그린 후 호출: 밝은 영역을 추출/블러(블룸)하고, 톤매핑(exposure)
 	// + 비네트(vignetteStrength)로 합성한 뒤, 색보정/필름 그레인(time) 단계를
-	// 거쳐 화면에 출력한다.
+	// 거쳐 화면에 출력한다. 끝나면 뷰포트가 출력 영역(SetPresentViewport)으로 남아 있어서,
+	// 이어서 그리는 HUD 등도 같은 영역에 맞춰진다.
 	void EndCaptureAndPresent(float exposure, float vignetteStrength, float bloomThreshold, float bloomIntensity, float time);
+
+	// 최종 결과를 창(기본 프레임버퍼)의 어느 영역에 그릴지. 창 크기가 바뀌면 화면비를 유지한 채 가운데
+	// 맞춘 영역을 넘긴다(나머지는 검은 띠). 기본값은 (0, 0, width, height).
+	void SetPresentViewport(int x, int y, int width, int height);
 
 private:
 	struct FrameBuffer
@@ -58,6 +63,11 @@ private:
 	int m_Height;
 	int m_BlurWidth;
 	int m_BlurHeight;
+
+	int m_PresentX = 0;
+	int m_PresentY = 0;
+	int m_PresentWidth;
+	int m_PresentHeight;
 
 	FrameBuffer m_Scene;
 	FrameBuffer m_Bright;

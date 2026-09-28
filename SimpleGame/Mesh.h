@@ -10,14 +10,12 @@ struct MeshData
 	GLenum primitiveType = GL_TRIANGLES;
 };
 
-// GPU에 업로드된 메시에 대한 핸들. vao는 정점 속성 설정을 미리 담아 둔 것으로,
-// Renderer::CreateMesh가 만들 때 한 번만 설정해서 그리기 직전마다 다시 설정할 필요가 없다.
+// Renderer::CreateMesh가 만든 메시. 단색 도형은 전부 Renderer의 배치 버퍼에 모아서 한 번에 그리므로
+// (Renderer.h의 렌더 큐 설명 참고), 메시는 GPU 버퍼가 아니라 CPU 쪽 삼각형 목록으로 들고 있다가
+// 그릴 때마다 MVP를 곱해 배치에 덧붙인다. 삼각형 팬 같은 형식은 만들 때 삼각형 목록으로 풀어 둔다.
 struct MeshHandle
 {
-	GLuint vbo = 0;
-	GLuint vao = 0;
-	int vertexCount = 0;
-	GLenum primitiveType = GL_TRIANGLES;
+	std::vector<float> triangles; // x,y,z 반복, 3개 정점마다 삼각형 하나
 };
 
 namespace MeshGen

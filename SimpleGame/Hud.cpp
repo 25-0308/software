@@ -151,9 +151,15 @@ void Hud::DrawStatus(Renderer& renderer, const MeshHandle& circleMesh, const Pla
 void Hud::DrawNameTags(SceneGraph& scene, const Mat4& viewProjection)
 {
 	glUseProgram(0);
-	glColor3f(1.f, 1.f, 1.f);
 
-	scene.ForEach([&viewProjection](Actor& actor)
+	// 글자 폭(픽셀)을 NDC 길이로 바꾸려면 지금 그리는 영역의 픽셀 크기가 필요하다(창 크기를 바꾸면
+	// 출력 영역도 달라지므로 800 같은 고정값 대신 현재 뷰포트를 읽는다).
+	GLint viewport[4] = { 0, 0, 800, 600 };
+	glGetIntegerv(GL_VIEWPORT, viewport);
+	float pixelToNdcX = 2.f / (float)((viewport[2] > 0) ? viewport[2] : 800);
+	float pixelToNdcY = 2.f / (float)((viewport[3] > 0) ? viewport[3] : 600);
+
+	scene.ForEach([&viewProjection, pixelToNdcX, pixelToNdcY](Actor& actor)
 	{
 		const char* name = actor.GetName();
 		if (name == nullptr || !actor.IsVisible() || actor.IsPendingDestroy())
@@ -167,8 +173,9 @@ void Hud::DrawNameTags(SceneGraph& scene, const Mat4& viewProjection)
 			return;
 		}
 
+		// 플레이어의 창끝(약 1.47*size)보다 조금 위에 띄운다.
 		float ndcX, ndcY;
-		TransformToNDC(viewProjection, actor.GetWorldX(), actor.GetWorldY(), actor.GetWorldZ() + actor.GetSize() * 1.3f, ndcX, ndcY);
+		TransformToNDC(viewProjection, actor.GetWorldX(), actor.GetWorldY(), actor.GetWorldZ() + actor.GetSize() * 1.55f, ndcX, ndcY);
 
 		if (ndcX < -1.1f || ndcX > 1.1f || ndcY < -1.1f || ndcY > 1.1f)
 		{
@@ -181,11 +188,20 @@ void Hud::DrawNameTags(SceneGraph& scene, const Mat4& viewProjection)
 			textWidth += glutBitmapWidth(GLUT_BITMAP_HELVETICA_10, *c);
 		}
 
-		// 텍스트 폭의 절반만큼 왼쪽으로 밀어서 가운데 정렬한다
-		// (픽셀→NDC 변환: 창 폭 800의 절반이 NDC 1.0에 대응).
-		float centeredNdcX = ndcX - (float)textWidth / 800.f;
+		// 텍스트 폭의 절반만큼 왼쪽으로 밀어서 가운데 정렬한다.
+		float left = ndcX - (float)textWidth * 0.5f * pixelToNdcX;
 
-		glRasterPos2f(centeredNdcX, ndcY);
+		// 1픽셀 오른쪽 아래에 검은 그림자를 먼저 찍어서, 밝은 모래·돌바닥 위에서도 글자가 또렷하게
+		// 읽히게 한다. 래스터 색은 glRasterPos를 부르는 순간의 색으로 정해지므로 색을 먼저 바꾼다.
+		glColor3f(0.f, 0.f, 0.f);
+		glRasterPos2f(left + pixelToNdcX, ndcY - pixelToNdcY);
+		for (const char* c = name; *c != '\0'; ++c)
+		{
+			glutBitmapCharacter(GLUT_BITMAP_HELVETICA_10, *c);
+		}
+
+		glColor3f(1.f, 1.f, 1.f);
+		glRasterPos2f(left, ndcY);
 		for (const char* c = name; *c != '\0'; ++c)
 		{
 			glutBitmapCharacter(GLUT_BITMAP_HELVETICA_10, *c);

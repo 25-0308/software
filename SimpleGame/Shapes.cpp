@@ -23,15 +23,21 @@ void Shapes::DrawBox(const RenderContext& ctx, float x, float y, float baseZ, fl
 	Mat4 topModel = Mat4::Translate(x, y, baseZ + height) * Mat4::Scale(width, depth, 1.f);
 	ctx.renderer.DrawObject(vp * topModel, top.r, top.g, top.b, 1.f);
 
-	// +y면: XZ 평면의 세운 사각형(화면 왼쪽 면).
+	// +y면: XZ 평면의 세운 사각형.
 	Mat4 faceYModel = Mat4::Translate(x, y + depth * 0.5f, baseZ + height * 0.5f)
 		* Mat4::RotateX(kHalfPi) * Mat4::Scale(width, height, 1.f);
 	ctx.renderer.DrawObject(vp * faceYModel, faceY.r, faceY.g, faceY.b, 1.f);
 
-	// +x면: YZ 평면의 세운 사각형(화면 오른쪽 면). 회전 후 로컬 x가 z(높이), 로컬 y가 y(깊이)가 된다.
+	// +x면: YZ 평면의 세운 사각형. 회전 후 로컬 x가 z(높이), 로컬 y가 y(깊이)가 된다.
 	Mat4 faceXModel = Mat4::Translate(x + width * 0.5f, y, baseZ + height * 0.5f)
 		* Mat4::RotateY(kHalfPi) * Mat4::Scale(height, depth, 1.f);
 	ctx.renderer.DrawObject(vp * faceXModel, faceX.r, faceX.g, faceX.b, 1.f);
+}
+
+void Shapes::DrawSolidBox(const RenderContext& ctx, float x, float y, float baseZ, float width, float depth, float height,
+	const Rgb& color)
+{
+	DrawBox(ctx, x, y, baseZ, width, depth, height, Shade(color, 1.0f), Shade(color, 0.82f), Shade(color, 0.62f));
 }
 
 void Shapes::DrawPanelOnFaceY(const RenderContext& ctx, float centerX, float faceY, float centerZ,
@@ -46,6 +52,26 @@ void Shapes::DrawPanelOnFaceX(const RenderContext& ctx, float faceX, float cente
 {
 	Mat4 model = Mat4::Translate(faceX, centerY, centerZ) * Mat4::RotateY(kHalfPi) * Mat4::Scale(height, width, 1.f);
 	ctx.renderer.DrawObject(ctx.viewProjection * model, color.r, color.g, color.b, 1.f);
+}
+
+void Shapes::DrawQuad(const RenderContext& ctx, const Point3& p0, const Point3& p1, const Point3& p2, const Point3& p3,
+	const Rgb& color)
+{
+	const float vertices[18] =
+	{
+		p0.x, p0.y, p0.z,  p1.x, p1.y, p1.z,  p2.x, p2.y, p2.z,
+		p0.x, p0.y, p0.z,  p2.x, p2.y, p2.z,  p3.x, p3.y, p3.z,
+	};
+	ctx.renderer.DrawTriangles(vertices, 6, ctx.viewProjection, color.r, color.g, color.b, 1.f);
+}
+
+void Shapes::DrawTriangle(const RenderContext& ctx, const Point3& p0, const Point3& p1, const Point3& p2, const Rgb& color)
+{
+	const float vertices[9] =
+	{
+		p0.x, p0.y, p0.z,  p1.x, p1.y, p1.z,  p2.x, p2.y, p2.z,
+	};
+	ctx.renderer.DrawTriangles(vertices, 3, ctx.viewProjection, color.r, color.g, color.b, 1.f);
 }
 
 void Shapes::DrawCylinder(const RenderContext& ctx, float x, float y, float baseZ, float radius, float height,

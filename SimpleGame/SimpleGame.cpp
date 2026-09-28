@@ -54,6 +54,16 @@ namespace
 	// 공유해야 "링이 보이면 실제로 닿는다"는 예측이 항상 맞는다.
 	const float kAttackRadius = 1.6f;
 	const float kInteractRadius = 1.4f;
+
+	// 게임 화면의 기준 해상도(4:3). HUD·미니맵·채팅창도 이 픽셀 좌표계로 그린다. 창 크기가 바뀌면
+	// 이 비율을 유지한 채 창 가운데에 맞춰 늘리거나 줄인다(Reshape 참고).
+	const int kScreenWidth = 800;
+	const int kScreenHeight = 600;
+
+	// 한 프레임에 진행하는 게임 시간의 상한(초). 창을 드래그하는 동안처럼 루프가 잠깐 멈췄다 풀리면
+	// 한 프레임의 dt가 수 초가 될 수 있는데, 이동 충돌은 도착 지점만 검사하므로 그 한 걸음에 건물·물을
+	// 건너뛸 수 있다. 상한을 두면 그 순간 게임 시간이 잠깐 느려질 뿐 벽을 뚫는 일은 없다.
+	const float kMaxDeltaSeconds = 0.1f;
 }
 
 Renderer *g_Renderer = NULL;
@@ -70,11 +80,14 @@ RingActor *g_AttackRing = NULL;
 RingActor *g_InteractRing = NULL;
 
 MeshHandle g_CircleMesh;
-MeshHandle g_EllipseMesh; // 나무 수관, 아이템 등 둥글넓적한 파츠에 재사용하는 타원 메시
+MeshHandle g_EllipseMesh; // 발밑 링(위치 마커/조준 링)에 쓰는 납작한 타원 메시
 
 QuestState g_QuestState = QuestState::NotStarted;
 
 bool g_KeyW = false, g_KeyA = false, g_KeyS = false, g_KeyD = false;
+
+// 게임 창 핸들. 이 창이 맨 앞(키보드 입력을 받는 창)인지 확인하는 데 쓴다(IsGameWindowFocused).
+HWND g_GameWindow = NULL;
 
 std::chrono::steady_clock::time_point g_LastFrameTime;
 float g_ElapsedSeconds = 0.f;
@@ -186,7 +199,9 @@ namespace
 			}
 			else
 			{
-				GameLog::Add(GameLog::Kind::Info, "[이미 조사했다.]");
+				// 퀘스트를 받기 전(주운 뒤엔 아이템이 사라지므로 여기 올 수 있는 건 이 경우뿐). 예전엔
+				// 조사한 적도 없는데 "[이미 조사했다.]"가 나왔다.
+				GameLog::Add(GameLog::Kind::Info, "[금빛으로 빛나는 항아리다. 손대기 전에 마을 장로에게 먼저 가보자.]");
 			}
 		}
 		else if (id == kInteractVillager)
@@ -240,6 +255,19 @@ namespace
 
 		GameLog::Add(GameLog::Kind::Info, enabled ? "[뷰 컬링] 켬" : "[뷰 컬링] 끔");
 	}
+
+	// 게임 창이 지금 키보드 입력을 받는 맨 앞 창인지. 다른 창으로 전환한 동안 뗀 키는 KeyUp이 오지
+	// 않아서, 전환 전에 누르고 있던 방향키가 계속 눌린 것으로 남아 캐릭터가 혼자 걸어가던 문제를
+	// 막는 데 쓴다. 창 핸들을 못 얻었으면 입력을 막지 않도록 true.
+	bool IsGameWindowFocused()
+	{
+		if (g_GameWindow == NULL)
+		{
+			return true;
+		}
+
+		return GetForegroundWindow() == g_GameWindow;
+	}
 }
 
 void RenderScene(void)
@@ -249,12 +277,15 @@ void RenderScene(void)
 
 	g_PostProcess->BeginCapture();
 
-	glClearColor(0.05f, 0.05f, 0.08f, 1.0f);
+	// 지우는 색 = 먼바다 색. 섬 둘레에 바다를 깔아 두었지만, 혹시 그 바깥이 보여도 허공이 아니라
+	// 바다처럼 보이게 한다.
+	glClearColor(0.05f, 0.16f, 0.30f, 1.0f);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 	Mat4 viewProjection = g_Camera->GetViewProjection();
 
-	// 화면에 배치된 모든 것(타일/오브젝트/캐릭터/링)은 씬 그래프가 알아서 그린다.
+	// 화면에 배치된 모든 것(타일/오브젝트/캐릭터/링)은 씬 그래프가 알아서 그린다. 씬 그래프는 끝에서
+	// 렌더러의 렌더 큐를 비워서(Flush) 씬 버퍼에 다 그려 둔 상태로 돌아온다.
 	RenderContext renderContext = { *g_Renderer, viewProjection, g_ElapsedSeconds, g_CircleMesh, g_EllipseMesh };
 	g_Scene->Render(renderContext);
 
@@ -265,11 +296,13 @@ void RenderScene(void)
 
 	// HUD/이름표는 후처리(블룸/비네트/그레인)가 이미 끝난 기본 프레임버퍼 위에
 	// 그대로 덧그려서, 화면 흔들림/줌/색보정의 영향을 받지 않고 항상 또렷하게
-	// 보이게 한다.
+	// 보이게 한다. 렌더 큐에 모인 도형은 구간마다 끝에서 Flush해서, 그 구간의 비용이
+	// 그 구간에 잡히고 레거시 GL로 그리는 이름표와 순서가 섞이지 않게 한다.
 	{
 		// 이름표는 레거시 glRasterPos/glutBitmapCharacter 경로라 드로우콜 카운터엔 안
 		// 잡히지만 실제 비용은 있으므로, 여기서 따로 재서 눈에 보이게 한다.
 		Profiler::ScopedTimer timer(Profiler::Section::NameTags);
+		g_Renderer->Flush();
 		Hud::DrawNameTags(*g_Scene, viewProjection);
 	}
 	{
@@ -277,18 +310,21 @@ void RenderScene(void)
 		// 쿨타임이 얼마나 충전됐는지(1이면 바로 행동 가능)를 HUD 막대로 보여준다.
 		float actionReadiness = (g_ActionCooldown > 0.f) ? 1.f - g_ActionCooldown / kActionCooldownSeconds : 1.f;
 		Hud::DrawStatus(*g_Renderer, g_CircleMesh, g_Player->GetStats(), actionReadiness);
+		g_Renderer->Flush();
 	}
 
 	{
 		// 오른쪽 위 미니맵도 HUD처럼 후처리 이후 화면 고정 좌표계로 그린다.
 		Profiler::ScopedTimer timer(Profiler::Section::MiniMap);
 		g_MiniMap->Draw(*g_Renderer, *g_Scene, *g_TileMap, *g_Camera);
+		g_Renderer->Flush();
 	}
 
 	{
 		// 왼쪽 아래 채팅창(NPC 대사와 전투/보상/알림 로그). 3초가 지나면 각 줄이 사라진다.
 		Profiler::ScopedTimer timer(Profiler::Section::ChatWindow);
 		g_ChatWindow->Draw(*g_Renderer);
+		g_Renderer->Flush();
 	}
 
 	{
@@ -333,6 +369,13 @@ void Update(float deltaSeconds)
 	float horizontalStep = kInvertHorizontalInput ? -1.f : 1.f;
 	float verticalStep = kInvertVerticalInput ? -1.f : 1.f;
 
+	// 다른 창으로 전환해 있는 동안 뗀 키는 KeyUp이 오지 않으므로, 게임 창이 맨 앞이 아니면 방향키를
+	// 전부 뗀 것으로 본다(돌아왔을 때 캐릭터가 혼자 걸어가지 않게).
+	if (!IsGameWindowFocused())
+	{
+		g_KeyW = g_KeyA = g_KeyS = g_KeyD = false;
+	}
+
 	float moveX = 0.f, moveY = 0.f;
 	if (g_KeyW) moveY += verticalStep;
 	if (g_KeyS) moveY -= verticalStep;
@@ -371,8 +414,32 @@ void Idle(void)
 	float deltaSeconds = std::chrono::duration<float>(now - g_LastFrameTime).count();
 	g_LastFrameTime = now;
 
+	if (deltaSeconds > kMaxDeltaSeconds)
+	{
+		deltaSeconds = kMaxDeltaSeconds;
+	}
+
 	Update(deltaSeconds);
 	RenderScene();
+}
+
+// 창 크기가 바뀌면 게임 화면(800x600, 4:3)의 비율을 유지한 채 창 가운데에 맞추고, 남는 곳은 검은 띠로
+// 둔다. 예전엔 800x600이 곳곳에 고정돼 있어서 창을 최대화하면 왼쪽 아래 800x600에만 그려졌다.
+// HUD·미니맵·채팅창·이름표도 이 영역을 기준으로 그려지므로 같이 커지고 줄어든다.
+void Reshape(int width, int height)
+{
+	if (g_PostProcess == NULL || width <= 0 || height <= 0)
+	{
+		return;
+	}
+
+	float scaleX = (float)width / (float)kScreenWidth;
+	float scaleY = (float)height / (float)kScreenHeight;
+	float scale = (scaleX < scaleY) ? scaleX : scaleY;
+
+	int viewWidth = (int)(kScreenWidth * scale);
+	int viewHeight = (int)(kScreenHeight * scale);
+	g_PostProcess->SetPresentViewport((width - viewWidth) / 2, (height - viewHeight) / 2, viewWidth, viewHeight);
 }
 
 void MouseInput(int button, int state, int x, int y)
@@ -432,8 +499,11 @@ int main(int argc, char **argv)
 	glutInit(&argc, argv);
 	glutInitDisplayMode(GLUT_DEPTH | GLUT_DOUBLE | GLUT_RGBA);
 	glutInitWindowPosition(0, 0);
-	glutInitWindowSize(800, 600);
+	glutInitWindowSize(kScreenWidth, kScreenHeight);
 	glutCreateWindow("Game Software Engineering KPU");
+
+	// 방금 만든 창의 OpenGL 컨텍스트가 현재 컨텍스트이므로, 그 DC에서 창 핸들을 얻어 둔다.
+	g_GameWindow = WindowFromDC(wglGetCurrentDC());
 
 	glewInit();
 	if (glewIsSupported("GL_VERSION_3_0"))
@@ -446,22 +516,24 @@ int main(int argc, char **argv)
 	}
 
 	// 렌더러 초기화
-	g_Renderer = new Renderer(800, 600);
+	g_Renderer = new Renderer(kScreenWidth, kScreenHeight);
 	if (!g_Renderer->IsInitialized())
 	{
 		std::cout << "렌더러를 초기화하지 못했습니다.\n";
 	}
 
-	g_Camera = new Camera(8.f, 6.f, 1.f);
+	// 기본 시야 16x12 월드 단위(예전 8x6의 2배 = 카메라를 두 배 멀리 뺀 것과 같음). 직교 투영이라
+	// "거리"는 한 화면에 담기는 범위로 정해진다.
+	g_Camera = new Camera(16.f, 12.f, 1.f);
 
 	// 카메라 화면을 좌우·상하로 모두 뒤집는다(그림이 180도 돌아간 상태). HUD는 별도의 화면
 	// 좌표계라 뒤집히지 않고, 이름표는 뒤집힌 화면 위치를 따라간다. 되돌리려면 (false, false).
 	g_Camera->SetFlip(true, true);
 
-	g_PostProcess = new PostProcess(800, 600);
+	g_PostProcess = new PostProcess(kScreenWidth, kScreenHeight);
 
-	// 캐릭터 머리에 쓸 원형 메시, 나무 수관/아이템에 쓸 타원 메시. 처음 실행할 땐
-	// 만들어서 ./Cache에 저장하고, 다음 실행부터는 파일에서 그대로 불러온다.
+	// 원기둥 원판·세운 타원(머리, 나무 수관, 아이템 등)에 쓸 원형 메시와 발밑 링에 쓸 타원 메시.
+	// 처음 실행할 땐 만들어서 ./Cache에 저장하고, 다음 실행부터는 파일에서 그대로 불러온다.
 	// 나무 수관·원기둥 원판처럼 큰 원도 매끄럽게 보이도록 32각형으로 만든다.
 	MeshData circleMeshData = MeshCache::GetOrCreate("circle_32", []() { return MeshGen::GenerateCircle(32); });
 	g_CircleMesh = g_Renderer->CreateMesh(circleMeshData);
@@ -478,7 +550,7 @@ int main(int argc, char **argv)
 	// 화면에 배치되는 모든 것을 액터로 만들어 씬 그래프에 올린다.
 	g_Scene = new SceneGraph();
 	SpawnTileActors(*g_Scene, *g_Renderer, *g_TileMap);
-	LevelActors level = SpawnLevelActors(*g_Scene, layout);
+	LevelActors level = SpawnLevelActors(*g_Scene, layout, *g_TileMap);
 	g_Player = level.player;
 	g_AttackRing = level.attackRing;
 	g_InteractRing = level.interactRing;
@@ -491,6 +563,7 @@ int main(int argc, char **argv)
 	g_LastFrameTime = std::chrono::steady_clock::now();
 
 	glutDisplayFunc(RenderScene);
+	glutReshapeFunc(Reshape);
 	glutIdleFunc(Idle);
 	glutKeyboardFunc(KeyInput);
 	glutKeyboardUpFunc(KeyUp);

@@ -13,7 +13,15 @@ float Hash(float n)
 
 void main()
 {
-	float dist = length(v_Local) * 2.0;
+	// 카메라를 향해 세운 사각형(로컬 y = 위쪽)에 그린다. 위로 갈수록 가로를 조이고 좌우로 살랑이게
+	// 해서, 둥근 빛덩이가 아니라 위로 타오르는 불꽃 모양을 만든다.
+	vec2 q = v_Local;
+	float height01 = q.y + 0.5; // 0(아래) ~ 1(위)
+	q.x -= sin(u_Time * 7.0 + u_PhaseOffset + q.y * 6.0) * 0.07 * height01;
+	q.x *= 1.0 + height01 * 1.2;
+	q.y *= 0.9;
+
+	float dist = length(q) * 2.0;
 	float falloff = 1.0 - smoothstep(0.3, 1.0, dist);
 
 	// 살짝 떨리는 밝기로 불꽃이 일렁이는 느낌을 낸다.

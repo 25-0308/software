@@ -7,7 +7,8 @@ namespace
 	const float kPitchRadians = 0.959931086f; // 55도 (더 위에서 내려다보는 아이소메트릭 느낌)
 }
 
-const float Camera::kMinZoom = 0.25f;
+// 기본 시야(16x12) 기준 배율. 0.5배면 32칸 맵 전체가, 4배면 캐릭터 몇 명이 한 화면에 들어온다.
+const float Camera::kMinZoom = 0.5f;
 const float Camera::kMaxZoom = 4.0f;
 
 Camera::Camera(float viewWidth, float viewHeight, float zoom)

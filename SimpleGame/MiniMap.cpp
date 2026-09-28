@@ -192,7 +192,7 @@ void MiniMap::Draw(Renderer& renderer, SceneGraph& scene, const TileMap& tileMap
 
 	Mat4 uiProjection = Mat4::Ortho(0.f, kScreenWidth, 0.f, kScreenHeight, -1.f, 1.f);
 
-	// 패널: 어두운 테두리 + 반투명 배경.
+	// 패널: 어두운 테두리 + 바다색 배경(본 화면처럼 섬 둘레가 바다로 보이게).
 	float centerX = m_Transform.centerX;
 	float centerY = m_Transform.centerY;
 
@@ -200,7 +200,7 @@ void MiniMap::Draw(Renderer& renderer, SceneGraph& scene, const TileMap& tileMap
 	renderer.DrawObject(uiProjection * border, 0.02f, 0.02f, 0.03f, 0.9f);
 
 	Mat4 background = Mat4::Translate(centerX, centerY, 0.f) * Mat4::Scale(kPanelHalfSize * 2.f, kPanelHalfSize * 2.f, 1.f);
-	renderer.DrawObject(uiProjection * background, 0.08f, 0.09f, 0.11f, 0.85f);
+	renderer.DrawObject(uiProjection * background, 0.07f, 0.2f, 0.34f, 0.9f);
 
 	// 지형과 나무/건물.
 	DrawList(renderer, uiProjection, m_Grass, 0.16f, 0.30f, 0.15f);

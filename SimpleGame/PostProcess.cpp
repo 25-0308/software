@@ -16,6 +16,8 @@ PostProcess::PostProcess(int width, int height)
 	, m_Height(height)
 	, m_BlurWidth(width / 2)
 	, m_BlurHeight(height / 2)
+	, m_PresentWidth(width)
+	, m_PresentHeight(height)
 {
 	m_Scene = CreateColorFramebuffer(m_Width, m_Height);
 	// 블룸 버퍼는 절반 해상도로 처리한다: 비용이 싸고, 어차피 블러가 다운
@@ -159,6 +161,14 @@ void PostProcess::DrawFullscreenQuad()
 	glDrawArrays(GL_TRIANGLES, 0, 6);
 }
 
+void PostProcess::SetPresentViewport(int x, int y, int width, int height)
+{
+	m_PresentX = x;
+	m_PresentY = y;
+	m_PresentWidth = width;
+	m_PresentHeight = height;
+}
+
 void PostProcess::BeginCapture()
 {
 	glBindFramebuffer(GL_FRAMEBUFFER, m_Scene.fbo);
@@ -223,10 +233,12 @@ void PostProcess::EndCaptureAndPresent(float exposure, float vignetteStrength, f
 
 	DrawFullscreenQuad();
 
-	// 4) 마지막 단계: 색보정 + 필름 그레인을 적용해 실제 화면에 출력.
+	// 4) 마지막 단계: 색보정 + 필름 그레인을 적용해 실제 화면(의 출력 영역)에 그린다. 창 전체를
+	//    검게 지운 뒤 그리므로, 출력 영역 밖(창 비율이 4:3이 아닐 때 남는 곳)은 검은 띠가 된다.
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
-	glViewport(0, 0, m_Width, m_Height);
+	glClearColor(0.f, 0.f, 0.f, 1.f);
 	glClear(GL_COLOR_BUFFER_BIT);
+	glViewport(m_PresentX, m_PresentY, m_PresentWidth, m_PresentHeight);
 
 	glUseProgram(m_Grade.program);
 	glUniform1f(m_Grade.uniformTime, time);

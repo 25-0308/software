@@ -169,10 +169,10 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <None Include="Shaders\SolidRect.fs">
+    <None Include="Shaders\ColorBatch.fs">
       <Filter>소스 파일\Shaders</Filter>
     </None>
-    <None Include="Shaders\SolidRect.vs">
+    <None Include="Shaders\ColorBatch.vs">
       <Filter>소스 파일\Shaders</Filter>
     </None>
     <None Include="Shaders\PostProcess.vs">
@@ -191,9 +191,6 @@
       <Filter>소스 파일\Shaders</Filter>
     </None>
     <None Include="Shaders\Shadow.vs">
-      <Filter>소스 파일\Shaders</Filter>
-    </None>
-    <None Include="Shaders\Shadow.fs">
       <Filter>소스 파일\Shaders</Filter>
     </None>
     <None Include="Shaders\Fire.fs">

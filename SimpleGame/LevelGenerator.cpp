@@ -165,19 +165,21 @@ LevelLayout GenerateVillageLevel(TileMap& tileMap)
 	std::uniform_real_distribution<float> villagePosDist(-3.f, 3.f);
 	std::uniform_real_distribution<float> villageRadiusDist(2.2f, 2.6f);
 	std::uniform_real_distribution<float> angleDist(0.f, 6.2831853f);
-	std::uniform_real_distribution<float> lakeDistDist(6.f, 10.f); // 맵이 커진 만큼 호수를 마을에서 더 떨어뜨려 배치.
+	// 맵이 커진 만큼 호수를 마을에서 떨어뜨려 배치한다. 최소 6.5면 가장 큰 호수(반지름 2.6)도 마을
+	// 중심에서 3.9 밖에 있어서, 마을 가장자리 건물(모서리가 중심에서 약 3.8)과 겹치지 않는다.
+	std::uniform_real_distribution<float> lakeDistDist(6.5f, 10.f);
 	std::uniform_real_distribution<float> lakeRadiusDist(1.8f, 2.6f);
 
 	LevelLayout layout;
 	layout.villageCenterX = villagePosDist(rng);
 	layout.villageCenterY = villagePosDist(rng);
-	float villageRadius = villageRadiusDist(rng);
+	layout.villageRadius = villageRadiusDist(rng);
 
 	float angle = angleDist(rng);
 	float lakeDist = lakeDistDist(rng);
 	layout.lakeCenterX = layout.villageCenterX + cosf(angle) * lakeDist;
 	layout.lakeCenterY = layout.villageCenterY + sinf(angle) * lakeDist;
-	float lakeRadius = lakeRadiusDist(rng);
+	layout.lakeRadius = lakeRadiusDist(rng);
 
 	// 맵 경계 안쪽으로 클램프.
 	float halfExtent = width * 0.5f - 1.5f;
@@ -186,11 +188,11 @@ LevelLayout GenerateVillageLevel(TileMap& tileMap)
 	if (layout.lakeCenterY < -halfExtent) layout.lakeCenterY = -halfExtent;
 	if (layout.lakeCenterY > halfExtent) layout.lakeCenterY = halfExtent;
 
-	CarveDisk(tileMap, layout.lakeCenterX, layout.lakeCenterY, lakeRadius, TileType::Water);
+	CarveDisk(tileMap, layout.lakeCenterX, layout.lakeCenterY, layout.lakeRadius, TileType::Water);
 	// 호수가 마을 자리를 침범했을 수 있으니 마을을 나중에 다시 그려서
 	// 항상 마을이 우선하도록 한다 (겹침 방지를 정확히 계산하는 대신
 	// 이렇게 처리하는 편이 훨씬 단순하고 견고하다).
-	CarveDisk(tileMap, layout.villageCenterX, layout.villageCenterY, villageRadius, TileType::Stone);
+	CarveDisk(tileMap, layout.villageCenterX, layout.villageCenterY, layout.villageRadius, TileType::Stone);
 
 	int startX = tileMap.GetGridX(layout.villageCenterX);
 	int startY = tileMap.GetGridY(layout.villageCenterY);

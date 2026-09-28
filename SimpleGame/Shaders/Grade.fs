@@ -14,12 +14,15 @@ float Hash(vec2 p)
 void main()
 {
 	vec3 color = texture(u_Scene, v_UV).rgb;
+	float luminance = dot(color, vec3(0.2126, 0.7152, 0.0722));
+
+	// 채도를 조금 올려서 지중해의 선명한 색감(푸른 바다, 흰 벽, 붉은 지붕, 올리브 숲)이 살아나게 한다.
+	color = max(mix(vec3(luminance), color, 1.12), vec3(0.0));
 
 	// 색보정: 어두운 신화적 분위기를 위해 어두운 부분은 살짝 푸르게,
 	// 밝은 부분은 살짝 따뜻하게 물들인다.
 	vec3 shadowTint = vec3(0.92, 0.95, 1.05);
 	vec3 highlightTint = vec3(1.06, 1.0, 0.90);
-	float luminance = dot(color, vec3(0.2126, 0.7152, 0.0722));
 	color *= mix(shadowTint, highlightTint, clamp(luminance, 0.0, 1.0));
 
 	// 필름 그레인: 미세한 노이즈로 분위기를 더함.

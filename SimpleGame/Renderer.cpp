@@ -2,6 +2,30 @@
 #include "Renderer.h"
 #include "ShaderUtil.h"
 
+#include <iostream>
+
+namespace
+{
+	// 원점 중심의 단위 사각형(삼각형 2개). m_VBORect와 같은 정점 순서.
+	const float kUnitQuad[6][2] =
+	{
+		{ -0.5f, -0.5f }, { -0.5f, 0.5f }, { 0.5f, 0.5f },
+		{ -0.5f, -0.5f }, { 0.5f, 0.5f }, { 0.5f, -0.5f },
+	};
+
+	// 배치 정점의 모양 값(Shaders/ColorBatch.fs 참고).
+	const float kShapeSolid = 0.f;
+	const float kShapeSoftDisc = 1.f;
+
+	// vertices(x,y,z 반복)의 index번째 정점을 out 뒤에 덧붙인다.
+	void AppendPoint(std::vector<float>& out, const float* vertices, size_t index)
+	{
+		out.push_back(vertices[index * 3 + 0]);
+		out.push_back(vertices[index * 3 + 1]);
+		out.push_back(vertices[index * 3 + 2]);
+	}
+}
+
 Renderer::Renderer(int windowSizeX, int windowSizeY)
 {
 	Initialize(windowSizeX, windowSizeY);
@@ -9,17 +33,16 @@ Renderer::Renderer(int windowSizeX, int windowSizeY)
 
 Renderer::~Renderer()
 {
-	if (m_SolidRect.program != 0) glDeleteProgram(m_SolidRect.program);
-	if (m_Shadow.program != 0) glDeleteProgram(m_Shadow.program);
+	if (m_ColorBatch.program != 0) glDeleteProgram(m_ColorBatch.program);
 	if (m_Fire.program != 0) glDeleteProgram(m_Fire.program);
 	if (m_Text.program != 0) glDeleteProgram(m_Text.program);
 	if (m_TileBatchSolid.program != 0) glDeleteProgram(m_TileBatchSolid.program);
 	if (m_TileBatchWater.program != 0) glDeleteProgram(m_TileBatchWater.program);
 
 	if (m_VaoRect != 0) glDeleteVertexArrays(1, &m_VaoRect);
-	if (m_VaoDynamic != 0) glDeleteVertexArrays(1, &m_VaoDynamic);
+	if (m_VaoBatch != 0) glDeleteVertexArrays(1, &m_VaoBatch);
 	if (m_VBORect != 0) glDeleteBuffers(1, &m_VBORect);
-	if (m_VBODynamic != 0) glDeleteBuffers(1, &m_VBODynamic);
+	if (m_VBOBatch != 0) glDeleteBuffers(1, &m_VBOBatch);
 }
 
 ShaderProgramInfo Renderer::CompileAndCache(const char* filenameVS, const char* filenameFS)
@@ -53,8 +76,7 @@ void Renderer::Initialize(int windowSizeX, int windowSizeY)
 	glEnable(GL_BLEND);
 	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-	m_SolidRect = CompileAndCache("./Shaders/SolidRect.vs", "./Shaders/SolidRect.fs");
-	m_Shadow = CompileAndCache("./Shaders/Shadow.vs", "./Shaders/Shadow.fs");
+	m_ColorBatch = CompileAndCache("./Shaders/ColorBatch.vs", "./Shaders/ColorBatch.fs");
 	m_Fire = CompileAndCache("./Shaders/Shadow.vs", "./Shaders/Fire.fs");
 	m_Text = CompileAndCache("./Shaders/Text.vs", "./Shaders/Text.fs");
 	m_TileBatchSolid = CompileAndCache("./Shaders/TileBatch.vs", "./Shaders/TileBatchSolid.fs");
@@ -62,8 +84,8 @@ void Renderer::Initialize(int windowSizeX, int windowSizeY)
 
 	CreateVertexBufferObjects();
 
-	if (m_SolidRect.program > 0 && m_Shadow.program > 0 && m_Fire.program > 0
-		&& m_Text.program > 0 && m_TileBatchSolid.program > 0 && m_TileBatchWater.program > 0 && m_VBORect > 0)
+	if (m_ColorBatch.program > 0 && m_Fire.program > 0 && m_Text.program > 0
+		&& m_TileBatchSolid.program > 0 && m_TileBatchWater.program > 0 && m_VBORect > 0 && m_VBOBatch > 0)
 	{
 		m_Initialized = true;
 	}
@@ -89,102 +111,124 @@ void Renderer::CreateVertexBufferObjects()
 	glBindBuffer(GL_ARRAY_BUFFER, m_VBORect);
 	glBufferData(GL_ARRAY_BUFFER, sizeof(rect), rect, GL_STATIC_DRAW);
 
-	// 모든 정점 셰이더가 a_Position을 위치 0으로 고정해 뒀으므로(Shaders/*.vs 참고), 이 VAO
-	// 하나를 셰이더가 바뀔 때마다 다시 설정하지 않고 계속 재사용할 수 있다.
 	glGenVertexArrays(1, &m_VaoRect);
 	glBindVertexArray(m_VaoRect);
 	glBindBuffer(GL_ARRAY_BUFFER, m_VBORect);
 	glEnableVertexAttribArray(0);
 	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(float) * 3, 0);
 
-	// 내용은 DrawTriangles를 부를 때마다 채우지만(glBufferData), 버퍼 오브젝트 자체와 그
-	// 속성 설정은 한 번만 하면 된다 — glBufferData로 내용을 다시 채워도 이미 설정해 둔
-	// glVertexAttribPointer 바인딩은 그대로 유효하다.
-	glGenBuffers(1, &m_VBODynamic);
-	glGenVertexArrays(1, &m_VaoDynamic);
-	glBindVertexArray(m_VaoDynamic);
-	glBindBuffer(GL_ARRAY_BUFFER, m_VBODynamic);
-	glEnableVertexAttribArray(0);
-	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(float) * 3, 0);
+	// 배치 버퍼: 내용은 Flush 때마다 통째로 다시 채우지만(glBufferData), 버퍼 오브젝트 자체와 그
+	// 정점 속성 설정은 한 번만 하면 된다 — 내용을 다시 채워도 설정해 둔 속성 바인딩은 그대로 유효하다.
+	GLsizei stride = (GLsizei)(sizeof(float) * kBatchFloatsPerVertex);
+
+	glGenBuffers(1, &m_VBOBatch);
+	glGenVertexArrays(1, &m_VaoBatch);
+	glBindVertexArray(m_VaoBatch);
+	glBindBuffer(GL_ARRAY_BUFFER, m_VBOBatch);
+	glEnableVertexAttribArray(0); // a_Position: 클립 좌표 (x,y,z,w)
+	glVertexAttribPointer(0, 4, GL_FLOAT, GL_FALSE, stride, (void*)0);
+	glEnableVertexAttribArray(1); // a_Local: 사각형 내부 로컬 좌표
+	glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(sizeof(float) * 4));
+	glEnableVertexAttribArray(2); // a_Color
+	glVertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, stride, (void*)(sizeof(float) * 6));
+	glEnableVertexAttribArray(3); // a_Shape
+	glVertexAttribPointer(3, 1, GL_FLOAT, GL_FALSE, stride, (void*)(sizeof(float) * 10));
 
 	glBindVertexArray(0);
 }
 
+void Renderer::QueueVertex(const Mat4& mvp, float x, float y, float z, float localX, float localY,
+	float r, float g, float b, float a, float shape)
+{
+	const float* m = mvp.m;
+
+	size_t start = m_BatchVertices.size();
+	m_BatchVertices.resize(start + kBatchFloatsPerVertex);
+	float* out = &m_BatchVertices[start];
+
+	// 셰이더가 하던 u_MVP * 위치를 여기서 미리 한다(열 우선 저장: m[열*4+행]). w까지 넘겨서
+	// 원근 투영이 들어와도 GPU가 그대로 나눗셈을 할 수 있게 한다(지금은 전부 직교라 w = 1).
+	out[0] = m[0] * x + m[4] * y + m[8] * z + m[12];
+	out[1] = m[1] * x + m[5] * y + m[9] * z + m[13];
+	out[2] = m[2] * x + m[6] * y + m[10] * z + m[14];
+	out[3] = m[3] * x + m[7] * y + m[11] * z + m[15];
+	out[4] = localX;
+	out[5] = localY;
+	out[6] = r;
+	out[7] = g;
+	out[8] = b;
+	out[9] = a;
+	out[10] = shape;
+}
+
+void Renderer::QueueUnitQuad(const Mat4& mvp, float r, float g, float b, float a, float shape)
+{
+	for (int i = 0; i < 6; ++i)
+	{
+		float lx = kUnitQuad[i][0];
+		float ly = kUnitQuad[i][1];
+		QueueVertex(mvp, lx, ly, 0.f, lx, ly, r, g, b, a, shape);
+	}
+}
+
 void Renderer::DrawObject(const Mat4& mvp, float r, float g, float b, float a)
 {
-	glUseProgram(m_SolidRect.program);
-	glUniformMatrix4fv(m_SolidRect.uniformMVP, 1, GL_FALSE, mvp.m);
-	glUniform4f(m_SolidRect.uniformColor, r, g, b, a);
+	QueueUnitQuad(mvp, r, g, b, a, kShapeSolid);
+}
 
-	glBindVertexArray(m_VaoRect);
-	glDrawArrays(GL_TRIANGLES, 0, 6);
+void Renderer::DrawSoftDisc(const Mat4& mvp, float r, float g, float b, float a)
+{
+	QueueUnitQuad(mvp, r, g, b, a, kShapeSoftDisc);
 }
 
 void Renderer::DrawShadow(const Mat4& mvp, float opacity)
 {
-	glUseProgram(m_Shadow.program);
-	glUniformMatrix4fv(m_Shadow.uniformMVP, 1, GL_FALSE, mvp.m);
-	glUniform1f(m_Shadow.uniformOpacity, opacity);
-
-	glBindVertexArray(m_VaoRect);
-	glDrawArrays(GL_TRIANGLES, 0, 6);
-}
-
-void Renderer::DrawFire(const Mat4& mvp, float time, float phaseOffset)
-{
-	glUseProgram(m_Fire.program);
-	glUniformMatrix4fv(m_Fire.uniformMVP, 1, GL_FALSE, mvp.m);
-	glUniform1f(m_Fire.uniformTime, time);
-	glUniform1f(m_Fire.uniformPhaseOffset, phaseOffset);
-
-	glBindVertexArray(m_VaoRect);
-	glDrawArrays(GL_TRIANGLES, 0, 6);
+	DrawSoftDisc(mvp, 0.f, 0.f, 0.f, opacity);
 }
 
 MeshHandle Renderer::CreateMesh(const MeshData& meshData)
 {
 	MeshHandle handle;
-	handle.vertexCount = (int)(meshData.vertices.size() / 3);
-	handle.primitiveType = meshData.primitiveType;
+	size_t vertexCount = meshData.vertices.size() / 3;
+	const float* vertices = meshData.vertices.data();
 
-	glGenBuffers(1, &handle.vbo);
-	glBindBuffer(GL_ARRAY_BUFFER, handle.vbo);
-	glBufferData(GL_ARRAY_BUFFER, meshData.vertices.size() * sizeof(float), meshData.vertices.data(), GL_STATIC_DRAW);
-
-	// VAO도 메시를 만들 때 한 번만 설정해서 핸들에 담아 둔다 — DrawMesh는 이후로 그리기
-	// 직전에 속성을 다시 설정할 필요 없이 이 VAO만 바인드하면 된다.
-	glGenVertexArrays(1, &handle.vao);
-	glBindVertexArray(handle.vao);
-	glBindBuffer(GL_ARRAY_BUFFER, handle.vbo);
-	glEnableVertexAttribArray(0);
-	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(float) * 3, 0);
-	glBindVertexArray(0);
+	if (meshData.primitiveType == GL_TRIANGLE_FAN)
+	{
+		// 팬(0, i, i+1)을 삼각형 목록으로 푼다 — 배치 버퍼는 삼각형 목록 하나로 이어 그리기 때문.
+		for (size_t i = 1; i + 1 < vertexCount; ++i)
+		{
+			AppendPoint(handle.triangles, vertices, 0);
+			AppendPoint(handle.triangles, vertices, i);
+			AppendPoint(handle.triangles, vertices, i + 1);
+		}
+	}
+	else if (meshData.primitiveType == GL_TRIANGLES)
+	{
+		handle.triangles.assign(vertices, vertices + vertexCount * 3);
+	}
+	else
+	{
+		std::cout << "[렌더러] 지원하지 않는 메시 형식(" << meshData.primitiveType << ")이라 그리지 않습니다.\n";
+	}
 
 	return handle;
 }
 
 void Renderer::DestroyMesh(MeshHandle& mesh)
 {
-	if (mesh.vao != 0)
-	{
-		glDeleteVertexArrays(1, &mesh.vao);
-		mesh.vao = 0;
-	}
-	if (mesh.vbo != 0)
-	{
-		glDeleteBuffers(1, &mesh.vbo);
-		mesh.vbo = 0;
-	}
+	mesh.triangles.clear();
+	mesh.triangles.shrink_to_fit();
 }
 
 void Renderer::DrawMesh(const MeshHandle& mesh, const Mat4& mvp, float r, float g, float b, float a)
 {
-	glUseProgram(m_SolidRect.program);
-	glUniformMatrix4fv(m_SolidRect.uniformMVP, 1, GL_FALSE, mvp.m);
-	glUniform4f(m_SolidRect.uniformColor, r, g, b, a);
+	size_t vertexCount = mesh.triangles.size() / 3;
 
-	glBindVertexArray(mesh.vao);
-	glDrawArrays(mesh.primitiveType, 0, mesh.vertexCount);
+	for (size_t i = 0; i < vertexCount; ++i)
+	{
+		const float* v = &mesh.triangles[i * 3];
+		QueueVertex(mvp, v[0], v[1], v[2], 0.f, 0.f, r, g, b, a, kShapeSolid);
+	}
 }
 
 void Renderer::DrawTriangles(const float* vertices, int vertexCount, const Mat4& mvp, float r, float g, float b, float a)
@@ -194,16 +238,46 @@ void Renderer::DrawTriangles(const float* vertices, int vertexCount, const Mat4&
 		return;
 	}
 
-	glUseProgram(m_SolidRect.program);
-	glUniformMatrix4fv(m_SolidRect.uniformMVP, 1, GL_FALSE, mvp.m);
-	glUniform4f(m_SolidRect.uniformColor, r, g, b, a);
+	for (int i = 0; i < vertexCount; ++i)
+	{
+		const float* v = &vertices[i * 3];
+		QueueVertex(mvp, v[0], v[1], v[2], 0.f, 0.f, r, g, b, a, kShapeSolid);
+	}
+}
 
-	// 임시 버퍼를 이번 호출의 정점으로 통째로 다시 채운다(GL_STREAM_DRAW: 한 번 쓰고 한 번 그림).
-	glBindVertexArray(m_VaoDynamic);
-	glBindBuffer(GL_ARRAY_BUFFER, m_VBODynamic);
-	glBufferData(GL_ARRAY_BUFFER, sizeof(float) * 3 * vertexCount, vertices, GL_STREAM_DRAW);
+void Renderer::Flush()
+{
+	if (m_BatchVertices.empty())
+	{
+		return;
+	}
+
+	int vertexCount = (int)(m_BatchVertices.size() / kBatchFloatsPerVertex);
+
+	glUseProgram(m_ColorBatch.program);
+	glBindVertexArray(m_VaoBatch);
+
+	// 버퍼를 이번에 모은 정점으로 통째로 다시 채운다(GL_STREAM_DRAW: 한 번 쓰고 한 번 그림).
+	glBindBuffer(GL_ARRAY_BUFFER, m_VBOBatch);
+	glBufferData(GL_ARRAY_BUFFER, sizeof(float) * m_BatchVertices.size(), m_BatchVertices.data(), GL_STREAM_DRAW);
 
 	glDrawArrays(GL_TRIANGLES, 0, vertexCount);
+
+	m_BatchVertices.clear();
+}
+
+void Renderer::DrawFire(const Mat4& mvp, float time, float phaseOffset)
+{
+	// 먼저 모아 둔 도형을 그려야 이 불꽃보다 앞서 그려야 할 것들이 불꽃을 덮지 않는다.
+	Flush();
+
+	glUseProgram(m_Fire.program);
+	glUniformMatrix4fv(m_Fire.uniformMVP, 1, GL_FALSE, mvp.m);
+	glUniform1f(m_Fire.uniformTime, time);
+	glUniform1f(m_Fire.uniformPhaseOffset, phaseOffset);
+
+	glBindVertexArray(m_VaoRect);
+	glDrawArrays(GL_TRIANGLES, 0, 6);
 }
 
 void Renderer::DrawTexture(GLuint texture, const Mat4& mvp, float r, float g, float b, float a)
@@ -212,6 +286,8 @@ void Renderer::DrawTexture(GLuint texture, const Mat4& mvp, float r, float g, fl
 	{
 		return;
 	}
+
+	Flush();
 
 	glUseProgram(m_Text.program);
 	glUniformMatrix4fv(m_Text.uniformMVP, 1, GL_FALSE, mvp.m);
@@ -244,10 +320,10 @@ Renderer::TileBatchHandle Renderer::CreateTileBatch(const float* vertices, int v
 	glBindVertexArray(batch.vao);
 	glBindBuffer(GL_ARRAY_BUFFER, batch.vbo);
 
-	GLsizei stride = sizeof(float) * kTileBatchFloatsPerVertex;
+	GLsizei stride = (GLsizei)(sizeof(float) * kTileBatchFloatsPerVertex);
 	glEnableVertexAttribArray(0); // a_Position (x,y,z)
 	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, stride, (void*)0);
-	glEnableVertexAttribArray(1); // a_Local (lx,ly)
+	glEnableVertexAttribArray(1); // a_Extra (재질 번호 / 물가 정도)
 	glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(sizeof(float) * 3));
 	glEnableVertexAttribArray(2); // a_Color (r,g,b,a)
 	glVertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, stride, (void*)(sizeof(float) * 5));
@@ -271,15 +347,18 @@ void Renderer::DestroyTileBatch(TileBatchHandle& batch)
 	batch.vertexCount = 0;
 }
 
-void Renderer::DrawTileBatchSolid(const TileBatchHandle& batch, const Mat4& viewProjection)
+void Renderer::DrawTileBatchSolid(const TileBatchHandle& batch, const Mat4& viewProjection, float time)
 {
 	if (batch.vao == 0 || batch.vertexCount <= 0)
 	{
 		return;
 	}
 
+	Flush();
+
 	glUseProgram(m_TileBatchSolid.program);
 	glUniformMatrix4fv(m_TileBatchSolid.uniformMVP, 1, GL_FALSE, viewProjection.m);
+	glUniform1f(m_TileBatchSolid.uniformTime, time);
 
 	glBindVertexArray(batch.vao);
 	glDrawArrays(GL_TRIANGLES, 0, batch.vertexCount);
@@ -291,6 +370,8 @@ void Renderer::DrawTileBatchWater(const TileBatchHandle& batch, const Mat4& view
 	{
 		return;
 	}
+
+	Flush();
 
 	glUseProgram(m_TileBatchWater.program);
 	glUniformMatrix4fv(m_TileBatchWater.uniformMVP, 1, GL_FALSE, viewProjection.m);

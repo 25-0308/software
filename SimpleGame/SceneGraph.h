@@ -52,8 +52,8 @@ public:
 	// 트리 전체를 갱신하고, 파괴 예약된 액터를 프레임 끝에 정리한다.
 	void Update(float deltaSeconds, float time, const TileMap& tileMap);
 
-	// 뷰 컬링으로 화면 밖 액터를 거른 뒤, Ground → Decal → (그림자 → Object 깊이 정렬)
-	// 순서로 그린다.
+	// 뷰 컬링으로 화면 밖 액터를 거른 뒤, Ground → Decal → (그림자 → Object 깊이 정렬) → Overlay
+	// 순서로 그리고, 마지막에 렌더러에 모아 둔 도형을 Flush해서 씬 버퍼에 확실히 그려 둔다.
 	void Render(const RenderContext& ctx);
 
 	// 뷰 컬링 켜기/끄기(끄면 보이든 안 보이든 전부 그린다 — 최적화 효과 비교용).
@@ -85,4 +85,14 @@ private:
 	std::vector<Actor*> m_RenderGround;
 	std::vector<Actor*> m_RenderDecal;
 	std::vector<Actor*> m_RenderObjects;
+	std::vector<Actor*> m_RenderOverlay;
+
+	// Object 레이어를 깊이 정렬할 때 쓰는 목록. 비교할 때마다 부모 체인을 거슬러 월드 위치를 다시
+	// 계산하지 않도록, 액터마다 카메라에서 먼 정도를 한 번만 구해서 같이 담아 둔다.
+	struct SortedActor
+	{
+		Actor* actor;
+		float distance; // 카메라에서 먼 정도(클수록 멀어서 먼저 그림)
+	};
+	std::vector<SortedActor> m_SortedObjects;
 };

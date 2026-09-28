@@ -23,15 +23,17 @@ enum class ActorType
 	Player,
 	NPC,
 	Animal,    // 야생 짐승 (사슴/늑대)
+	Effect,    // 공중을 떠다니는 빛 알갱이 같은 순수 시각 효과(충돌·상호작용 없음)
 };
 
-// 그리기 순서 그룹. 씬 그래프는 Ground → Decal → Object 순서로 그리고,
-// Object만 깊이(y+z) 기준으로 정렬한다.
+// 그리기 순서 그룹. 씬 그래프는 Ground → Decal → Object → Overlay 순서로 그리고,
+// Object만 카메라에서 먼 것부터 깊이 정렬한다.
 enum class RenderLayer
 {
-	Ground, // 바닥 타일: 서로 겹치지 않으므로 정렬 불필요
-	Decal,  // 바닥 위 표시(마커/조준 링): 그림자·캐릭터보다 먼저 그림
-	Object, // 캐릭터/건물/나무 등: 깊이 정렬 후 그림
+	Ground,  // 바닥 타일: 서로 겹치지 않으므로 정렬 불필요
+	Decal,   // 바닥 위 표시(마커/조준 링): 그림자·캐릭터보다 먼저 그림
+	Object,  // 캐릭터/건물/나무 등: 깊이 정렬 후 그림
+	Overlay, // 모든 오브젝트 위에 덧그리는 효과(빛 알갱이 등): 정렬하지 않음
 };
 
 struct UpdateContext

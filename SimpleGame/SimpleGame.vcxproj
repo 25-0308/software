@@ -218,15 +218,14 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <None Include="Shaders\SolidRect.fs" />
-    <None Include="Shaders\SolidRect.vs" />
+    <None Include="Shaders\ColorBatch.fs" />
+    <None Include="Shaders\ColorBatch.vs" />
     <None Include="Shaders\PostProcess.vs" />
     <None Include="Shaders\BrightExtract.fs" />
     <None Include="Shaders\Blur.fs" />
     <None Include="Shaders\Composite.fs" />
     <None Include="Shaders\Grade.fs" />
     <None Include="Shaders\Shadow.vs" />
-    <None Include="Shaders\Shadow.fs" />
     <None Include="Shaders\Fire.fs" />
     <None Include="Shaders\TileBatch.vs" />
     <None Include="Shaders\TileBatchSolid.fs" />

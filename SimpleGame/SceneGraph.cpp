@@ -5,13 +5,14 @@
 #include <cmath>
 
 #include "Profiler.h"
+#include "Renderer.h"
 
 namespace
 {
 	// 뷰 볼륨에 걸치는 액터만 레이어별로 모은다. 경계 계층 덕분에, 자신과 자손 전체가 화면 밖인
 	// 노드는 자손을 하나하나 보지 않고 통째로 건너뛴다(예: 화면 밖 타일 청크 64칸을 검사 1번으로).
 	void CollectVisible(Actor& actor, const ViewVolume& view, bool culling, SceneRenderStats& stats,
-		std::vector<Actor*>& ground, std::vector<Actor*>& decal, std::vector<Actor*>& objects)
+		std::vector<Actor*>& ground, std::vector<Actor*>& decal, std::vector<Actor*>& objects, std::vector<Actor*>& overlay)
 	{
 		if (!actor.IsVisible() || actor.IsPendingDestroy())
 		{
@@ -40,6 +41,7 @@ namespace
 				case RenderLayer::Ground: ground.push_back(&actor); break;
 				case RenderLayer::Decal:  decal.push_back(&actor); break;
 				case RenderLayer::Object: objects.push_back(&actor); break;
+				case RenderLayer::Overlay: overlay.push_back(&actor); break;
 				}
 				++stats.renderedActors;
 			}
@@ -47,8 +49,23 @@ namespace
 
 		for (const std::unique_ptr<Actor>& child : actor.GetChildren())
 		{
-			CollectVisible(*child, view, culling, stats, ground, decal, objects);
+			CollectVisible(*child, view, culling, stats, ground, decal, objects, overlay);
 		}
+	}
+
+	// 액터가 카메라에서 먼 정도(클수록 멀다). 직교 투영의 클립 z는 카메라에 가까울수록 작아지므로
+	// (near → -1, far → +1), view-projection의 셋째 행으로 월드 위치의 클립 z를 구하면 그대로 "먼
+	// 정도"가 된다 — 카메라 각도를 바꿔도 정렬이 저절로 맞는다. 예전 정렬 키(y+z)는 카메라가 (+x,+y)
+	// 쪽에서 내려다본다는 걸 반영하지 못해서, x 방향으로 떨어진 나무·건물과 캐릭터의 앞뒤가 뒤집혀
+	// 보였다(나무 앞에 선 캐릭터가 수관에 가려지는 등).
+	float DistanceFromCamera(const Mat4& viewProjection, const Actor& actor)
+	{
+		const float* m = viewProjection.m;
+		float x = actor.GetWorldX();
+		float y = actor.GetWorldY();
+		float z = actor.GetWorldZ();
+
+		return m[2] * x + m[6] * y + m[10] * z + m[14];
 	}
 
 	void VisitAll(Actor& actor, const std::function<void(Actor&)>& visitor)
@@ -166,7 +183,8 @@ void SceneGraph::Render(const RenderContext& ctx)
 	m_RenderGround.clear();
 	m_RenderDecal.clear();
 	m_RenderObjects.clear();
-	CollectVisible(*m_Root, view, m_CullingEnabled, stats, m_RenderGround, m_RenderDecal, m_RenderObjects);
+	m_RenderOverlay.clear();
+	CollectVisible(*m_Root, view, m_CullingEnabled, stats, m_RenderGround, m_RenderDecal, m_RenderObjects, m_RenderOverlay);
 
 	m_LastStats = stats;
 
@@ -185,32 +203,47 @@ void SceneGraph::Render(const RenderContext& ctx)
 		}
 	}
 
-	// 이 씬은 2.5D이고 실제 3D 깊이버퍼가 아니므로, 월드 깊이(y + z) 기준으로
-	// 정렬한 뒤 뒤에서 앞 순서로 그린다 (페인터 알고리즘). 컬링 후에 정렬하므로
-	// 화면 밖 액터는 정렬 비용도 들지 않는다.
-	std::stable_sort(m_RenderObjects.begin(), m_RenderObjects.end(), [](const Actor* lhs, const Actor* rhs)
+	// 이 씬은 2.5D이고 실제 3D 깊이버퍼가 아니므로, 카메라에서 먼 것부터 가까운 것 순서로
+	// 그린다(페인터 알고리즘). 컬링 후에 정렬하므로 화면 밖 액터는 정렬 비용도 들지 않는다.
+	m_SortedObjects.clear();
+	for (Actor* actor : m_RenderObjects)
 	{
-		return (lhs->GetWorldY() + lhs->GetWorldZ()) < (rhs->GetWorldY() + rhs->GetWorldZ());
+		SortedActor entry = { actor, DistanceFromCamera(ctx.viewProjection, *actor) };
+		m_SortedObjects.push_back(entry);
+	}
+
+	std::stable_sort(m_SortedObjects.begin(), m_SortedObjects.end(), [](const SortedActor& lhs, const SortedActor& rhs)
+	{
+		return lhs.distance > rhs.distance;
 	});
 
 	{
 		// 그림자를 먼저 그려 캐릭터/건물 발밑에 깔리도록 한다.
 		Profiler::ScopedTimer timer(Profiler::Section::RenderShadow);
-		for (Actor* actor : m_RenderObjects)
+		for (const SortedActor& entry : m_SortedObjects)
 		{
-			if (actor->CastsShadow())
+			if (entry.actor->CastsShadow())
 			{
-				actor->OnRenderShadow(ctx);
+				entry.actor->OnRenderShadow(ctx);
 			}
 		}
 	}
 
 	{
 		Profiler::ScopedTimer timer(Profiler::Section::RenderObject);
-		for (Actor* actor : m_RenderObjects)
+		for (const SortedActor& entry : m_SortedObjects)
+		{
+			entry.actor->OnRender(ctx);
+		}
+
+		for (Actor* actor : m_RenderOverlay)
 		{
 			actor->OnRender(ctx);
 		}
+
+		// 이번 씬에서 렌더 큐에 모아 둔 도형을 여기서 그린다 — 후처리가 프레임버퍼를 바꾸기 전에 씬
+		// 버퍼에 그려 두어야 하고, 그 비용이 이 구간(씬렌더.오브젝트)에 잡히게 하려는 것.
+		ctx.renderer.Flush();
 	}
 }
 
