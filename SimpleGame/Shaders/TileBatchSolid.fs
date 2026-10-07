@@ -3,7 +3,7 @@
 // 지형(잔디/돌바닥/흙길) 배치. 색은 LevelBuilder가 정점마다 구워 둔 값(주변 지형과 부드럽게 섞이고
 // 물가는 모래색)을 쓰고, 여기서는 재질별 잔무늬와 천천히 흘러가는 구름 그림자만 더한다.
 in vec3 v_WorldPos;
-in vec2 v_Extra; // y: 재질 번호(0 잔디, 1 돌바닥, 2 흙길, 9 무늬 없음 — 꽃·풀 같은 장식)
+in vec2 v_Extra; // y: 재질 번호(0 잔디, 1 돌바닥, 2 흙길, 3 바위 산, 9 무늬 없음 — 꽃·풀 같은 장식)
 in vec4 v_Color;
 layout(location=0) out vec4 FragColor;
 
@@ -66,6 +66,14 @@ void main()
 		color *= 0.88 + 0.22 * Noise(p * 2.2);
 		float grit = Noise(p * 7.0);
 		color *= 1.0 + 0.25 * smoothstep(0.78, 0.9, grit);
+	}
+	else if (material < 3.5)
+	{
+		// 바위 산: 큼직한 명암 얼룩 + 가늘게 갈라진 어두운 틈.
+		float crag = Noise(p * 1.3) * 0.6 + Noise(p * 3.9) * 0.4;
+		color *= 0.82 + 0.3 * crag;
+		float crack = abs(Noise(p * 2.6 + vec2(7.0, 3.0)) - 0.5);
+		color *= 1.0 - 0.35 * (1.0 - smoothstep(0.0, 0.05, crack));
 	}
 
 	color *= 1.0 - 0.2 * CloudShadow(p, u_Time);

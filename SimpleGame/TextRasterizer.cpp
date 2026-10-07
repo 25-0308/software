@@ -38,7 +38,7 @@ namespace
 	}
 }
 
-TextRasterizer::TextRasterizer(int fontPixelHeight)
+TextRasterizer::TextRasterizer(int fontPixelHeight, bool bold)
 {
 	HDC screenDc = GetDC(nullptr);
 	HDC memoryDc = CreateCompatibleDC(screenDc);
@@ -46,7 +46,7 @@ TextRasterizer::TextRasterizer(int fontPixelHeight)
 
 	// 한글이 들어 있는 맑은 고딕. 없는 시스템에서는 GDI가 비슷한 글꼴로 대신한다.
 	// ANTIALIASED_QUALITY: 색 번짐 없는 회색조 안티앨리어싱(알파로 쓰기 좋다).
-	HFONT font = CreateFontW(-fontPixelHeight, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+	HFONT font = CreateFontW(-fontPixelHeight, 0, 0, 0, bold ? FW_BOLD : FW_NORMAL, FALSE, FALSE, FALSE,
 		DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, ANTIALIASED_QUALITY,
 		DEFAULT_PITCH | FF_DONTCARE, L"Malgun Gothic");
 

@@ -1,20 +1,32 @@
 #pragma once
 
+#include <functional>
+
 #include "TileMap.h"
 
-// 무작위로 생성된 레벨에서 마을/호수의 중심 위치와 반지름. SpawnLevelActors()가 이 값을
-// 기준으로 건물/NPC/아이템 등을 배치한다(예: 퀘스트 아이템은 호수 반지름 바로 바깥 물가에).
-struct LevelLayout
+// 맵 지형(타일)을 칠하는 도구 모음. 지역(맵)마다 어떤 모양으로 칠할지는 WorldMaps.cpp가 정하고,
+// 여기에는 어느 지역에서나 쓰는 붓만 둔다(원·선·조건 칠하기, 연결성 보장, 결정적 노이즈).
+// 좌표는 모두 월드 좌표(타일 중심 기준)다.
+namespace Terrain
 {
-	float villageCenterX = 0.f;
-	float villageCenterY = 0.f;
-	float villageRadius = 0.f;
-	float lakeCenterX = 0.f;
-	float lakeCenterY = 0.f;
-	float lakeRadius = 0.f;
-};
+	void Fill(TileMap& tileMap, TileType type);
 
-// 마을(Stone)과 호수(Water)를 무작위 위치/크기로 배치한다. 호수 때문에 물에
-// 막혀 갈 수 없는 영역이 생기면, 마을에서부터 도달 가능한 가장 가까운 칸까지
-// 직선으로 길(Path)을 뚫어 맵 전체가 하나로 연결되도록 보장한다.
-LevelLayout GenerateVillageLevel(TileMap& tileMap);
+	// 타일 중심이 (centerX, centerY)에서 radius 안에 드는 칸을 type으로 칠한다.
+	void PaintDisk(TileMap& tileMap, float centerX, float centerY, float radius, TileType type);
+
+	// 선분 (x0,y0)-(x1,y1)에서 halfWidth 안에 드는 칸을 type으로 칠한다(길·강·골목).
+	void PaintLine(TileMap& tileMap, float x0, float y0, float x1, float y1, float halfWidth, TileType type);
+
+	// 타일 중심의 월드 좌표를 받아 true를 돌려주는 칸을 type으로 칠한다(산자락 띠, 구불구불한 해안선 등 자유 모양).
+	void PaintWhere(TileMap& tileMap, const std::function<bool(float, float)>& predicate, TileType type);
+
+	// 지나갈 수 있는 칸이 모두 (startX, startY)에서 걸어서 닿을 수 있도록, 고립된 칸이 있으면 그 칸에서
+	// 시작 지점 쪽으로 길(Path)을 뚫는다. 지형을 손으로 그리다 실수로 막힌 곳이 생겨도 안전하게 해 준다.
+	void EnsureFullyConnected(TileMap& tileMap, float startX, float startY);
+
+	// 정수 격자점마다 고정된 0~1 난수(같은 입력이면 항상 같은 값).
+	float Hash(int x, int y, int seed);
+
+	// 격자점 난수를 부드럽게 보간한 값 노이즈(0~1). 경계를 자연스럽게 흔들 때 쓴다.
+	float Noise(float x, float y, int seed);
+}

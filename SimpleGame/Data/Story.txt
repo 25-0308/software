@@ -1,0 +1,1123 @@
+# =====================================================================================
+# 황혼의 신탁 — 이야기 데이터 (대사 · 진행 단계 · 지역)
+# 근거 문서: 저장소 루트의 STORY.md(스토리 바이블 v0.3). ID·플래그는 STORY.md 규칙을 그대로 쓴다.
+# 게임을 켤 때마다 이 파일을 읽으므로, 대사만 고칠 땐 다시 컴파일하지 않아도 된다(게임만 다시 실행).
+# 읽다가 틀린 줄이 있으면 콘솔에 "[이야기 데이터] 줄 N: ..."으로 알려 주고 그 줄만 건너뛴다.
+#
+# ---- 형식 ----
+# '#'로 시작하는 줄은 주석이다. 줄 중간의 #은 주석이 아니라 대사의 일부다.
+#
+# name <화자ID> <표시 이름>          대화창 이름표. 표시 이름을 비우면 지문(이름표 없음).
+# step <단계ID> [<지역ID>] [@대상,대상,...] <목표 문구>
+#                                    진행 단계. 선언한 순서가 곧 진행 순서다(조건식의 STORY_STEP 크기 비교).
+#                                    <지역ID>(LOC_로 시작): 목표가 있는 지역. 플레이어가 다른 지역에 있으면 목표 표시
+#                                    (머리 위 마름모·발밑 화살표·미니맵·지도)가 지금 있는 지역의 이정표를 가리키고, 목표
+#                                    문구 아래에 목적지가 뜨며, 이정표 선택지 중 그 지역으로 가는 것에 "◆ 목표"가 붙는다.
+#                                    지역을 비우면 따지지 않는다(대상이 지금 지역에 하나도 없을 때만 이정표를 가리킴).
+#                                    @대상: 머리 위에 금빛 마름모를 띄울 스토리 ID들(쉼표로 잇고 공백 없이).
+#                                    "ID?조건"이면 그 조건이 참일 때만 표시한다(조건에도 공백 없이, 예: A&&!B).
+#                                    목표 문구엔 {변수}를 쓸 수 있다.
+# region <지역ID> <지역 이름> | <한마디>   지역에 들어설 때 뜨는 이름 배너와 헤르메스의 한마디.
+# bark <화자ID> (조건) <대사>         그 인물이 곁(8칸 안)에 있을 때 45~75초마다 채팅창에 뜨는 혼잣말.
+#
+# == <대화ID>                         대화 블록 시작. 다음 == 까지가 이 블록이다.
+#   on talk|pickup|trigger|kill|enter <대상ID>
+#                                    대화가 저절로 열리는 계기(말 걸기/줍기/트리거 영역 진입/처치/지역 도착).
+#                                    on 줄이 없으면 다른 대화의 GOTO로만 열린다.
+#   if <조건>                         모두 참이어야 열린다(여러 줄 가능).
+#   once                              한 번 본 뒤로는 열리지 않는다.
+#   <화자ID>: <대사>                  PLAYER는 플레이어, narr는 지문. {변수}는 그 값으로 바뀐다.
+#   choice [(조건)] <문구> -> <효과>; <효과>   선택지(숫자키로 고름). 조건이 거짓이면 보이지 않는다.
+#   do <효과>; <효과>                 대화가 끝날 때 적용(선택지가 있으면 고른 선택지 효과보다 먼저).
+#   or                                여기부터 다음 변형. 같은 대화를 다시 열면 변형을 차례로 돌려 가며 보여준다.
+#
+# 같은 계기·대상에 블록이 여럿이면, 조건이 맞는 것 중 이 파일에서 가장 먼저 나온 블록이 열린다.
+# → 진행 단계별로 구체적인 블록을 위에, 평소 잡담을 아래에 둔다.
+#
+# 조건: A && B || C 는 (A && B) || C (괄호는 없음). 항은 변수 / !변수 / 변수 연산자 값 (== != >= <= > <).
+#       STORY_STEP끼리는 step 선언 순서로, 정수끼리는 수로, true/false는 참거짓으로 비교한다.
+#       설정한 적 없는 변수는 빈 값이다(거짓, 수로는 0).
+# 효과: SET 변수 값 / ADD 변수 수 / STEP 단계ID / UNLOCK 지역ID / GOTO 대화ID(그 대화의 조건이 참일 때만 열림) /
+#       TRAVEL 지역ID / XP 수 / HEAL / NOTICE 문구(채팅창 안내 — 문구에 ; 는 쓸 수 없음) /
+#       EVENT BLESSING(수호신의 첫 축복) / EVENT SHAKE 초(화면 흔들림) / EVENT FLARE 스토리ID(흐려진 신이 잠깐 선명해짐)
+#       대화가 열려 있는 동안 GOTO로 부른 대화는 지금 대화가 끝난 뒤에 차례로 열린다.
+#
+# ---- 변수 ----
+# STORY.md 8장의 변수: PATRON, PATRON_TRUST(기본 50), HUMAN_FAITH(기본 50), ERIS_CLUE(0~5), FLAG_THREADLESS_REVEALED,
+#   MQ02_DONE, PYTHIA_LOST 등. 분기 판정은 STORY.md 8장 변수를 기준으로 한다.
+# 구현용 진행 기록(게임 진행을 기록하는 변수라 여기에만 정리한다 — STORY.md 8장은 분기·엔딩 판정 변수만 둔다):
+#   STORY_STEP            지금 진행 단계(아래 step 목록)
+#   MAP                   지금 있는 지역 ID(지역에 들어설 때 게임이 설정)
+#   UNLOCK_<지역ID>       이정표로 갈 수 있는 지역(UNLOCK 효과로 열리고, 한 번 가 본 지역은 게임이 자동으로 true)
+#   LAUREL                MQ_00 축제 준비로 모은 월계수 가지 수
+#   CRACK_OPEN            신탁의 균열이 열렸는지(그림자 괴물이 나오고 순례객이 흩어짐)
+#   PYTHON_SLAIN          그림자 퓌톤을 쓰러뜨렸는지
+#   MQ01_SCHEDULE_SEEN    헤르메스에게 면접 일정표를 받았는지
+#   MET_<신>              MQ_01에서 면담을 마친 신(ZEUS / POSEIDON / HADES / APHRODITE / HERMES)
+#   INTERVIEW_COUNT       MQ_01에서 면담을 마친 신의 수
+#   HERMES_GOSSIP_SEEN    헤르메스의 황금사과 가십(복선 F-03)을 들었는지
+#   BLESSING_GRANTED      수호신의 첫 축복을 받았는지(EVENT BLESSING이 설정)
+#   ATHENS_ARRIVED / DELPHI_RETURNED   지역에 처음 도착·다시 돌아왔을 때의 연출을 봤는지
+#   HEARTH_GOD_NAMED      MQ_02에서 옛 화로의 신에게 이름을 불러 줬는지(SQ_ATHENS_02로 이어질 예정)
+#
+# ---- 아직 없는 것(TODO) ----
+# TODO: RQ_<신>_01~03 수호신 루트 — 지금은 수호신을 고르면 곧바로 MQ_02로 이어진다(STORY.md에선 루트 3번째 퀘스트 후 합류).
+# TODO: 축복의 액티브 스킬·스킬 트리(지금은 상시 효과만 있음 — StoryDirector::GrantBlessing).
+# TODO: MQ_03 이후의 메인 퀘스트, 서브 퀘스트(SQ_*), 엔딩 판정, MQ_02 완료 시의 "지역별 신앙 지표 UI".
+#
+# ---- STORY.md에 없거나 어긋나서 여기서 정한 것(2026-10-07) ----
+# - 옛 화로의 신의 이름: 에스카로스(그리스어 eschara '화로'에서). STORY.md MQ_02엔 이름이 없다.
+# - 대회의에서 헤르메스가 제우스를 부르는 말: STORY.md 원문은 "형님"이지만 헤르메스는 제우스의 아들이라
+#   "아버지"로 고쳤다(대사 예시는 톤 기준이라 고쳐 써도 된다 — STORY.md 0장).
+# - 위의 구현용 진행 기록 변수는 STORY.md 8장에 넣지 않는다(8장은 분기·엔딩 판정 변수 전용).
+# - 수호신 루트(RQ_*)는 그 무대가 될 지역(에게해·키프로스·타이나론 등)을 지을 때 함께 만든다. 그때까진 위 TODO대로.
+# =====================================================================================
+
+
+# ---- 화자 ----
+name PLAYER 나
+name narr
+name CHR_PYTHIA 피티아
+name CHR_PYTHIA_VOICES 세 겹의 목소리
+name CHR_ERIS 떠돌이 노파
+name CHR_HERMES 헤르메스
+name CHR_ZEUS 제우스
+name CHR_POSEIDON 포세이돈
+name CHR_HADES 하데스
+name CHR_APHRODITE 아프로디테
+name CHR_HERA 헤라
+name CHR_ATHENA 아테나
+name CHR_ARES 아레스
+name CHR_DIONYSUS 디오니소스
+name CHR_HEPHAESTUS 헤파이스토스
+name CHR_PAN 판
+name CHR_HEARTH_GOD 옛 화로의 신
+name CHR_HEARTH_GOD_NAMED 에스카로스
+name NPC_PILGRIM 순례객
+name NPC_MERCHANT 상인
+name NPC_DELPHI_VILLAGER 델포이 주민
+name NPC_SHEPHERD 양치기
+name NPC_ATHENS_SKEPTIC 투덜대는 시민
+name NPC_ATHENS_CITIZEN 아테네 시민
+name NPC_PRIEST 유피테르 신전 사제
+name NPC_PHILOSOPHER 철학자
+
+
+# ---- 진행 단계(선언 순서 = 진행 순서) ----
+step MQ_00.START LOC_DELPHI 신탁 축제 날 아침
+step MQ_00.FESTIVAL LOC_DELPHI @CHR_PYTHIA 제단 곁의 피티아에게 말 걸기 (E)
+step MQ_00.LAUREL LOC_DELPHI @ITEM_LAUREL 카스탈리아 샘가에서 월계수 가지 줍기 ({LAUREL}/3)
+step MQ_00.LAUREL_DONE LOC_DELPHI @CHR_PYTHIA 월계수 가지를 피티아에게 가져다주기
+step MQ_00.RITUAL LOC_DELPHI @TRIGGER_ALTAR 신탁 제단 앞에 서서 본 의식 지켜보기
+step MQ_00.ESCAPE LOC_DELPHI @MON_SHADOW_PYTHON 균열에서 기어나온 그림자 퓌톤 쓰러뜨리기 (Space)
+step MQ_00.CAVE LOC_DELPHI @TRIGGER_CAVE 피티아와 함께 바위 언덕의 동굴로 피하기
+step MQ_00.OLDWOMAN LOC_DELPHI @CHR_ERIS 모닥불 곁의 노파에게 말 걸기
+step MQ_00.HERMES LOC_DELPHI @CHR_HERMES 하늘에서 떨어진 누군가에게 가 보기
+step MQ_01.INTERVIEW LOC_DELPHI @CHR_HERMES?!MET_HERMES,CHR_ZEUS?MQ01_SCHEDULE_SEEN&&!MET_ZEUS,CHR_POSEIDON?MQ01_SCHEDULE_SEEN&&!MET_POSEIDON,CHR_HADES?MQ01_SCHEDULE_SEEN&&!MET_HADES,CHR_APHRODITE?MQ01_SCHEDULE_SEEN&&!MET_APHRODITE 신전 광장의 신들과 면담하기 ({INTERVIEW_COUNT}/5)
+step MQ_01.CHOOSE LOC_DELPHI @CHR_ZEUS,CHR_POSEIDON,CHR_HADES,CHR_APHRODITE,CHR_HERMES 수호신 고르기 — 모실 신에게 말 걸기
+step MQ_01.CHOSEN LOC_OLYMPUS_FOOT 올림포스 산기슭으로 떠나기
+step MQ_02.COUNCIL LOC_OLYMPUS_FOOT @TRIGGER_COUNCIL 언덕 위 회의장에서 열리는 신들의 대회의에 참석하기
+step MQ_02.ATHENS LOC_ATHENS @OBJ_FALLEN_STATUE 아테네 아고라의 쓰러진 신상 살펴보기
+step MQ_02.FAITH LOC_ATHENS @NPC_ATHENS_SKEPTIC 신상 곁에서 투덜대는 시민과 이야기하기
+step MQ_02.ALLEY LOC_ATHENS @CHR_HEARTH_GOD 뒷골목 막다른 곳의 식은 화덕 찾아가기
+step MQ_02.PRIESTS LOC_ATHENS @OBJ_PRIEST_LEDGER 사제단 창고 앞에 떨어진 장부 조사하기
+step MQ_02.DONE [2장 완료] 다음 이야기(MQ_03 배신자의 이름)는 준비 중
+
+
+# ---- 지역 ----
+region LOC_DELPHI 델포이 · 파르나소스 산기슭 | 헤르메스: "세상의 배꼽이래. 신탁은 애매하고, 무화과는 비싸."
+region LOC_OLYMPUS_FOOT 올림포스 산기슭 · 테살리아 | 헤르메스: "제우스 신전 근처에서 이상하게 잘생긴 동물을 보면, 일단 피하세요."
+region LOC_ATHENS 아테네 · 폴리스 연합 | 헤르메스: "말 많은 도시야. 신들 험담도 여기가 제일 빨라. 나 다음으로."
+
+
+# ---- 동료의 혼잣말(피티아) ----
+# 헛소리(복선 F-01)는 처음엔 웃기게, 뒤로 갈수록 덜 웃기게.
+bark CHR_PYTHIA (STORY_STEP >= MQ_01.INTERVIEW) 보인다… 큰 바다… 젖은… 아, 미안. 혼잣말이야.
+bark CHR_PYTHIA (STORY_STEP >= MQ_01.INTERVIEW) 누가… 실타래를… 아니, 실타래 모양 빵이었나. 배고파서 그래.
+bark CHR_PYTHIA (STORY_STEP >= MQ_01.INTERVIEW) 너 어릴 때 신전 계단에서 미끄러져서 사흘을 울었어. …왜 갑자기 그 생각이 나지.
+bark CHR_PYTHIA (STORY_STEP >= MQ_01.INTERVIEW) 신들은 밥 안 먹나? 암브로시아만 먹으면 질릴 것 같은데.
+bark CHR_PYTHIA (STORY_STEP >= MQ_01.INTERVIEW && MAP == LOC_DELPHI) 균열 쪽은 쳐다보지 마. 저 틈에서 자꾸 누가 내 이름을 불러.
+bark CHR_PYTHIA (MAP == LOC_OLYMPUS_FOOT) 저 위가 올림포스래. …지금도 우리를 내려다보고 있겠지?
+bark CHR_PYTHIA (MAP == LOC_OLYMPUS_FOOT) 강은 여울로 건너. 신발 젖으면… 젖은 양말… 아니야, 아무것도.
+bark CHR_PYTHIA (MAP == LOC_ATHENS) 아테네 사람들은 말이 빨라. 따라가다가 내 혀가 꼬이겠어.
+bark CHR_PYTHIA (STORY_STEP >= MQ_02.ATHENS) …왕관이… 아니야. 요즘 입이 자꾸 제멋대로 움직여.
+bark CHR_PYTHIA (PATRON == HADES) 하데스 님 축복을 받은 뒤로 네 그림자가 좀 진해진 것 같아. 기분 탓이겠지?
+bark CHR_PYTHIA (PATRON == HERMES) 천천히 좀 걸어! 축복을 받았으면 받은 거지, 왜 나까지 뛰게 만들어.
+
+
+# =====================================================================================
+# MQ_00 프롤로그 — 신탁의 균열 (LOC_DELPHI)
+# =====================================================================================
+
+== MQ00_OPENING
+on enter LOC_DELPHI
+if STORY_STEP == MQ_00.START
+narr: 파르나소스 산기슭, 델포이. 일 년에 한 번 열리는 신탁 축제 날 아침이다.
+narr: 신전 계단은 새벽부터 순례객으로 가득하고, 시장에선 월계관과 무화과와 "신탁 적중 기념품"이 불티나게 팔린다.
+narr: 당신은 이 신전의 잡일꾼이다. 이십 년 전 신전 계단에서 발견되어, 무녀 피티아의 손에 자란 아이.
+narr: 오늘도 할 일은 산더미다. 우선 제단 곁의 피티아에게 가 보자.
+do STEP MQ_00.FESTIVAL
+
+== MQ00_FESTIVAL
+on talk CHR_PYTHIA
+if STORY_STEP == MQ_00.FESTIVAL
+CHR_PYTHIA: 왔구나, 꼬맹이! 오늘 순례객이 평소의 세 배야. 세 배! 아폴론 님도 오늘만큼은 우리 편이시다.
+narr: 피티아가 삼발이 곁에서 순례객의 손바닥을 들여다보더니, 눈을 감고 엄숙하게 읊는다.
+CHR_PYTHIA: 보인다… 큰 바다… 젖은 양말…
+CHR_PYTHIA: …아, 이건 아까 빨래 걷는 걸 깜빡한 거네.
+narr: 순례객은 감격한 얼굴로 은화 한 닢을 두고 떠난다.
+CHR_PYTHIA: 봤지? 원래 신탁은 애매해야 장사가 돼. 너무 정확하면 다들 겁먹고 안 와.
+choice [진지] 그래도 신탁인데, 그렇게 막 해도 돼? -> GOTO MQ00_FESTIVAL_SERIOUS
+choice [냉소] 젖은 양말에 은화 한 닢이라니. 이게 사기가 아니면 뭐야. -> GOTO MQ00_FESTIVAL_CYNIC
+choice [유머] 그럼 빨래는 내가 걷을게. 적중률은 올려 드려야지. -> GOTO MQ00_FESTIVAL_HUMOR
+
+== MQ00_FESTIVAL_SERIOUS
+CHR_PYTHIA: 신탁은 아폴론 님 말씀을 옮기는 거야. 근데 요 이십 년은 그분도 통 말씀이 없으셔서… 행간을 내가 좀 채우는 거지.
+CHR_PYTHIA: 그리고 생각해 봐. 저 사람, 집에 가면 진짜로 빨래부터 걷을걸? 그럼 맞은 거야.
+do GOTO MQ00_LAUREL_REQUEST
+
+== MQ00_FESTIVAL_CYNIC
+CHR_PYTHIA: 사기라니! 이건 해석의 여지라는 거야. 해석은 손님 몫, 은화는 신전 몫.
+CHR_PYTHIA: 그 은화로 네 밥을 이십 년 해 먹였어. 고맙습니다, 하고 먹어.
+do GOTO MQ00_LAUREL_REQUEST
+
+== MQ00_FESTIVAL_HUMOR
+CHR_PYTHIA: 오, 좋은 생각. 그럼 내일 신탁은 "보인다… 뽀송뽀송한 양말…"로 가자.
+CHR_PYTHIA: 너는 어릴 때부터 이런 데만 머리가 잘 돌아갔어.
+do GOTO MQ00_LAUREL_REQUEST
+
+== MQ00_LAUREL_REQUEST
+CHR_PYTHIA: 아, 맞다. 본 의식에 쓸 월계관이 모자라. 카스탈리아 샘가에 월계수 가지가 떨어져 있을 거야. 세 개만 주워 와.
+CHR_PYTHIA: 샘은 신전 오른쪽으로 난 길 끝이야. 금빛 표시 보이지? 늑대 조심하고. 너 어릴 때 늑대 보고 울면서… 아니다, 됐다. 다녀와.
+do SET LAUREL 0; STEP MQ_00.LAUREL
+
+# 월계수 가지 줍기: 대화창 없이 채팅창 안내만(효과만 있는 블록). 마지막 가지를 위에 둬야 먼저 걸린다.
+== MQ00_LAUREL_LAST
+on pickup ITEM_LAUREL
+if STORY_STEP == MQ_00.LAUREL && LAUREL >= 2
+do ADD LAUREL 1; NOTICE [월계수 가지 3/3] 다 모았다. 피티아에게 돌아가자.; STEP MQ_00.LAUREL_DONE
+
+== MQ00_LAUREL_PICK
+on pickup ITEM_LAUREL
+if STORY_STEP == MQ_00.LAUREL
+do ADD LAUREL 1; NOTICE [월계수 가지 {LAUREL}/3]
+
+== MQ00_LAUREL_RETURN
+on talk CHR_PYTHIA
+if STORY_STEP == MQ_00.LAUREL_DONE
+CHR_PYTHIA: 오, 셋 다 멀쩡하네. 잘했어. 의식만 무사히 끝나면 오늘 저녁은 고기다.
+narr: 피티아가 월계관을 엮다가 문득 손을 멈춘다. 눈동자가 잠깐 흐려진다.
+CHR_PYTHIA: …왕관이… 계단에서 넘어진다.
+PLAYER: 뭐?
+CHR_PYTHIA: 응? 몰라. 그냥 입에서 나왔어. 요즘 자꾸 이래. 늙었나 봐.
+CHR_PYTHIA: 자, 의식 시작한다. 제단 앞에 서 있어. 너 거기 있어야 내가 안 떨려.
+do STEP MQ_00.RITUAL
+
+== MQ00_RITUAL
+on trigger TRIGGER_ALTAR
+if STORY_STEP == MQ_00.RITUAL
+narr: 향 연기가 피어오르고, 피티아가 삼발이에 오른다. 웅성거리던 광장이 조용해진다.
+CHR_PYTHIA: 빛나는 아폴론이시여, 오늘도 저희에게… 저희에게…
+narr: 피티아의 말이 끊긴다. 고개가 천천히 꺾이고, 입술이 저 혼자 움직인다.
+CHR_PYTHIA_VOICES: 잣는다… 잰다… 끊는다…
+narr: 세 개의 목소리가 한꺼번에 흘러나온다. 하나는 젊고, 하나는 늙었고, 하나는 사람의 것이 아니다.
+CHR_PYTHIA_VOICES: 누가… 실타래를… 먹었어…
+narr: 쩍— 제단 앞 바닥이 갈라진다. 틈에서 보랏빛 연기가 솟고, 순례객들이 비명을 지르며 흩어진다.
+narr: 연기 속에서 거대한 그림자 뱀이 고개를 든다. 먼 옛날 아폴론이 쓰러뜨렸다던 괴물, 퓌톤의 그림자다.
+CHR_PYTHIA: 꼬맹이… 도망…쳐…
+PLAYER: 안 가. 내가 막을게.
+do SET CRACK_OPEN true; EVENT SHAKE 1.5; NOTICE [전투] 그림자 퓌톤에게 다가가 Space로 공격하자.; STEP MQ_00.ESCAPE
+
+== MQ00_PYTHON_SLAIN
+on kill MON_SHADOW_PYTHON
+if STORY_STEP == MQ_00.ESCAPE
+narr: 그림자 퓌톤이 연기처럼 흩어진다. 그러나 균열은 닫히지 않는다. 갈라진 틈 사이로 무언가가 계속 속삭인다.
+CHR_PYTHIA: 하아… 머리가… 깨질 것 같아. 여기 있으면 안 돼. 저 아래 바위 언덕… 동굴로…
+narr: 기진맥진한 피티아를 부축해 일으킨다. 이제부터 그녀는 당신 곁에서 걷는다.
+do SET PYTHON_SLAIN true; XP 40; STEP MQ_00.CAVE
+
+# "실 없음" 공개 — 유머 없이(STORY.md MQ_00-4). 그래서 세 번째 선택지는 [유머] 대신 [침묵].
+== MQ00_CAVE
+on trigger TRIGGER_CAVE
+if STORY_STEP == MQ_00.CAVE
+narr: 동굴 안은 서늘하다. 바깥의 소란이 멀어지고, 물방울 떨어지는 소리만 남는다.
+narr: 한참 뒤, 숨을 고른 피티아가 당신을 바라본다. 처음 보는 진지한 얼굴이다.
+CHR_PYTHIA: 손 줘 봐. …신탁을 해 줄게. 진짜로. 장난 아니고.
+narr: 피티아가 당신의 손을 감싸 쥐고 눈을 감는다. 오래, 아주 오래.
+CHR_PYTHIA: …아무것도 없어.
+CHR_PYTHIA: 너한테는 실이 없어. 누구에게나 있는 운명의 실이… 너한테만 없어.
+CHR_PYTHIA: 네가 온 날은… 신전이 유난히 조용했어. 베틀 소리가 멎은 것처럼. 그땐 그냥 기분 탓인 줄 알았는데.
+choice [진지] 실이 없다는 게… 무슨 뜻이야? -> GOTO MQ00_CAVE_AFTER
+choice [냉소] 내 미래는 나도 모르고 신들도 모른다는 거네. 공평하네. -> GOTO MQ00_CAVE_AFTER
+choice [침묵] (피티아의 손을 마주 잡는다) -> GOTO MQ00_CAVE_AFTER
+
+== MQ00_CAVE_AFTER
+CHR_PYTHIA: 나도 몰라. 이런 건 처음이야. 신탁에도, 신전 두루마리에도 이런 얘긴 없었어.
+CHR_PYTHIA: 그래도 하나는 알아. 실이 있든 없든, 넌 내가 키운 애야. 그건 안 바뀌어.
+narr: 동굴 밖에서 장작 타는 냄새가 흘러든다. 누군가 불을 피운 모양이다.
+do SET FLAG_THREADLESS_REVEALED true; STEP MQ_00.OLDWOMAN
+
+# 떠돌이 노파 = 에리스의 위장. 금빛 사과(복선 F-02), 싸움 붙이는 "인생 조언", 사과 얘기엔 정색.
+== MQ00_OLDWOMAN
+on talk CHR_ERIS
+if STORY_STEP == MQ_00.OLDWOMAN
+narr: 모닥불 곁에 두건을 쓴 노파가 앉아 있다. 금빛이 도는 사과를 깎는 중이다. 껍질이 끊기지 않고 한 줄로 길게 늘어진다.
+CHR_ERIS: 왔구나. 오래 기다렸다. …아니, 방금 왔다. 늙으면 시간이 헷갈려.
+CHR_ERIS: 하늘이 갈라지는 소리를 들었지. 이제 신들이 널 찾으러 올 거다.
+CHR_ERIS: 골라 먹는 건 네 몫이고.
+choice [진지] 할머니는 누구세요? 저를 아세요? -> GOTO MQ00_OLDWOMAN_SERIOUS
+choice [냉소] 점쟁이시군요. 오늘 점은 충분히 봤어요. -> GOTO MQ00_OLDWOMAN_CYNIC
+choice [유머] 그 사과 한 조각만 주시면, 신들 얘기 더 들을게요. -> GOTO MQ00_OLDWOMAN_HUMOR
+
+== MQ00_OLDWOMAN_SERIOUS
+CHR_ERIS: 떠돌이 점쟁이지. 남의 집 잔치에 초대 못 받는 사람은 원래 이것저것 많이 알게 된단다.
+CHR_ERIS: 인생 조언 하나 해 주마. 좋은 가족이란 말이다, 서로의 약점을 정확히 아는 사이야. …아, 그러니까 사랑한다는 뜻이지.
+do GOTO MQ00_OLDWOMAN_END
+
+== MQ00_OLDWOMAN_CYNIC
+CHR_ERIS: 흐흐. 피티아의 점 말이냐? 젖은 양말 같은 거? 그 아이 점은 들을 만해. 생각보다 훨씬.
+CHR_ERIS: 인생 조언 하나 해 주마. 싸움이 붙거든 절대 말리지 마라. 구경하는 쪽이 제일 많이 배운다.
+do GOTO MQ00_OLDWOMAN_END
+
+== MQ00_OLDWOMAN_HUMOR
+narr: 노파의 손이 멈춘다. 웃음기가 순식간에 사라진다.
+CHR_ERIS: 이건 안 된다.
+CHR_ERIS: …이 사과는 남 주려고 깎는 게 아니야. 내 몫이다. 원래 내 몫이었던 거고.
+narr: 그리고 노파는 아무 일 없었다는 듯 다시 웃는다.
+CHR_ERIS: 대신 인생 조언을 주마. 누가 둘이 다투거든, 둘 다 맞다고 해 줘라. 그럼 싸움이 아주 오래간다. …아니, 사이가 좋아진다는 뜻이야.
+do GOTO MQ00_OLDWOMAN_END
+
+== MQ00_OLDWOMAN_END
+CHR_PYTHIA: (작게) 저 할머니, 언제부터 저기 있었지…?
+narr: 그때, 하늘에서 무언가가 비명을 지르며 떨어진다. 쿵. 땅이 흔들린다.
+do EVENT SHAKE 0.6; STEP MQ_00.HERMES
+
+== MQ00_HERMES
+on talk CHR_HERMES
+if STORY_STEP == MQ_00.HERMES
+narr: 날개 달린 모자를 쓴 신이 흙먼지를 털며 일어난다. 착지는 엉망이었지만 표정만은 당당하다.
+CHR_HERMES: 착지는 못 본 걸로 해 줘. 헤르메스야. 전령의 신, 소식 배달 전문.
+CHR_HERMES: 축하해! 너 오늘부로 올림포스 관심 명단 1순위야.
+CHR_HERMES: …좋은 의미 아니야.
+CHR_HERMES: 신탁이 깨지는 소리를 올림포스 전체가 들었어. 그 앞에 서 있던 실 없는 인간도 다들 봤고.
+CHR_HERMES: 그래서 신들이 너를 면접 보겠대. 서로 자기 편으로 데려가려고. 장소는 신전 광장, 시간은 지금. 일정표는 나한테 있어.
+choice [진지] 신들이 왜 나를 원하는 거지? -> GOTO MQ00_HERMES_END
+choice [냉소] 거절하면? -> GOTO MQ00_HERMES_REFUSE
+choice [유머] 면접 복장 규정 같은 거 있어? -> GOTO MQ00_HERMES_DRESS
+
+== MQ00_HERMES_REFUSE
+CHR_HERMES: 거절도 선택지지! 그럼 신들이 다 같이 너를 찾아올 거야. 한꺼번에. 그게 더 무서워. 믿어.
+do GOTO MQ00_HERMES_END
+
+== MQ00_HERMES_DRESS
+CHR_HERMES: 없어. 제우스는 번개 연출 각도만 신경 쓰고, 아프로디테는 네 옷보다 자기 옷을 볼 거야. 편하게 입어.
+do GOTO MQ00_HERMES_END
+
+== MQ00_HERMES_END
+CHR_HERMES: 좋은 소식이랑 나쁜 소식이 있어. 좋은 소식은 신들이 너를 원한다는 거야. 나쁜 소식도 그거고.
+CHR_HERMES: 광장에서 보자! 아, 내가 방금 한 말은 비밀이다.
+narr: 헤르메스가 바람처럼 사라진다. 신전 광장 쪽에서 천둥소리와 파도 소리, 그리고 어울리지 않게 달콤한 향수 냄새가 몰려온다.
+do SET INTERVIEW_COUNT 0; XP 50; NOTICE [프롤로그 완료] 신탁의 균열 — 신전 광장의 신들을 만나 보자.; STEP MQ_01.INTERVIEW
+
+
+# =====================================================================================
+# MQ_01 수호신의 선택 (LOC_DELPHI 신전 광장)
+# 면담: 헤르메스의 일정표 → 다섯 신(순서 자유). 신마다 [진지/냉소/유머] 대응 → 면담 끝에 두려움 한 줄.
+# 두 번째 면담이 끝나면 헤르메스의 황금사과 가십(복선 F-03), 다섯 번 다 끝나면 수호신 고르기.
+# =====================================================================================
+
+== MQ01_SCHEDULE
+on talk CHR_HERMES
+if STORY_STEP == MQ_01.INTERVIEW && !MQ01_SCHEDULE_SEEN
+CHR_HERMES: 왔어? 자, 면접 일정표. 제우스, 포세이돈, 하데스, 아프로디테, 그리고 마지막으로 이 몸.
+CHR_HERMES: 순서는 마음대로. 다들 자기가 첫 번째인 줄 알 거야. 그게 이 바닥 예의야.
+CHR_HERMES: 다섯 분 다 만나 보고 수호신을 골라. 고른 신이 첫 축복을 내려 줄 거야. 축복은… 반품이 안 돼.
+do SET MQ01_SCHEDULE_SEEN true
+choice 헤르메스부터 면담한다 -> GOTO MQ01_MEET_HERMES
+choice 다른 신들부터 만나 본다
+
+# 일정표를 받기 전에 다른 신에게 먼저 말을 걸면
+== MQ01_NEED_SCHEDULE_ZEUS
+on talk CHR_ZEUS
+if STORY_STEP == MQ_01.INTERVIEW && !MQ01_SCHEDULE_SEEN
+CHR_ZEUS: 면접은 순서대로다. 헤르메스에게 일정표부터 받아 와라. 왕은 기다리게 하는 법이지, 기다리는 법이 아니다.
+
+== MQ01_NEED_SCHEDULE_POSEIDON
+on talk CHR_POSEIDON
+if STORY_STEP == MQ_01.INTERVIEW && !MQ01_SCHEDULE_SEEN
+CHR_POSEIDON: 일정표는 헤르메스가 들고 있다. 형님이 정한 순서겠지. 늘 그렇듯.
+
+== MQ01_NEED_SCHEDULE_HADES
+on talk CHR_HADES
+if STORY_STEP == MQ_01.INTERVIEW && !MQ01_SCHEDULE_SEEN
+CHR_HADES: 접수 순서가 있다. 헤르메스에게 번호표부터 받아 와.
+
+== MQ01_NEED_SCHEDULE_APHRODITE
+on talk CHR_APHRODITE
+if STORY_STEP == MQ_01.INTERVIEW && !MQ01_SCHEDULE_SEEN
+CHR_APHRODITE: 어머, 급하네. 그런 거 좋아. 그래도 일정표는 헤르메스한테 받아 와. 기다리게 만드는 것도 매력이거든.
+
+# ---- 헤르메스 ----
+== MQ01_MEET_HERMES
+on talk CHR_HERMES
+if STORY_STEP == MQ_01.INTERVIEW && MQ01_SCHEDULE_SEEN && !MET_HERMES
+CHR_HERMES: 이번엔 내 차례네. 공식 면접이야. 에헴. 헤르메스, 속도와 길과 도둑의 신. 장점은 빠르다. 단점은 너무 빠르다.
+CHR_HERMES: 내 축복을 받으면 바람처럼 달릴 수 있어. 왜 너냐고? 재밌을 것 같아서. 진짜 그게 다야.
+choice [진지] 다른 신들처럼 속셈이 있는 거 아니야? -> GOTO MQ01_HERMES_SERIOUS
+choice [냉소] 재미로 고르는 신이라니, 제일 믿음이 안 가는데. -> GOTO MQ01_HERMES_CYNIC
+choice [유머] 도둑의 신이면, 면접비는 누가 훔쳐 가? -> GOTO MQ01_HERMES_HUMOR
+
+== MQ01_HERMES_SERIOUS
+CHR_HERMES: 속셈이라… 굳이 말하자면 네 이야기를 제일 가까이서 듣는 거? 소식은 신선할 때 팔아야… 아니, 전해야 하거든.
+do GOTO MQ01_HERMES_FEAR
+
+== MQ01_HERMES_CYNIC
+CHR_HERMES: 맞아. 그래서 제일 정직한 거야. 다른 신들은 이유를 지어내잖아. 난 안 지어내. 재밌으니까.
+do GOTO MQ01_HERMES_FEAR
+
+== MQ01_HERMES_HUMOR
+CHR_HERMES: 면접비? 그런 게 있었어? …지금 생겼다. 그리고 방금 사라졌다. 신기하지?
+do GOTO MQ01_HERMES_FEAR
+
+== MQ01_HERMES_FEAR
+narr: 헤르메스가 잠깐 하늘을 올려다본다. 웃음이 조금 늦게 따라온다.
+CHR_HERMES: 다들 언젠가 내 소식을 안 듣게 될 거야. 그 전까진… 열심히 떠들어야지.
+do SET MET_HERMES true; ADD INTERVIEW_COUNT 1; GOTO MQ01_GOSSIP; GOTO MQ01_PROGRESS
+
+# ---- 제우스 ----
+== MQ01_MEET_ZEUS
+on talk CHR_ZEUS
+if STORY_STEP == MQ_01.INTERVIEW && MQ01_SCHEDULE_SEEN && !MET_ZEUS
+narr: 제우스가 팔을 번쩍 들어 올린다. 하늘이 어두워지고, 구름 사이로 빛이 모인다. 모두가 숨을 죽인다.
+narr: …아무 일도 일어나지 않는다. 멀리서 염소가 운다.
+CHR_ZEUS: …지금 건 경고 사격이었다. 다들 받아 적어.
+CHR_ZEUS: 나는 제우스, 신들의 왕이다. 내 곁으로 와라. 번개의 축복을 주마. 왕의 곁이 가장 안전한 법이지.
+choice [진지] 왜 저를 곁에 두려 하십니까? -> GOTO MQ01_ZEUS_SERIOUS
+choice [냉소] 방금 그 번개가 안전의 보증입니까? -> GOTO MQ01_ZEUS_CYNIC
+choice [유머] 받아 적었습니다. "경고 사격. 불발 아님." -> GOTO MQ01_ZEUS_HUMOR
+
+== MQ01_ZEUS_SERIOUS
+CHR_ZEUS: 신탁을 깨뜨린 자를 내 눈 밖에 둘 수는 없지. …보호하겠다는 뜻이다. 보호.
+do GOTO MQ01_ZEUS_FEAR
+
+== MQ01_ZEUS_CYNIC
+CHR_ZEUS: 날씨 탓이다. 오늘은 습도가 높아. 번개는 습도에 민감한 예술이다.
+do GOTO MQ01_ZEUS_FEAR
+
+== MQ01_ZEUS_HUMOR
+CHR_ZEUS: 그래, 그렇게 쓰는 거다. 마음에 드는군. 마침 기록관 자리가 비어 있다.
+do GOTO MQ01_ZEUS_FEAR
+
+== MQ01_ZEUS_FEAR
+narr: 제우스가 당신의 얼굴을 오래 들여다본다. 무언가를 읽으려는 듯이. 그리고 아무것도 읽지 못한 듯이.
+CHR_ZEUS: 미래가 안 보이는 자식은… 아니, 인간은 처음이군.
+do SET MET_ZEUS true; ADD INTERVIEW_COUNT 1; GOTO MQ01_GOSSIP; GOTO MQ01_PROGRESS
+
+# ---- 포세이돈 ----
+== MQ01_MEET_POSEIDON
+on talk CHR_POSEIDON
+if STORY_STEP == MQ_01.INTERVIEW && MQ01_SCHEDULE_SEEN && !MET_POSEIDON
+narr: 포세이돈이 삼지창으로 바닥을 쿵 찍는다. 근처 샘물이 일제히 솟구친다.
+CHR_POSEIDON: 바다의 왕, 포세이돈이다. 형님 얘기는 들었겠지. 하늘을 가졌다고 다 가진 줄 아는 그 양반.
+CHR_POSEIDON: 제비뽑기였다고. 제비뽑기! 그것도 형이 투구를 흔들었어.
+CHR_POSEIDON: 내게 오면 물과 대지를 흔드는 축복을 주마. 바다는 누구도 버리지 않는다.
+choice [진지] 형님과 사이가 안 좋으신가 봅니다. -> GOTO MQ01_POSEIDON_SERIOUS
+choice [냉소] 결국 형님 흉을 보러 오신 거군요. -> GOTO MQ01_POSEIDON_CYNIC
+choice [유머] 다시 뽑자고 해 보시죠. 이번엔 제가 투구를 흔들게요. -> GOTO MQ01_POSEIDON_HUMOR
+
+== MQ01_POSEIDON_SERIOUS
+CHR_POSEIDON: 사이? 좋지. 아주 좋아. 내가 써 둔 「형님 잘못 목록」이 두루마리 열두 개밖에 안 되니까.
+do GOTO MQ01_POSEIDON_FEAR
+
+== MQ01_POSEIDON_CYNIC
+CHR_POSEIDON: 흉이 아니라 기록이다. 역사가 공정하려면 누군가는 적어 둬야 해.
+do GOTO MQ01_POSEIDON_FEAR
+
+== MQ01_POSEIDON_HUMOR
+CHR_POSEIDON: …오. 너, 마음에 든다. 그 말은 열세 번째 두루마리 첫 줄에 적어 두마.
+do GOTO MQ01_POSEIDON_FEAR
+
+== MQ01_POSEIDON_FEAR
+narr: 포세이돈이 웃다가, 문득 하늘 쪽을 본다. 거기엔 늘 형의 구름이 떠 있다.
+CHR_POSEIDON: 제비뽑기 2등의 기분을 아나? 수천 년 동안, 매일 아침 눈뜰 때마다 2등이야.
+do SET MET_POSEIDON true; ADD INTERVIEW_COUNT 1; GOTO MQ01_GOSSIP; GOTO MQ01_PROGRESS
+
+# ---- 하데스 ----
+== MQ01_MEET_HADES
+on talk CHR_HADES
+if STORY_STEP == MQ_01.INTERVIEW && MQ01_SCHEDULE_SEEN && !MET_HADES
+narr: 하데스는 다른 신들과 조금 떨어져 서서 두루마리에 무언가를 적고 있다.
+CHR_HADES: 면접자인가. 신청서는 가져왔나. …없군. 그럴 줄 알았다. 이쪽 양식에 적어.
+CHR_HADES: 저승에 이상한 영혼이 몰리고 있다. 죽을 날이 아닌데 온 자, 죽을 날이 지났는데 안 오는 자. 조사 인력이 필요하다.
+CHR_HADES: 내게 오면 망자와 그림자의 축복을 주지. 속셈? 없다. 진짜로 사람이 모자라.
+choice [진지] 죽음의 신을 따르는 건… 무섭지 않을까요? -> GOTO MQ01_HADES_SERIOUS
+choice [냉소] 결국 일손이 필요하신 거군요. -> GOTO MQ01_HADES_CYNIC
+choice [유머] 연봉은 얼마나 됩니까? -> GOTO MQ01_HADES_HUMOR
+
+== MQ01_HADES_SERIOUS
+CHR_HADES: 죽음이 무섭다고? 나한텐 야근이 무섭다.
+do GOTO MQ01_HADES_FEAR
+
+== MQ01_HADES_CYNIC
+CHR_HADES: 그렇다. 다른 신들은 그걸 운명이니 영광이니 포장하지. 나는 서류에 정확히 쓴다. 업무: 많음.
+do GOTO MQ01_HADES_FEAR
+
+== MQ01_HADES_HUMOR
+CHR_HADES: 저승에 돈은 못 가져간다. 그러니 연봉도 없다. 대신 정시 퇴근을… 노력은 해 보지.
+do GOTO MQ01_HADES_FEAR
+
+== MQ01_HADES_FEAR
+narr: 하데스가 두루마리를 덮는다. 목소리가 조금 낮아진다.
+CHR_HADES: 끝나지 않는 것들이 늘고 있다. 끝이 있어야 할 것들이.
+do SET MET_HADES true; ADD INTERVIEW_COUNT 1; GOTO MQ01_GOSSIP; GOTO MQ01_PROGRESS
+
+# ---- 아프로디테 ----
+== MQ01_MEET_APHRODITE
+on talk CHR_APHRODITE
+if STORY_STEP == MQ_01.INTERVIEW && MQ01_SCHEDULE_SEEN && !MET_APHRODITE
+narr: 손거울을 보던 아프로디테가 당신을 향해 미소 짓는다. 주변 공기가 묘하게 달콤해진다.
+CHR_APHRODITE: 긴장하지 마. 난 손님한텐 친절해. …대부분은.
+CHR_APHRODITE: 너, 재미있는 이야기가 될 거야. 실 없는 인간이라니. 올림포스에 이렇게 신선한 소문은 백 년 만이야.
+CHR_APHRODITE: 내게 오면 매혹과 변장의 축복을 줄게. 누구든 될 수 있고, 누구에게든 사랑받을 수 있지.
+choice [진지] 저를 이야깃거리로만 보시는 건가요? -> GOTO MQ01_APHRODITE_SERIOUS
+choice [냉소] 소문을 모으시는 분이 소문의 주인공을 원하시는군요. -> GOTO MQ01_APHRODITE_CYNIC
+choice [유머] 사랑받는 축복이면, 하데스 님 신청서도 면제됩니까? -> GOTO MQ01_APHRODITE_HUMOR
+
+== MQ01_APHRODITE_SERIOUS
+CHR_APHRODITE: 이야기가 뭐가 어때서? 신들은 이야기로 살아. 잊히지 않는 이야기가 되는 게 우리한텐 최고의 칭찬이야.
+do GOTO MQ01_APHRODITE_FEAR
+
+== MQ01_APHRODITE_CYNIC
+CHR_APHRODITE: 어머, 똑똑하네. 비밀은 사랑과 같아. 혼자 간직하면 아무 가치가 없지.
+do GOTO MQ01_APHRODITE_FEAR
+
+== MQ01_APHRODITE_HUMOR
+CHR_APHRODITE: 하데스는 나한테도 신청서를 받아. 세 장이나. 그래도 귀엽잖아?
+do GOTO MQ01_APHRODITE_FEAR
+
+== MQ01_APHRODITE_FEAR
+narr: 아프로디테가 다시 손거울을 들여다본다. 그리고 무언가를 본 듯, 황급히 거울을 덮는다.
+CHR_APHRODITE: …햇빛이 너무 강하네. 오늘은 여기까지 하자.
+do SET MET_APHRODITE true; ADD INTERVIEW_COUNT 1; GOTO MQ01_GOSSIP; GOTO MQ01_PROGRESS
+
+# ---- 쉬는 시간의 가십(복선 F-03) — 두 번째 면담이 끝나면 한 번 ----
+== MQ01_GOSSIP
+once
+if INTERVIEW_COUNT >= 2
+narr: 헤르메스가 슬쩍 다가와 어깨동무를 한다.
+CHR_HERMES: 쉬는 시간! 가십 하나 들을래? 공짜야. 오늘만.
+CHR_HERMES: 한 삼백 년 전에, 올림포스 가족 모임에 누가 황금사과를 하나 굴렸어. "가장 아름다운 이에게"라고 써서.
+CHR_HERMES: 헤라, 아테나, 아프로디테가 서로 자기 거라고 싸웠지. 그 싸움이 번지고 번져서 인간 세상에선 전쟁이 십 년을 갔어.
+CHR_HERMES: 사과를 굴린 건 에리스야. 불화의 여신. 초대를 못 받아서 화가 났었대.
+CHR_HERMES: 그 뒤로 가족 모임에 에리스 자리는 없어. 다들 그 얘긴 안 해.
+CHR_HERMES: …나도 방금 안 했다. 알지?
+do SET HERMES_GOSSIP_SEEN true
+
+# 다섯 신을 다 만났으면 수호신 고르기로(효과만 있는 블록 — 면담 끝마다 GOTO로 확인).
+== MQ01_PROGRESS
+if INTERVIEW_COUNT >= 5
+do STEP MQ_01.CHOOSE; NOTICE [면담 완료] 이제 수호신을 고를 차례다. 모시고 싶은 신에게 말을 걸자.
+
+# ---- 수호신 고르기 ----
+== MQ01_CHOOSE_ZEUS
+on talk CHR_ZEUS
+if STORY_STEP == MQ_01.CHOOSE
+CHR_ZEUS: 결정했느냐? 왕의 곁에 서겠느냐?
+choice 제우스를 수호신으로 모신다 — 번개·권능 (공격력 +4, 가끔 벼락이 함께 떨어져 피해 2배) -> SET PATRON ZEUS; EVENT BLESSING; GOTO MQ01_BLESS_ZEUS
+choice 조금 더 생각해 본다
+
+== MQ01_CHOOSE_POSEIDON
+on talk CHR_POSEIDON
+if STORY_STEP == MQ_01.CHOOSE
+CHR_POSEIDON: 형님 쪽으로 갈 생각이면 말해라. 섭섭해할 준비는 수천 년째 되어 있으니까.
+choice 포세이돈을 수호신으로 모신다 — 물·지진 (최대 체력 +12) -> SET PATRON POSEIDON; EVENT BLESSING; GOTO MQ01_BLESS_POSEIDON
+choice 조금 더 생각해 본다
+
+== MQ01_CHOOSE_HADES
+on talk CHR_HADES
+if STORY_STEP == MQ_01.CHOOSE
+CHR_HADES: 신청서는 다 썼나. 서명란은 맨 아래다.
+choice 하데스를 수호신으로 모신다 — 망자·그림자 (적을 쓰러뜨리면 체력 회복) -> SET PATRON HADES; EVENT BLESSING; GOTO MQ01_BLESS_HADES
+choice 조금 더 생각해 본다
+
+== MQ01_CHOOSE_APHRODITE
+on talk CHR_APHRODITE
+if STORY_STEP == MQ_01.CHOOSE
+CHR_APHRODITE: 마음 정했어? 망설이는 얼굴도 예쁘긴 한데.
+choice 아프로디테를 수호신으로 모신다 — 매혹·변장 (짐승과 괴물이 훨씬 가까이 와서야 알아챈다) -> SET PATRON APHRODITE; EVENT BLESSING; GOTO MQ01_BLESS_APHRODITE
+choice 조금 더 생각해 본다
+
+== MQ01_CHOOSE_HERMES
+on talk CHR_HERMES
+if STORY_STEP == MQ_01.CHOOSE
+CHR_HERMES: 다 만나 봤지? 자, 누구로 할래? 나? 나지? 아니어도 괜찮아. 진짜야. 조금 섭섭할 뿐.
+choice 헤르메스를 수호신으로 모신다 — 속도·도둑질 (이동 속도 +30%) -> SET PATRON HERMES; EVENT BLESSING; GOTO MQ01_BLESS_HERMES
+choice 조금 더 생각해 본다
+
+== MQ01_BLESS_ZEUS
+narr: 맑은 하늘에서 벼락이 떨어진다. 이번엔 진짜다. 손끝이 찌릿하다.
+CHR_ZEUS: 봤지? 습도가 내려갔다. …환영한다. 이제 너는 왕의 사람이다. 늘 내 눈이 닿는 곳에 있어라.
+do GOTO MQ01_AFTER_CHOICE
+
+== MQ01_BLESS_POSEIDON
+narr: 발밑에서 땅이 한 번 울린다. 멀리 바다 쪽에서 파도가 부서지는 소리가 들린다.
+CHR_POSEIDON: 바다는 누구도 버리지 않는다. 이제 너도 내 사람이다. …형님한테 이 얘기 꼭 전해라. 아니, 전하지 마라. 아니, 전해라.
+do GOTO MQ01_AFTER_CHOICE
+
+== MQ01_BLESS_HADES
+narr: 발밑의 그림자가 잠깐 깊어진다. 서늘한 기운이 지나가고, 이상하게 마음이 차분해진다.
+CHR_HADES: 신청서 처리 완료. 오늘부터 저승 조사관이다. 출근 시간 같은 건 없다. 죽음은 늘 근무 중이니까.
+do GOTO MQ01_AFTER_CHOICE
+
+== MQ01_BLESS_APHRODITE
+narr: 달콤한 향기가 감돌고, 광장 사람들의 시선이 잠깐 당신에게 머물렀다가 미끄러져 간다.
+CHR_APHRODITE: 좋아. 넌 이제 내 이야기야. 예쁘게 써 줄게. …마지막 장은 아직 나도 모르지만.
+do GOTO MQ01_AFTER_CHOICE
+
+== MQ01_BLESS_HERMES
+narr: 발뒤꿈치가 가벼워진다. 바람이 등을 떠미는 것 같다.
+CHR_HERMES: 계약 성립! 이제 넌 내 사람이야. 아, 그리고 이건 비밀인데… 아니다. 비밀은 비밀일 때 비싸지.
+do GOTO MQ01_AFTER_CHOICE
+
+# TODO: STORY.md에선 여기서 수호신 루트(RQ_<PATRON>_01~03)가 시작되고, 3번째 퀘스트를 마치면 MQ_02로 합류한다.
+== MQ01_AFTER_CHOICE
+CHR_HERMES: 축하해! 다른 신들은 지금 표정 관리 중이야. 쳐다보지 마. 눈 마주치면 오래 기억해.
+CHR_HERMES: 다음 일정은 올림포스 산기슭에서 열리는 신들의 대회의야. 수호신의 시종 자격으로 너도 참석. 마을 끝 이정표에서 출발하면 돼.
+CHR_PYTHIA: 나도 갈 거야. 너 혼자 신들 사이에 두면 밥도 안 챙겨 먹을 테니까.
+narr: 신들이 하나둘 빛이 되어 광장을 떠난다.
+do UNLOCK LOC_OLYMPUS_FOOT; XP 30; NOTICE [수호신의 선택 완료] 마을 끝 이정표에서 올림포스 산기슭으로 떠나자.; STEP MQ_01.CHOSEN
+
+# ---- 면담 중에 다시 말을 걸면 ----
+== MQ01_HERMES_WAIT
+on talk CHR_HERMES
+if STORY_STEP == MQ_01.INTERVIEW
+CHR_HERMES: 다른 신들도 만나 봐. 다들 안 기다리는 척하면서 기다리고 있어.
+or
+CHR_HERMES: 지금까지 {INTERVIEW_COUNT}분 만났으면… 음, 산수는 아테나 담당이야.
+
+== MQ01_ZEUS_WAIT
+on talk CHR_ZEUS
+if STORY_STEP == MQ_01.INTERVIEW
+CHR_ZEUS: 다른 신들의 말도 들어 보아라. 그래야 내 말이 얼마나 옳은지 알게 될 테니.
+
+== MQ01_POSEIDON_WAIT
+on talk CHR_POSEIDON
+if STORY_STEP == MQ_01.INTERVIEW
+CHR_POSEIDON: 형님한테 갔다 왔나? 뭐라던? …아니, 말하지 마라. 목록에 적을 게 늘어나니까.
+
+== MQ01_HADES_WAIT
+on talk CHR_HADES
+if STORY_STEP == MQ_01.INTERVIEW
+CHR_HADES: 서류는 천천히 작성해도 된다. 영원은 길다.
+
+== MQ01_APHRODITE_WAIT
+on talk CHR_APHRODITE
+if STORY_STEP == MQ_01.INTERVIEW
+CHR_APHRODITE: 다른 신들 얘기도 들어 봐. 비교당하는 거, 나 은근히 좋아해.
+
+
+# =====================================================================================
+# MQ_02 흔들리는 왕좌 — 올림포스 산기슭(LOC_OLYMPUS_FOOT): 신들의 대회의
+# =====================================================================================
+
+== MQ02_ARRIVE
+on enter LOC_OLYMPUS_FOOT
+if STORY_STEP == MQ_01.CHOSEN
+narr: 테살리아의 평원 너머로 올림포스가 솟아 있다. 정상은 구름에 가려 보이지 않는다. 신들은 늘 그렇게 보이고 싶어 한다.
+CHR_PYTHIA: 저기 언덕 위에 기둥 보이지? 회의장이래. …신들도 회의를 하는구나. 우리 신전 회의랑 비슷하려나. 그럼 큰일인데.
+do STEP MQ_02.COUNCIL
+
+# 대회의(STORY.md MQ_02-1, S-01) — 웃음의 표적은 제우스의 허세. 변신 이력 목록엔 상대 여성 개인을 넣지 않는다.
+== MQ02_COUNCIL
+on trigger TRIGGER_COUNCIL
+if STORY_STEP == MQ_02.COUNCIL
+narr: 대리석 식탁을 둘러싸고 올림포스의 신들이 앉아 있다. 당신은 수호신의 시종 자리, 기둥 그늘에 선다.
+CHR_HERMES: (작게) 왔어? 딱 맞춰 왔네. 지금 막 시작이야.
+CHR_ATHENA: 회의를 시작하겠습니다. 회의록은 제가 작성합니다. …늘 그렇듯 저 혼자.
+CHR_POSEIDON: 안건 전에 하나. 바다 지분 재협상 건을 올리겠다. 그 제비뽑기는 무효다.
+CHR_ARES: 무효면 싸우면 되잖아! 지금! 여기서!
+narr: 아레스가 칼을 반쯤 뽑는다.
+CHR_HERA: 아레스. 칼 넣으렴. 착하지.
+CHR_ARES: …네, 어머니.
+CHR_DIONYSUS: (술잔을 들며) 저는 다 찬성이요. 뭐든지. 건배.
+CHR_APHRODITE: 그럼 제가 준비한 "사랑의 일기" 낭독부터… 아, 오늘은 시간 관계상 목차만 할게요.
+CHR_HERA: 됐어. 오늘의 첫 안건은 "왕의 품위"입니다. 제가 자료를 준비했죠.
+CHR_HERA: 왕의 변신 이력. 백조. 황소. 황금 비. 독수리. 구름. …이하 연도별 별첨 참조.
+narr: 헤라가 두루마리를 펼친다. 두루마리가 식탁 끝을 넘어 바닥까지 굴러간다. 아직 반도 안 읽었다.
+CHR_ZEUS: 그 시절엔 다들 그랬어.
+# STORY.md 원문은 "형님만"이지만 헤르메스는 제우스의 아들이라 "아버지만"으로 고쳤다(머리말 참고).
+CHR_HERMES: (작게) 아뇨. 아버지만 그랬어요.
+CHR_ZEUS: 정숙! 이 회의는 이것으로…!
+narr: 제우스가 번개를 내리치려 팔을 든다. 하늘이 잠깐 번쩍이려다… 만다. 정적.
+CHR_HERMES: …다음 안건 가실게요.
+CHR_HERMES: 보고입니다. 아테네 아고라의 제우스 신상이 무너졌습니다. 그리고 그 옆에 "유피테르" 신전이 새로 섰고요.
+narr: 웃음이 멎는다. 아무도 술잔을 들지 않는다.
+CHR_ZEUS: …유피테르가 누구냐.
+CHR_HERMES: 서쪽 사람들이 쓰는 새 이름이래요. 이름은 왕의 것인데, 그 신전에 왕은 안 계시고요.
+CHR_DIONYSUS: 저는 서쪽에서 "바쿠스"로 꽤 잘나가는데요. 이름 바꾸는 거, 생각보다 괜찮아요.
+narr: 제우스가 디오니소스를 쳐다본다. 디오니소스가 조용히 술잔을 내려놓는다.
+CHR_ZEUS: …조사해. 누가 내 신상을 무너뜨렸는지. 아니, 누가 내 이름을 가져갔는지.
+CHR_ATHENA: 아테네는 제 도시입니다. 수호신의 시종이 가 주면 좋겠군요. 신의 눈보다 인간의 눈이 더 많은 것을 볼 테니까요.
+narr: 모든 신의 시선이 당신에게 쏠린다. 그렇게 회의가 끝나고, 신들은 하나둘 빛이 되어 흩어진다.
+narr: 텅 빈 회의장. 기둥 그늘에서 피티아가 혼잣말처럼 중얼거린다.
+CHR_PYTHIA: …왕관이… 계단에서 넘어진다.
+narr: 이번엔 아무도 웃지 않는다.
+do UNLOCK LOC_ATHENS; XP 40; NOTICE [다음 목적지] 이정표에서 아테네로 가자.; STEP MQ_02.ATHENS
+
+# 회의 참석자에게 먼저 말을 걸어도(트리거 영역을 거치지 않았을 때를 대비해) 회의가 시작된다.
+== COUNCIL_TALK_ZEUS
+on talk CHR_ZEUS
+if STORY_STEP == MQ_02.COUNCIL
+do GOTO MQ02_COUNCIL
+
+== COUNCIL_TALK_HERA
+on talk CHR_HERA
+if STORY_STEP == MQ_02.COUNCIL
+do GOTO MQ02_COUNCIL
+
+== COUNCIL_TALK_POSEIDON
+on talk CHR_POSEIDON
+if STORY_STEP == MQ_02.COUNCIL
+do GOTO MQ02_COUNCIL
+
+== COUNCIL_TALK_ATHENA
+on talk CHR_ATHENA
+if STORY_STEP == MQ_02.COUNCIL
+do GOTO MQ02_COUNCIL
+
+== COUNCIL_TALK_ARES
+on talk CHR_ARES
+if STORY_STEP == MQ_02.COUNCIL
+do GOTO MQ02_COUNCIL
+
+== COUNCIL_TALK_APHRODITE
+on talk CHR_APHRODITE
+if STORY_STEP == MQ_02.COUNCIL
+do GOTO MQ02_COUNCIL
+
+== COUNCIL_TALK_DIONYSUS
+on talk CHR_DIONYSUS
+if STORY_STEP == MQ_02.COUNCIL
+do GOTO MQ02_COUNCIL
+
+== COUNCIL_TALK_HERMES
+on talk CHR_HERMES
+if STORY_STEP == MQ_02.COUNCIL
+do GOTO MQ02_COUNCIL
+
+# 크로노스 벽화(복선 F-04 — RQ_ZEUS_02가 없는 루트의 대체 지점).
+== MQ02_MURAL
+on talk OBJ_KRONOS_MURAL
+narr: 오래된 벽화. 거대한 왕이 강보에 싼 무언가를 삼키려 하고 있다. 자식을 삼킨 왕, 크로노스.
+narr: 벽화 앞 바닥의 돌이 유난히 닳아 있다. 누군가 이 앞에 아주 오래, 자주 서 있었던 것처럼. 군데군데 번개에 그을린 자국이 남아 있다.
+CHR_PYTHIA: 이 그림… 보고 있으면 숨이 막혀. 아버지가 자식을 무서워하는 그림이잖아.
+
+# 판(S-07): 농담의 표적은 판 자신의 허세. 잊혀 갈수록 농담이 짧아진다(망각 테마).
+== PAN_TALK
+on talk CHR_PAN
+CHR_PAN: 어이, 거기! 내가 누군지 알아? 판이야! 사람들이 겁먹고 우왕좌왕하는 걸 "패닉"이라고 하지? 그거 내 이름에서 나온 말이야.
+CHR_PAN: 내가 이 산에서 한 번 소리 지르면 군대가 도망쳤어. 요즘은… 염소가 도망가. 그것도 한 마리.
+or
+CHR_PAN: 내 피리 소리 들어 볼래? 한때는 축제마다 날 모셔 가려고 줄을 섰다고. 줄이 이만큼… 아니, 이만큼.
+or
+CHR_PAN: 농담 하나 해 줄까? 그러니까… 염소 다리 신이 술집에 들어가서… 어… 그다음이 뭐였더라.
+or
+CHR_PAN: 판이야. …판. 기억 안 나? 괜찮아. 요즘은 나도 가끔 헷갈려.
+
+# TODO: SQ_OLYMPUS_01 「헤파이스토스의 견적서」(무기 주문서의 에리스 흔적, ERIS_CLUE +1) — 지금은 잡담의 실마리만 있다.
+== HEPHAESTUS_TALK
+on talk CHR_HEPHAESTUS
+CHR_HEPHAESTUS: 주문이면 견적부터. 칼 한 자루, 창 한 자루, 번개 수리는 별도. 요즘 번개 수리 주문이 부쩍 늘었어. 누구 건지는 말 못 해.
+or
+CHR_HEPHAESTUS: 이상한 주문이 들어와. 같은 날, 같은 수량으로, 서로 싸우려는 양쪽에서. 난 안 물어. 견적만 정확하면 돼.
+or
+CHR_HEPHAESTUS: 산에서 굴러떨어져 본 적 있나? 난 있어. 어머니가 던졌지. 그 뒤로 높은 데서 내려다보는 자들은 안 믿어.
+
+== SHEPHERD_TALK
+on talk NPC_SHEPHERD
+NPC_SHEPHERD: 요즘은 산 위에서 천둥이 쳐도 비가 안 와요. 할아버지 땐 천둥만 치면 다들 엎드렸다던데.
+or
+NPC_SHEPHERD: 저 언덕 위 회의장 말이오? 신들이 모이는 날이면 우리 양들이 풀을 안 먹어요. 시끄러워서.
+or
+NPC_SHEPHERD: 강은 여울로 건너요. 강의 신이 요즘 기분이 안 좋다나. 제물이 줄었거든.
+
+
+# =====================================================================================
+# MQ_02 흔들리는 왕좌 — 아테네(LOC_ATHENS): 쓰러진 신상, 신앙을 잃은 시민, 잊혀지는 신, 사제단의 배후
+# =====================================================================================
+
+== MQ02_ATHENS_ARRIVE
+on enter LOC_ATHENS
+if !ATHENS_ARRIVED
+narr: 아테네. 아크로폴리스 위의 신전은 여전히 하얗게 빛나지만, 아고라를 오가는 사람들은 그 위를 올려다보지 않는다.
+CHR_PYTHIA: 저기, 광장 한가운데… 저거 신상 아니야? 왜 누워 있어?
+do SET ATHENS_ARRIVED true
+
+== MQ02_STATUE
+on talk OBJ_FALLEN_STATUE
+if STORY_STEP == MQ_02.ATHENS
+narr: 아고라 한가운데, 받침대만 남아 있다. 제우스 신상은 목이 부러진 채 바닥에 누워 있다. 아무도 일으켜 세우지 않았다.
+narr: 받침대에 새겨진 이름 위로 누군가 새 글자를 덧새겼다. IVPPITER. 유피테르.
+CHR_PYTHIA: 무너진 지 며칠은 된 것 같아. 그런데 아무도 안 치웠어. 신상이 쓰러졌는데… 다들 그냥 비켜 가.
+do STEP MQ_02.FAITH
+
+== MQ02_STATUE_AFTER
+on talk OBJ_FALLEN_STATUE
+narr: 쓰러진 신상의 얼굴이 하늘을 보고 있다. 비둘기 한 마리가 그 코 위에 앉아 있다.
+
+# 시민 앞에서 신을 변호 / 침묵 / 비판 → HUMAN_FAITH 증감(STORY.md MQ_02 선택).
+== MQ02_SKEPTIC
+on talk NPC_ATHENS_SKEPTIC
+if STORY_STEP == MQ_02.FAITH
+NPC_ATHENS_SKEPTIC: 신상 보러 왔소? 구경거리긴 하지. 무너지는 소리가 꽤 컸거든.
+NPC_ATHENS_SKEPTIC: 신탁도 틀리고, 신들은 싸우기만 하는데 왜 믿어야 하죠?
+NPC_ATHENS_SKEPTIC: 우리 아버지는 매달 제물을 바쳤소. 흉년은 그래도 왔고. 대답해 보시오, 신의 시종 양반.
+choice [변호] 신들도 실수를 해요. 그래도 아직 이 세상을 지키고 있어요. -> ADD HUMAN_FAITH 10; GOTO MQ02_SKEPTIC_DEFEND
+choice [침묵] (대답하지 못한다) -> GOTO MQ02_SKEPTIC_SILENT
+choice [비판] 맞아요. 믿을 이유가 없죠. 저도 요즘은 모르겠어요. -> ADD HUMAN_FAITH -10; GOTO MQ02_SKEPTIC_CRITIC
+
+== MQ02_SKEPTIC_DEFEND
+NPC_ATHENS_SKEPTIC: …지킨다라. 저 신상 하나 못 지키면서. 그래도 당신 눈은 진심이군. 생각은 해 보겠소.
+do GOTO MQ02_SKEPTIC_END
+
+== MQ02_SKEPTIC_SILENT
+narr: 당신은 대답하지 못한다. 시민이 쓴웃음을 짓는다.
+NPC_ATHENS_SKEPTIC: 그렇지. 신의 시종도 대답을 못 하는데, 우리가 뭘 알겠소.
+do GOTO MQ02_SKEPTIC_END
+
+== MQ02_SKEPTIC_CRITIC
+NPC_ATHENS_SKEPTIC: 하! 신의 시종 입에서 그런 말이 나오다니. 이거 술집 가서 자랑해야겠군.
+do GOTO MQ02_SKEPTIC_END
+
+== MQ02_SKEPTIC_END
+NPC_ATHENS_SKEPTIC: 신들 얘기라면 뒷골목에 가 보시오. 막다른 곳에 아무도 안 쓰는 화덕이 있는데, 밤마다 거기서 누가 혼잣말을 한다더군. 다들 미친 노인이라고 하지만.
+do STEP MQ_02.ALLEY
+
+== SKEPTIC_AFTER
+on talk NPC_ATHENS_SKEPTIC
+if STORY_STEP >= MQ_02.ALLEY
+NPC_ATHENS_SKEPTIC: 뒷골목엔 가 봤소? 그 노인네… 아니, 그분 말이오.
+or
+NPC_ATHENS_SKEPTIC: 신상은 아직 저기 누워 있소. 일으킬 사람이 없으니까.
+
+== SKEPTIC_BEFORE
+on talk NPC_ATHENS_SKEPTIC
+NPC_ATHENS_SKEPTIC: 뭘 보시오? 신상이 무너진 게 그렇게 신기하오?
+
+# 잊혀지는 신(STORY.md MQ_02-4) — 유머 금지. 이름을 불러 주면 잠깐 선명해진다.
+== MQ02_HEARTH
+on talk CHR_HEARTH_GOD
+if STORY_STEP == MQ_02.ALLEY
+narr: 식은 화덕 곁에 누군가 앉아 있다. 몸이 아침 안개처럼 흐릿해서, 그 너머의 벽이 비쳐 보인다.
+CHR_HEARTH_GOD: …손님인가. 오랜만이군. 여기까지 오는 사람은 이제 없는데.
+CHR_HEARTH_GOD: 나는… 이 골목의 화로를 지키던 신이다. 아니, 지켰었다. 집집마다 저녁이면 내 이름을 부르며 불씨를 나눠 갔지.
+CHR_HEARTH_GOD: 그 이름이… 무엇이었더라. 마지막으로 불린 게 언제였는지도 모르겠군.
+CHR_PYTHIA: (작게) 신전 서고에서 본 적 있어. 아테네 뒷골목의 옛 화로 신… 에스카로스. 아마 그 이름일 거야.
+choice [이름을 불러 준다] 에스카로스. -> SET HEARTH_GOD_NAMED true; EVENT FLARE CHR_HEARTH_GOD; GOTO MQ02_HEARTH_NAMED
+choice [곁에 앉는다] (아무 말 없이 화덕 곁에 앉는다) -> GOTO MQ02_HEARTH_SILENT
+
+== MQ02_HEARTH_NAMED
+narr: 그 이름이 골목에 울리는 순간, 흐릿하던 몸이 잠깐 선명해진다. 식은 화덕에 아주 작은 불씨가 살아난다.
+CHR_HEARTH_GOD_NAMED: …에스카로스. 그래, 그게 내 이름이었지. 따뜻한 이름이군.
+CHR_HEARTH_GOD_NAMED: 고맙다. 신은 죽지 않아. 잊힐 뿐이야. 그리고 잊히는 건… 생각보다 조용하더군.
+narr: 불씨는 작지만 꺼지지 않는다. 그의 모습은 다시 천천히 흐려진다. 아까보다는 조금 덜.
+do GOTO MQ02_HEARTH_END
+
+== MQ02_HEARTH_SILENT
+narr: 당신은 아무 말 없이 화덕 곁에 앉는다. 오래도록, 둘 다 말이 없다.
+CHR_HEARTH_GOD: …고맙다. 누가 곁에 앉아 준 것도 오랜만이군.
+CHR_HEARTH_GOD: 신은 죽지 않아. 잊힐 뿐이야.
+do GOTO MQ02_HEARTH_END
+
+== MQ02_HEARTH_END
+CHR_HEARTH_GOD: 하나만 알려 주지. 요즘 사제들이 엉터리 예언을 팔고 다닌다. 그 돈이 어디서 오는지는… 사제단 창고 앞을 보면 알 거다.
+CHR_HEARTH_GOD: 나는 이제 그 문을 두드릴 힘도 없지만.
+do XP 40; STEP MQ_02.PRIESTS
+
+== HEARTH_AFTER_NAMED
+on talk CHR_HEARTH_GOD
+if HEARTH_GOD_NAMED
+CHR_HEARTH_GOD_NAMED: 불씨가 아직 살아 있군. 네가 불러 준 덕이다. …가끔 와서 불러 주겠나. 이름은 자꾸 잊히거든.
+
+== HEARTH_AFTER
+on talk CHR_HEARTH_GOD
+if STORY_STEP >= MQ_02.PRIESTS
+CHR_HEARTH_GOD: …손님인가. 오랜만이군. 아니, 아까 왔었던가. 요즘은 그것도 헷갈려.
+
+== HEARTH_BEFORE
+on talk CHR_HEARTH_GOD
+narr: 식은 화덕 곁에 흐릿한 누군가가 앉아 있다. 말을 걸어도 대답이 없다. 아직 당신을 볼 수 없는 것처럼.
+
+# 사제단의 배후 — 올림포스 내부의 후원(누군지는 MQ_03에서). 꼼꼼히 조사하면 숨은 단서(ERIS_CLUE +1, STORY.md 11장).
+== MQ02_LEDGER
+on talk OBJ_PRIEST_LEDGER
+if STORY_STEP == MQ_02.PRIESTS
+narr: 창고 문 앞에 두툼한 장부가 떨어져 있다. 급히 옮기다 흘린 모양이다.
+narr: 예언 판매 내역. "흉년 예언 — 마을 열두 곳. 결과: 제우스 신전 제물 4할 감소. 평가: 우수. 계속 진행할 것."
+narr: 맨 뒷장은 후원금 수령 기록이다. 금액은 엄청나고, 보낸 이의 이름 칸은 비어 있다. 함께 끼워진 금화는 인간 세상의 것이 아니다. 올림포스 금화다.
+CHR_PYTHIA: 엉터리 예언을… 일부러 퍼뜨린 거야? 신들 돈으로? 신이 자기 신앙을 깎아서 뭘 하려고?
+choice [조사] 장부를 끝까지 꼼꼼히 넘겨 본다 -> GOTO MQ02_LEDGER_SEARCH
+choice [보관] 이 정도면 충분하다. 장부를 챙긴다 -> GOTO MQ02_LEDGER_END
+
+== MQ02_LEDGER_SEARCH
+narr: 마지막 장 사이에 무언가가 눌려 있다. 말라붙은 사과 껍질이다. 끊기지 않고 한 줄로 길게 깎인, 금빛이 도는 껍질.
+CHR_PYTHIA: 사과 껍질? 이런 데 왜…
+narr: 어디선가 본 듯한 껍질이다.
+do ADD ERIS_CLUE 1; GOTO MQ02_LEDGER_END
+
+== MQ02_LEDGER_END
+CHR_PYTHIA: 이건 헤르메스한테… 아니, 헤르메스는 말이 너무 많아. 일단 우리가 갖고 있자.
+narr: 신들은 늙어 가고, 누군가는 그 틈을 파고들고 있다. — 2장 「흔들리는 왕좌」 끝.
+do SET MQ02_DONE true; XP 60; NOTICE [MQ_02 완료] 흔들리는 왕좌 — 다음 이야기(MQ_03 배신자의 이름)는 준비 중이다.; STEP MQ_02.DONE
+
+== PRIEST_PRIESTS
+on talk NPC_PRIEST
+if STORY_STEP == MQ_02.PRIESTS
+NPC_PRIEST: 창고요? 거긴 그냥… 향초랑 두루마리뿐입니다. 정말이에요. 장부 같은 것도… 장부라고 하셨나요? 아무도 장부라고는 안 했는데.
+
+== PRIEST_TALK
+on talk NPC_PRIEST
+NPC_PRIEST: 유피테르 신전 봉헌식에 오세요! 같은 신, 새 이름, 더 나은 혜택!
+or
+NPC_PRIEST: 제우스와 유피테르가 같은 신이냐고요? 음… 그건 해석의 여지라는 겁니다.
+or
+NPC_PRIEST: 첫 제물은 반값입니다. 두 번째부터는… 신의 뜻에 따라.
+
+# TODO: SQ_ATHENS_01 「신 vs 철학자 토론회」 — 지금은 철학자의 잡담(복선 F-05)만 있다.
+== PHILOSOPHER_TALK
+on talk NPC_PHILOSOPHER
+NPC_PHILOSOPHER: 신들이 사라지면 무엇이 남느냐고? 많은 것이 사라지겠지. 하지만 하나는 남네. 불화. 불화만은 신 없이도 존재하지. 사람이 둘 이상 모이기만 하면.
+or
+NPC_PHILOSOPHER: 나는 신을 믿지 않네. 하지만 신들의 이야기는 좋아하지. 이야기는 믿지 않아도 들을 수 있으니까.
+or
+NPC_PHILOSOPHER: 사제들에게 공개 토론을 하자고 했더니, 신탁을 받아 보고 정하겠다더군. 그 신탁이 늘 틀린다는 게 토론 주제인데 말일세.
+
+== CITIZEN_TALK
+on talk NPC_ATHENS_CITIZEN
+NPC_ATHENS_CITIZEN: 제우스 신전 제물값이 또 올랐대. 유피테르 신전은 첫 제물이 반값이라던데.
+or
+NPC_ATHENS_CITIZEN: 신탁? 요즘 누가 신탁을 믿어. 옆집 영감은 신탁대로 배를 띄웠다가 쫄딱 망했어.
+or
+NPC_ATHENS_CITIZEN: 아크로폴리스엔 요즘 구경꾼만 올라가. 기도하는 사람은 통 못 봤어.
+or
+NPC_ATHENS_CITIZEN: 뒷골목 화덕 말이야? 우리 할머니 땐 저녁마다 거기서 불씨를 얻어 왔대. 무슨 신한테 기도하면서. 이름은… 글쎄.
+
+
+# =====================================================================================
+# 이정표 — 지역 이동(지역마다 하나). 갈 수 있는 곳만 선택지로 보인다(UNLOCK_<지역ID>).
+# =====================================================================================
+
+== SIGNPOST_LOCKED
+on talk OBJ_SIGNPOST
+if MAP == LOC_DELPHI && !UNLOCK_LOC_OLYMPUS_FOOT && !UNLOCK_LOC_ATHENS
+narr: 낡은 이정표. 북쪽 길은 테살리아로, 동쪽 길은 아테네로 이어진다. 하지만 지금은 델포이를 떠날 때가 아니다.
+or
+narr: 이정표 아래 누군가 낙서를 해 놓았다. "신탁 축제 무사고 300일째." 숫자가 여러 번 고쳐져 있다.
+
+== SIGNPOST_DELPHI
+on talk OBJ_SIGNPOST
+if MAP == LOC_DELPHI
+narr: 낡은 이정표. 북쪽 길은 테살리아와 올림포스 산기슭으로, 동쪽 길은 아테네로 이어진다.
+choice (UNLOCK_LOC_OLYMPUS_FOOT) 올림포스 산기슭 · 테살리아로 떠난다 -> TRAVEL LOC_OLYMPUS_FOOT
+choice (UNLOCK_LOC_ATHENS) 아테네로 떠난다 -> TRAVEL LOC_ATHENS
+choice 아직은 머문다
+
+== SIGNPOST_OLYMPUS
+on talk OBJ_SIGNPOST
+if MAP == LOC_OLYMPUS_FOOT
+narr: 이정표. 남쪽으로 델포이, 남동쪽으로 아테네. 북쪽 산길엔 번개 모양 낙서로 "관계자 외 출입 금지"라고 적혀 있다.
+choice (UNLOCK_LOC_DELPHI) 델포이로 돌아간다 -> TRAVEL LOC_DELPHI
+choice (UNLOCK_LOC_ATHENS) 아테네로 떠난다 -> TRAVEL LOC_ATHENS
+choice 아직은 머문다
+
+== SIGNPOST_ATHENS
+on talk OBJ_SIGNPOST
+if MAP == LOC_ATHENS
+narr: 항구 앞 이정표. 서쪽 길은 델포이로, 북쪽 길은 테살리아로 이어진다. 바다 건너 서쪽에서 왔다는 상인들이 새 신전 얘기를 하며 지나간다.
+choice (UNLOCK_LOC_DELPHI) 델포이로 돌아간다 -> TRAVEL LOC_DELPHI
+choice (UNLOCK_LOC_OLYMPUS_FOOT) 올림포스 산기슭 · 테살리아로 떠난다 -> TRAVEL LOC_OLYMPUS_FOOT
+choice 아직은 머문다
+
+== DELPHI_RETURN
+on enter LOC_DELPHI
+if STORY_STEP >= MQ_02.COUNCIL && !DELPHI_RETURNED
+CHR_PYTHIA: 집이다. …균열은 아직 그대로네. 저 틈, 밤이 되면 숨 쉬는 소리가 나.
+do SET DELPHI_RETURNED true
+
+
+# =====================================================================================
+# 동료 피티아(MQ_00.CAVE부터 따라다님) — 진행 단계별 말 걸기. 위에서부터 먼저 맞는 것이 열린다.
+# =====================================================================================
+
+== PYTHIA_LAUREL
+on talk CHR_PYTHIA
+if STORY_STEP == MQ_00.LAUREL
+CHR_PYTHIA: 월계수 가지 세 개! 카스탈리아 샘가에 있어. 금빛 표시를 따라가.
+or
+CHR_PYTHIA: 벌써 왔어? 몇 개 주웠는데? …{LAUREL}개? 세 개라니까.
+
+== PYTHIA_RITUAL
+on talk CHR_PYTHIA
+if STORY_STEP == MQ_00.RITUAL
+CHR_PYTHIA: 제단 앞에 서. 바닥이 금빛으로 빛나는 데. 의식 시작한다니까.
+
+== PYTHIA_ESCAPE
+on talk CHR_PYTHIA
+if STORY_STEP == MQ_00.ESCAPE
+CHR_PYTHIA: 목소리가… 안 멈춰… 나는 괜찮아, 저 뱀부터…!
+
+== PYTHIA_CAVE
+on talk CHR_PYTHIA
+if STORY_STEP == MQ_00.CAVE
+CHR_PYTHIA: 저 아래 바위 언덕… 동굴로 가자. 조금만 쉬면 괜찮아질 거야.
+
+== PYTHIA_OLDWOMAN
+on talk CHR_PYTHIA
+if STORY_STEP == MQ_00.OLDWOMAN
+CHR_PYTHIA: 저기 모닥불… 누가 있어. 가 보자. 천천히.
+
+== PYTHIA_HERMES
+on talk CHR_PYTHIA
+if STORY_STEP == MQ_00.HERMES
+CHR_PYTHIA: 방금 하늘에서 떨어진 거… 신이야? 신이 저렇게 떨어져도 돼?
+
+== PYTHIA_INTERVIEW
+on talk CHR_PYTHIA
+if STORY_STEP == MQ_01.INTERVIEW
+CHR_PYTHIA: 신들이 너를 두고 면접을 본대. 내가 키운 애가 출세했네. …좋은 뜻이 아니라는 건 나도 알아.
+or
+CHR_PYTHIA: 제우스 님 앞에서 번개 얘기는 꺼내지 마. 아까 그거, 다들 못 본 척하는 중이니까.
+or
+CHR_PYTHIA: 하데스 님이 나한테도 신청서를 한 장 주셨어. 무슨 신청서냐고 여쭤보니까 "나중에 필요할 거다"래. …무섭게.
+
+== PYTHIA_CHOOSE
+on talk CHR_PYTHIA
+if STORY_STEP == MQ_01.CHOOSE
+CHR_PYTHIA: 누굴 고를 거야? 누구든 상관없어. 그 신이 너를 지켜 주는 게 아니라, 네가 그 신 곁에 서는 거야. 그걸 잊지 마.
+or
+CHR_PYTHIA: 솔직히… 다들 무언가를 무서워하는 얼굴이었어. 신들도 무서운 게 있구나.
+
+== PYTHIA_COUNCIL
+on talk CHR_PYTHIA
+if STORY_STEP == MQ_02.COUNCIL
+CHR_PYTHIA: 회의장은 저 언덕 위래. 신들의 회의라니… 나 괜히 떨려. 너는?
+
+== PYTHIA_LEDGER_CLUE
+on talk CHR_PYTHIA
+if STORY_STEP == MQ_02.DONE && ERIS_CLUE >= 1
+CHR_PYTHIA: 그 사과 껍질 말이야. 어디서 본 것 같지 않아? 끊기지 않고 길게… 아니야, 기분 탓이겠지.
+
+== PYTHIA_MQ02_DONE
+on talk CHR_PYTHIA
+if STORY_STEP == MQ_02.DONE
+CHR_PYTHIA: 그 장부… 신들이 자기 신앙을 스스로 깎고 있다는 거잖아. 누가, 왜? …머리 아파. 오늘은 고기 먹자.
+
+== PYTHIA_ATHENS
+on talk CHR_PYTHIA
+if MAP == LOC_ATHENS && STORY_STEP >= MQ_02.ATHENS
+CHR_PYTHIA: 아테네 사람들은 신상이 쓰러져도 비켜서 지나가. 델포이였으면 다들 울면서 일으켜 세웠을 텐데.
+or
+CHR_PYTHIA: 유피테르 신전… 같은 신을 다른 이름으로 부르면, 그건 같은 신일까? 나는 잘 모르겠어.
+
+== PYTHIA_AFTER_COUNCIL
+on talk CHR_PYTHIA
+if STORY_STEP >= MQ_02.ATHENS
+CHR_PYTHIA: 그 회의, 우리 신전 회의랑 똑같더라. 아무도 회의록을 안 읽어. 아테나 님만 빼고.
+or
+CHR_PYTHIA: 회의장에서 내가 뭐라고 했어? …왕관? 기억이 안 나. 요즘 입이 자꾸 제멋대로 움직여.
+
+== PYTHIA_PATRON_ZEUS
+on talk CHR_PYTHIA
+if PATRON == ZEUS
+CHR_PYTHIA: 제우스 님이라… 왕의 곁은 안전하겠지. 왕이 무서워하는 게 없을 때까진.
+
+== PYTHIA_PATRON_POSEIDON
+on talk CHR_PYTHIA
+if PATRON == POSEIDON
+CHR_PYTHIA: 포세이돈 님은 화나면 근처 섬을 흔드신대. 신전 지붕부터 고쳐 둬야겠다.
+
+== PYTHIA_PATRON_HADES
+on talk CHR_PYTHIA
+if PATRON == HADES
+CHR_PYTHIA: 하데스 님 축복이라니. 너 이제 서류 쓰는 법부터 배워야겠네.
+
+== PYTHIA_PATRON_APHRODITE
+on talk CHR_PYTHIA
+if PATRON == APHRODITE
+CHR_PYTHIA: 아프로디테 님이라… 앞으로 거울 볼 때 조심해. 거울이 너를 더 오래 본대.
+
+== PYTHIA_PATRON_HERMES
+on talk CHR_PYTHIA
+if PATRON == HERMES
+CHR_PYTHIA: 헤르메스 님… 네 발은 빨라지겠지만, 네 소문은 더 빨라질 거야.
+
+== PYTHIA_DEFAULT
+on talk CHR_PYTHIA
+CHR_PYTHIA: 왜? 배고파? …나도.
+
+
+# =====================================================================================
+# 떠돌이 노파(에리스의 위장) — 프롤로그 뒤로도 모닥불 곁에 머문다. "인생 조언"은 전부 싸움 붙이는 법.
+# =====================================================================================
+
+== ERIS_HERMES_STEP
+on talk CHR_ERIS
+if STORY_STEP == MQ_00.HERMES
+CHR_ERIS: 저기 떨어진 녀석한테나 가 봐라. 저 녀석은 늘 소식을 들고 오지. 대개 나쁜 소식이고.
+
+== ERIS_ADVICE
+on talk CHR_ERIS
+CHR_ERIS: 인생 조언 하나 더 해 주마. 친구가 둘이면 서로의 비밀을 하나씩 귀띔해 줘라. 그때부터 아주 재밌어지지. …우정이 깊어진다는 뜻이다.
+or
+CHR_ERIS: 칭찬은 말이다, 한 사람 앞에서 다른 사람을 하는 거다. 그래야 둘 다 오래 기억하거든. 흐흐, 좋은 뜻이야.
+or
+CHR_ERIS: 사과 말이냐? 이건 안 된다. …다른 건 다 줘도.
+or
+CHR_ERIS: 신들이 너를 두고 줄을 섰다며? 좋겠구나. 나는 줄 뒤에 서 본 적은 있어도, 줄 앞에 서 본 적은 없어서 말이다.
+
+
+# =====================================================================================
+# 델포이 사람들 — 균열이 열리면 모두 흩어졌다가, 신들이 내려온 뒤(MQ_01) 구경하러 돌아온다.
+# =====================================================================================
+
+# TODO: SQ_DELPHI_01 「피티아의 장보기 목록」(엉터리 예언 때문에 망한 마을 수습) — 지금은 주민 잡담의 실마리만 있다.
+== PILGRIM_AFTER
+on talk NPC_PILGRIM
+if STORY_STEP >= MQ_01.INTERVIEW
+NPC_PILGRIM: 신들이 진짜로 내려오셨어요! 이 눈으로 봤어요! …근데 생각보다 다들 좀 피곤해 보이시던데요.
+or
+NPC_PILGRIM: 괴물이 나왔을 땐 끝인 줄 알았어요. 당신이 쓰러뜨리는 걸 봤어요. 고마워요.
+
+== PILGRIM_TALK
+on talk NPC_PILGRIM
+NPC_PILGRIM: 피티아 님 신탁 들었어요! "큰 바다… 젖은 양말…" 분명 깊은 뜻이 있을 거예요. 집에 가서 바다 쪽으로 양말을 널어 볼래요.
+or
+NPC_PILGRIM: 삼 년을 기다려서 왔어요. 오늘 축제엔 아폴론 님이 직접 오신다는 소문도 있던데요.
+or
+NPC_PILGRIM: 신탁이 애매하다고요? 원래 그 맛에 듣는 거죠. 너무 정확하면 무서워서 못 들어요.
+
+== MERCHANT_AFTER
+on talk NPC_MERCHANT
+if STORY_STEP >= MQ_01.INTERVIEW
+NPC_MERCHANT: 괴물이 나온 데서 장사를 계속하냐고? 구경꾼이 세 배야. 신들 덕분에 대목이지!
+or
+NPC_MERCHANT: "신들이 내려온 광장의 흙" 한 줌에 은화 한 닢! …방금 퍼 왔어. 진짜야.
+
+== MERCHANT_TALK
+on talk NPC_MERCHANT
+NPC_MERCHANT: 월계관 하나에 은화 두 닢! 신탁 효과는 보장 못 해도 머리 모양은 보장하지!
+or
+NPC_MERCHANT: 피티아? 그 양반 또 흥정하러 오면 나 없다고 해 줘. 지난번엔 무화과 값을 신탁으로 깎았다니까. "보인다… 반값…" 이러면서.
+
+== VILLAGER_AFTER
+on talk NPC_DELPHI_VILLAGER
+if STORY_STEP >= MQ_01.INTERVIEW
+NPC_DELPHI_VILLAGER: 피티아 님이 너를 데려온 날 기억나. 그날 밤 신전이 이상하게 조용했지. 새도 안 울었어. 하긴, 그날은 신탁도 쉬었으니까.
+or
+NPC_DELPHI_VILLAGER: 균열은 아직 그대로야. 밤마다 저 틈에서 뭐가 속삭이는 것 같아. 우리 개는 그쪽으로 안 가.
+
+== VILLAGER_TALK
+on talk NPC_DELPHI_VILLAGER
+NPC_DELPHI_VILLAGER: 요즘 신탁이 좀 이상하지 않아? 우리 할머니가 "흰 것을 조심하라"는 신탁을 받고 흰 염소를 꽁꽁 묶어 뒀는데, 검은 염소가 도망갔어.
+or
+NPC_DELPHI_VILLAGER: 축제 날엔 순례객이 너무 많아. 신전 잡일꾼이 제일 고생이지. …아, 그게 너구나. 힘내.

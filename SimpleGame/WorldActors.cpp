@@ -267,6 +267,30 @@ void ItemActor::OnRender(const RenderContext& ctx)
 		Shapes::DrawUprightEllipse(ctx, x, y, baseZ + size * 0.66f, size * 0.18f, size * 0.24f, Shapes::Shade(color, 0.85f));
 		Shapes::DrawUprightEllipse(ctx, x, y, baseZ + size * 0.8f, size * 0.32f, size * 0.09f, color);
 	}
+	else if (m_Kind == ItemKind::Laurel)
+	{
+		// 월계수 가지: 비스듬한 갈색 줄기를 따라 길쭉한 잎이 좌우로 어긋나게 달린다.
+		Shapes::Rgb stem = { 0.42f, 0.3f, 0.16f };
+		Shapes::DrawSolidBox(ctx, x, y, baseZ, size * 0.05f, size * 0.05f, size * 0.75f, stem);
+
+		for (int i = 0; i < 4; ++i)
+		{
+			float side = ((i % 2) == 0 ? 1.f : -1.f) * size * 0.12f * kScreenAxis;
+			float leafZ = baseZ + size * (0.2f + 0.16f * (float)i);
+			Shapes::DrawUprightEllipse(ctx, x + side, y - side, leafZ, size * 0.16f, size * 0.3f, Shapes::Shade(color, 0.85f + 0.05f * (float)i));
+		}
+	}
+	else if (m_Kind == ItemKind::Scroll)
+	{
+		// 두루마리: 가로로 펼친 양피지 + 양끝의 말린 부분(살짝 어두운 원기둥 단면).
+		float half = size * 0.32f * kScreenAxis;
+		Shapes::DrawUprightEllipse(ctx, x, y, baseZ + size * 0.35f, size * 0.62f, size * 0.42f, Shapes::Shade(color, 0.75f));
+		Shapes::DrawUprightEllipse(ctx, x, y, baseZ + size * 0.35f, size * 0.56f, size * 0.36f, color);
+		Shapes::DrawUprightEllipse(ctx, x + half, y - half, baseZ + size * 0.35f, size * 0.12f, size * 0.46f, Shapes::Shade(color, 0.7f));
+		Shapes::DrawUprightEllipse(ctx, x - half, y + half, baseZ + size * 0.35f, size * 0.12f, size * 0.46f, Shapes::Shade(color, 0.85f));
+		Shapes::DrawUprightEllipse(ctx, x, y, baseZ + size * 0.38f, size * 0.32f, size * 0.04f, Shapes::Shade(color, 0.45f));
+		Shapes::DrawUprightEllipse(ctx, x, y, baseZ + size * 0.3f, size * 0.26f, size * 0.04f, Shapes::Shade(color, 0.45f));
+	}
 	else
 	{
 		// 약초: 화면 좌우로 벌어진 잎 두 장 → 가운데 큰 잎 → 밝은 새순.
@@ -281,15 +305,16 @@ void ItemActor::OnRender(const RenderContext& ctx)
 
 // ---------------------------------------------------------------- FireActor
 
-FireActor::FireActor(float localX, float localY, float localZ, float size)
+FireActor::FireActor(float localX, float localY, float localZ, float size, bool campfire)
 	: Actor(ActorType::Fire)
+	, m_Campfire(campfire)
 {
 	SetPosition(localX, localY, localZ);
 	SetSize(size);
 
-	// 불꽃(원점 주변)부터 바닥(localZ 아래)의 횃대·불빛 웅덩이(반지름 0.8*size)까지 감싸도록,
-	// 중심을 불꽃과 바닥의 중간에 둔다.
-	SetBoundingSphere(localZ * 0.5f + size * 1.7f, -localZ * 0.5f);
+	// 불꽃(원점 주변)부터 바닥(localZ 아래)의 횃대·돌·불빛 웅덩이(반지름 0.8*size, 모닥불은 더 넓게)까지
+	// 감싸도록, 중심을 불꽃과 바닥의 중간에 둔다.
+	SetBoundingSphere(localZ * 0.5f + size * (campfire ? 2.4f : 1.7f), -localZ * 0.5f);
 }
 
 void FireActor::OnRender(const RenderContext& ctx)
@@ -298,12 +323,38 @@ void FireActor::OnRender(const RenderContext& ctx)
 	float y = GetWorldY();
 	float z = GetWorldZ();
 	float size = GetSize();
-	float groundZ = z - GetZ(); // 부모(건물)가 서 있는 바닥 높이
+	float groundZ = z - GetZ(); // 부모(건물)가 서 있는 바닥 높이(부모가 없으면 0)
 	float flicker = 0.85f + 0.15f * sinf(ctx.time * 9.f + x * 1.3f);
 
-	// 1) 바닥에 번지는 따뜻한 불빛.
-	Mat4 poolModel = Mat4::Translate(x, y, groundZ + 0.003f) * Mat4::Scale(size * 3.2f, size * 3.2f, 1.f);
-	ctx.renderer.DrawSoftDisc(ctx.viewProjection * poolModel, 1.f, 0.62f, 0.28f, 0.22f * flicker);
+	// 1) 바닥에 번지는 따뜻한 불빛(모닥불은 더 넓고 진하게).
+	float poolSize = size * (m_Campfire ? 4.6f : 3.2f);
+	Mat4 poolModel = Mat4::Translate(x, y, groundZ + 0.003f) * Mat4::Scale(poolSize, poolSize, 1.f);
+	ctx.renderer.DrawSoftDisc(ctx.viewProjection * poolModel, 1.f, 0.62f, 0.28f, (m_Campfire ? 0.3f : 0.22f) * flicker);
+
+	if (m_Campfire)
+	{
+		// 2) 모닥불: 둥글게 두른 돌(카메라에서 먼 쪽부터) → 엇갈려 쌓은 장작.
+		Shapes::Rgb stone = { 0.5f, 0.48f, 0.45f };
+		Shapes::Rgb log = { 0.33f, 0.21f, 0.12f };
+		const int kStones = 8;
+		for (int i = 0; i < kStones; ++i)
+		{
+			// 각도를 카메라 반대쪽(-x-y 방향, 225도)부터 돌려서 먼 돌이 먼저 그려지게 한다.
+			float angle = 3.926991f + ((i % 2 == 0) ? 1.f : -1.f) * (float)((i + 1) / 2) * (6.2831853f / (float)kStones);
+			float stoneX = x + cosf(angle) * size * 0.55f;
+			float stoneY = y + sinf(angle) * size * 0.55f;
+			Shapes::DrawSolidBox(ctx, stoneX, stoneY, groundZ, size * 0.22f, size * 0.22f, size * 0.14f,
+				Shapes::Shade(stone, 0.9f + 0.05f * (float)(i % 3)));
+		}
+
+		Shapes::DrawSolidBox(ctx, x, y, groundZ, size * 0.7f, size * 0.12f, size * 0.1f, log);
+		Shapes::DrawSolidBox(ctx, x, y, groundZ + size * 0.1f, size * 0.12f, size * 0.7f, size * 0.1f, Shapes::Shade(log, 1.1f));
+
+		Mat4 campFlame = Mat4::Translate(x, y, groundZ + size * 0.55f) * Mat4::RotateZ(-kQuarterPi) * Mat4::RotateX(kHalfPi)
+			* Mat4::Scale(size * 0.9f, size * 1.2f, 1.f);
+		ctx.renderer.DrawFire(ctx.viewProjection * campFlame, ctx.time, x * 1.3f + y * 0.7f);
+		return;
+	}
 
 	// 2) 횃대: 바닥에서 불꽃 아래까지 세운 나무 기둥 + 위의 쇠 받침(예전엔 불꽃만 허공에 떠 있었다).
 	float cupBase = z - size * 0.3f;

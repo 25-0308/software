@@ -16,6 +16,9 @@
     <Filter Include="소스 파일\Shaders">
       <UniqueIdentifier>{aa86e47f-445f-4440-9a76-173363b46c4e}</UniqueIdentifier>
     </Filter>
+    <Filter Include="소스 파일\Data">
+      <UniqueIdentifier>{5d2f8c3a-7b41-4e9a-9c6d-2f1e8a4b7c90}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <Text Include="ReadMe.txt" />
@@ -69,6 +72,9 @@
     <ClInclude Include="MiniMap.h">
       <Filter>헤더 파일</Filter>
     </ClInclude>
+    <ClInclude Include="MapScreen.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
     <ClInclude Include="SceneGraph.h">
       <Filter>헤더 파일</Filter>
     </ClInclude>
@@ -94,6 +100,27 @@
       <Filter>헤더 파일</Filter>
     </ClInclude>
     <ClInclude Include="MeshCache.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="DialogueBox.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="DialogueData.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="LandmarkActors.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="StoryDirector.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="StoryState.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="UiDraw.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="WorldMaps.h">
       <Filter>헤더 파일</Filter>
     </ClInclude>
   </ItemGroup>
@@ -123,6 +150,9 @@
       <Filter>소스 파일</Filter>
     </ClCompile>
     <ClCompile Include="MiniMap.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="MapScreen.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
     <ClCompile Include="SceneGraph.cpp">
@@ -165,6 +195,27 @@
       <Filter>소스 파일</Filter>
     </ClCompile>
     <ClCompile Include="Profiler.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="DialogueBox.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="DialogueData.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="LandmarkActors.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="StoryDirector.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="StoryState.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="UiDraw.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="WorldMaps.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
   </ItemGroup>
@@ -210,6 +261,9 @@
     </None>
     <None Include="Shaders\Text.fs">
       <Filter>소스 파일\Shaders</Filter>
+    </None>
+    <None Include="Data\Story.txt">
+      <Filter>소스 파일\Data</Filter>
     </None>
   </ItemGroup>
 </Project>

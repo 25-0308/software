@@ -63,6 +63,12 @@ void Actor::SetColor(float r, float g, float b, float a)
 
 void Actor::Update(const UpdateContext& ctx)
 {
+	// 이야기 진행 조건으로 숨은 액터(아직 나타나지 않은 괴물·인물 등)는 자손까지 통째로 멈춰 있는다.
+	if (!m_Visible)
+	{
+		return;
+	}
+
 	OnUpdate(ctx);
 
 	// OnUpdate 도중 자식이 추가될 수 있으므로 인덱스로 순회한다.

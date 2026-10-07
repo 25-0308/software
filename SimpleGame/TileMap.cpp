@@ -34,7 +34,8 @@ bool TileMap::IsWalkable(int gridX, int gridY) const
 	{
 		return false;
 	}
-	return GetTile(gridX, gridY) != TileType::Water;
+	TileType type = GetTile(gridX, gridY);
+	return type != TileType::Water && type != TileType::Rock;
 }
 
 bool TileMap::IsWorldPositionWalkable(float worldX, float worldY) const

@@ -7,7 +7,8 @@ enum class TileType
 	Grass,
 	Stone,
 	Water,
-	Path, // 마을과 호수를 잇는 다져진 길
+	Path, // 다져진 흙길(마을과 마을, 마을과 물가를 잇는 길)
+	Rock, // 바위 산·절벽·언덕(지나갈 수 없음) — 지역마다 지형(산기슭, 아크로폴리스 언덕 등)을 만든다
 };
 
 // 월드 원점을 중심으로 한 고정 크기 타일 그리드.
@@ -21,7 +22,7 @@ public:
 	TileType GetTile(int gridX, int gridY) const;
 	void SetTile(int gridX, int gridY, TileType type);
 
-	// Water 타일은 걸을 수 없는 벽으로 취급하고, 그 외에는 모두 통행 가능하다.
+	// Water·Rock 타일은 걸을 수 없는 벽으로 취급하고, 그 외에는 모두 통행 가능하다.
 	// 그리드 범위를 벗어나면 통행 불가로 취급한다 (맵 경계).
 	bool IsWalkable(int gridX, int gridY) const;
 	bool IsWorldPositionWalkable(float worldX, float worldY) const;

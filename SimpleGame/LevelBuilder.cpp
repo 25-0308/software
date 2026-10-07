@@ -2,10 +2,12 @@
 #include "LevelBuilder.h"
 
 #include <cmath>
-#include <random>
+#include <memory>
 #include <vector>
 
 #include "CharacterActors.h"
+#include "LandmarkActors.h"
+#include "LevelGenerator.h"
 #include "Renderer.h"
 #include "WorldActors.h"
 
@@ -31,8 +33,9 @@ namespace
 	// 지형 기본색.
 	const Color kGrassColor = { 0.21f, 0.37f, 0.17f };
 	const Color kDryGrassColor = { 0.42f, 0.43f, 0.21f };   // 햇볕에 마른 풀(잔디에 얼룩덜룩 섞음)
-	const Color kStoneColor = { 0.66f, 0.63f, 0.57f };      // 마을 돌바닥(밝은 석회암)
+	const Color kStoneColor = { 0.66f, 0.63f, 0.57f };      // 마을·신전 돌바닥(밝은 석회암)
 	const Color kPathColor = { 0.52f, 0.41f, 0.27f };
+	const Color kRockColor = { 0.46f, 0.43f, 0.39f };       // 바위 산·절벽(지나갈 수 없음)
 	const Color kSandColor = { 0.80f, 0.72f, 0.52f };       // 호수·바다 물가의 모래
 	const Color kShallowWaterColor = { 0.20f, 0.52f, 0.58f };
 	const Color kDeepWaterColor = { 0.08f, 0.24f, 0.40f };
@@ -42,6 +45,7 @@ namespace
 	const float kMaterialGrass = 0.f;
 	const float kMaterialStone = 1.f;
 	const float kMaterialPath = 2.f;
+	const float kMaterialRock = 3.f;
 	const float kMaterialPlain = 9.f; // 무늬 없이 색 그대로(꽃·풀 같은 장식)
 
 	// 바닥 높이. 캐릭터·건물·그림자가 서 있는 z = 0과 같아야 한다 — 예전엔 -0.5에 그려서, 이 카메라
@@ -52,40 +56,10 @@ namespace
 
 	const int kChunkSize = 8;
 
-	// ---- 결정적 난수/노이즈 (같은 입력이면 항상 같은 값) ----
-
-	float HashToUnit(int x, int y, int seed)
-	{
-		unsigned int h = (unsigned int)x * 374761393u + (unsigned int)y * 668265263u + (unsigned int)seed * 2246822519u;
-		h = (h ^ (h >> 13)) * 1274126177u;
-		h ^= h >> 16;
-		return (float)(h & 0xFFFFFFu) / 16777215.f;
-	}
-
-	// 격자점마다의 난수를 부드럽게 보간한 값 노이즈(0~1).
-	float ValueNoise(float x, float y, int seed)
-	{
-		int x0 = (int)floorf(x);
-		int y0 = (int)floorf(y);
-		float fx = x - (float)x0;
-		float fy = y - (float)y0;
-		float ux = fx * fx * (3.f - 2.f * fx);
-		float uy = fy * fy * (3.f - 2.f * fy);
-
-		float a = HashToUnit(x0, y0, seed);
-		float b = HashToUnit(x0 + 1, y0, seed);
-		float c = HashToUnit(x0, y0 + 1, seed);
-		float d = HashToUnit(x0 + 1, y0 + 1, seed);
-
-		float bottom = a + (b - a) * ux;
-		float top = c + (d - c) * ux;
-		return bottom + (top - bottom) * uy;
-	}
-
 	// 타일 한 칸 안의 장식 배치용 난수. salt를 바꾸면 같은 칸에서 서로 다른 난수가 나온다.
 	float TileRandom(int gx, int gy, int seed, int salt)
 	{
-		return HashToUnit(gx + salt * 1013, gy - salt * 719, seed + salt * 7);
+		return Terrain::Hash(gx + salt * 1013, gy - salt * 719, seed + salt * 7);
 	}
 
 	// ---- 바닥 정점 ----
@@ -112,6 +86,7 @@ namespace
 		int grass = 0;
 		int stone = 0;
 		int path = 0;
+		int rock = 0;
 	};
 
 	CornerTiles CountCornerTiles(const TileMap& tileMap, int cx, int cy)
@@ -133,6 +108,7 @@ namespace
 				case TileType::Water: ++counts.water; break;
 				case TileType::Stone: ++counts.stone; break;
 				case TileType::Path:  ++counts.path; break;
+				case TileType::Rock:  ++counts.rock; break;
 				default:              ++counts.grass; break;
 				}
 			}
@@ -147,6 +123,7 @@ namespace
 		{
 		case TileType::Stone: return kStoneColor;
 		case TileType::Path:  return kPathColor;
+		case TileType::Rock:  return kRockColor;
 		default:              return kGrassColor;
 		}
 	}
@@ -157,6 +134,7 @@ namespace
 		{
 		case TileType::Stone: return kMaterialStone;
 		case TileType::Path:  return kMaterialPath;
+		case TileType::Rock:  return kMaterialRock;
 		default:              return kMaterialGrass;
 		}
 	}
@@ -171,30 +149,30 @@ namespace
 
 		// 모서리에 닿은 땅 타일 색의 평균과 자기 색을 섞는다: 지형 경계가 부드럽게 번지되, 한 칸짜리
 		// 흙길처럼 좁은 지형이 주변 색에 묻혀 사라지지는 않을 만큼만.
-		int land = counts.grass + counts.stone + counts.path;
+		int land = counts.grass + counts.stone + counts.path + counts.rock;
 		if (land > 0)
 		{
 			float inv = 1.f / (float)land;
 			Color average =
 			{
-				(kGrassColor.r * counts.grass + kStoneColor.r * counts.stone + kPathColor.r * counts.path) * inv,
-				(kGrassColor.g * counts.grass + kStoneColor.g * counts.stone + kPathColor.g * counts.path) * inv,
-				(kGrassColor.b * counts.grass + kStoneColor.b * counts.stone + kPathColor.b * counts.path) * inv,
+				(kGrassColor.r * counts.grass + kStoneColor.r * counts.stone + kPathColor.r * counts.path + kRockColor.r * counts.rock) * inv,
+				(kGrassColor.g * counts.grass + kStoneColor.g * counts.stone + kPathColor.g * counts.path + kRockColor.g * counts.rock) * inv,
+				(kGrassColor.b * counts.grass + kStoneColor.b * counts.stone + kPathColor.b * counts.path + kRockColor.b * counts.rock) * inv,
 			};
 			color = Mix(ownColor, average, 0.45f);
 		}
 
 		// 넓은 밝기 얼룩 + 잔디에 섞이는 마른 풀빛. 둘 다 모서리 위치만의 함수라 이웃 타일과 이어진다.
-		float patch = ValueNoise((float)cx * 0.18f, (float)cy * 0.18f, seed);
+		float patch = Terrain::Noise((float)cx * 0.18f, (float)cy * 0.18f, seed);
 		if (own == TileType::Grass)
 		{
-			float dry = ValueNoise((float)cx * 0.33f + 11.f, (float)cy * 0.33f + 7.f, seed + 1);
+			float dry = Terrain::Noise((float)cx * 0.33f + 11.f, (float)cy * 0.33f + 7.f, seed + 1);
 			color = Mix(color, kDryGrassColor, dry * dry * 0.6f);
 		}
 		color = Scale(color, 0.86f + 0.26f * patch);
 
-		// 물(호수·바다)에 닿은 모서리는 모래색 → 물가를 따라 모래사장이 생긴다.
-		if (counts.water > 0)
+		// 물(호수·바다)에 닿은 모서리는 모래색 → 물가를 따라 모래사장이 생긴다(바위 절벽은 그대로 둔다).
+		if (counts.water > 0 && own != TileType::Rock)
 		{
 			float sandy = (float)counts.water * 0.4f;
 			if (sandy > 1.f)
@@ -312,16 +290,18 @@ namespace
 				}
 			}
 		}
-		else if (type == TileType::Path)
+		else if (type == TileType::Path || type == TileType::Rock)
 		{
-			// 자갈 0~3개.
+			// 자갈 0~3개(바위 산 위엔 좀 더 큰 돌 부스러기).
+			float sizeScale = (type == TileType::Rock) ? 1.6f : 1.f;
 			int pebbleCount = (int)(TileRandom(gx, gy, seed, 40) * 3.999f);
 			for (int pebble = 0; pebble < pebbleCount; ++pebble)
 			{
 				float pebbleX = centerX + (TileRandom(gx, gy, seed, 41 + pebble) - 0.5f) * 0.75f;
 				float pebbleY = centerY + (TileRandom(gx, gy, seed, 44 + pebble) - 0.5f) * 0.75f;
-				Color pebbleColor = Scale(kStoneColor, 0.7f + 0.3f * TileRandom(gx, gy, seed, 47 + pebble));
-				AppendDiamond(out, pebbleX, pebbleY, 0.035f + 0.025f * TileRandom(gx, gy, seed, 51 + pebble), pebbleColor);
+				Color pebbleColor = Scale(kStoneColor, 0.65f + 0.3f * TileRandom(gx, gy, seed, 47 + pebble));
+				float radius = (0.035f + 0.025f * TileRandom(gx, gy, seed, 51 + pebble)) * sizeScale;
+				AppendDiamond(out, pebbleX, pebbleY, radius, pebbleColor);
 			}
 		}
 	}
@@ -356,116 +336,15 @@ namespace
 		}
 	}
 
-	// ---- 배치 자리 찾기 ----
-
-	struct Spot
-	{
-		float x, y;
-	};
-
 	float DistanceSq(float ax, float ay, float bx, float by)
 	{
 		float dx = ax - bx;
 		float dy = ay - by;
 		return dx * dx + dy * dy;
 	}
-
-	bool IsNearAny(const std::vector<Spot>& spots, float x, float y, float distance)
-	{
-		for (const Spot& spot : spots)
-		{
-			if (DistanceSq(spot.x, spot.y, x, y) < distance * distance)
-			{
-				return true;
-			}
-		}
-		return false;
-	}
-
-	// (x, y)가 무언가를 세워도 되는 열린 땅인지: 플레이어가 갈 수 있는 맵 안쪽이고, 그 자리와 사방
-	// clearance 거리의 네 점이 모두 걸을 수 있는 타일이어야 한다(물가에 바짝 붙은 자리도 피함).
-	bool IsOpenGround(const TileMap& tileMap, float x, float y, float clearance)
-	{
-		float limitX = tileMap.GetWidth() * 0.5f - 1.f;
-		float limitY = tileMap.GetHeight() * 0.5f - 1.f;
-		if (fabsf(x) > limitX || fabsf(y) > limitY)
-		{
-			return false;
-		}
-
-		return tileMap.IsWorldPositionWalkable(x, y)
-			&& tileMap.IsWorldPositionWalkable(x + clearance, y)
-			&& tileMap.IsWorldPositionWalkable(x - clearance, y)
-			&& tileMap.IsWorldPositionWalkable(x, y + clearance)
-			&& tileMap.IsWorldPositionWalkable(x, y - clearance);
-	}
-
-	// (x, y)가 열린 땅이면 그대로, 아니면 가까운 곳부터 동심원으로 넓혀 가며 찾은 열린 땅을 돌려준다.
-	// 예전엔 마을 기준 고정 좌표를 그대로 써서 약초·짐승·퀘스트 아이템이 호수 안에 생길 수 있었다.
-	Spot FindOpenGround(const TileMap& tileMap, float x, float y, float clearance)
-	{
-		Spot spot = { x, y };
-		if (IsOpenGround(tileMap, x, y, clearance))
-		{
-			return spot;
-		}
-
-		const int kAngleSteps = 16;
-		for (float radius = 0.5f; radius <= 12.f; radius += 0.5f)
-		{
-			for (int i = 0; i < kAngleSteps; ++i)
-			{
-				float angle = (float)i * (6.2831853f / (float)kAngleSteps);
-				float candidateX = x + cosf(angle) * radius;
-				float candidateY = y + sinf(angle) * radius;
-
-				if (IsOpenGround(tileMap, candidateX, candidateY, clearance))
-				{
-					spot.x = candidateX;
-					spot.y = candidateY;
-					return spot;
-				}
-			}
-		}
-
-		return spot; // 찾지 못하면(현실적으로 없음) 원래 자리 그대로.
-	}
-
-	// 마을 사람 머리 색(짙은 갈색·검정·적갈색·희끗한 회색)을 번호로 돌려 가며 고른다.
-	HumanLook VillagerLook(int index)
-	{
-		const float kHairColors[4][3] =
-		{
-			{ 0.20f, 0.13f, 0.07f },
-			{ 0.09f, 0.07f, 0.06f },
-			{ 0.42f, 0.24f, 0.11f },
-			{ 0.55f, 0.50f, 0.44f },
-		};
-
-		const float* hair = kHairColors[index % 4];
-		HumanLook look;
-		look.hairR = hair[0];
-		look.hairG = hair[1];
-		look.hairB = hair[2];
-		return look;
-	}
-
-	// 마을 사람 NPC 하나를 (x, y)에 생성한다.
-	void SpawnVillager(SceneGraph& scene, float x, float y, float r, float g, float b, int index)
-	{
-		scene.Spawn<NpcActor>(x, y, 0.9f, r, g, b, VillagerLook(index), kInteractVillager, "Villager");
-	}
-
-	// 집 한 채와, 그 집에 붙어 다니는 횃불(자식 액터)을 생성한다. 횃불 위치는 집 기준 로컬 좌표라
-	// 집을 옮기면 같이 따라간다. 카메라 쪽(+y면) 문 옆 바닥에 세운다 — 반대편에 두면 집에 가려진다.
-	void SpawnBuildingWithTorch(SceneGraph& scene, float x, float y)
-	{
-		BuildingActor* building = scene.Spawn<BuildingActor>(x, y, 1.4f);
-		building->AddChild(std::unique_ptr<Actor>(new FireActor(0.42f, 0.85f, 0.8f, 0.5f)));
-	}
 }
 
-void SpawnTileActors(SceneGraph& scene, Renderer& renderer, const TileMap& tileMap)
+void SpawnTileActors(SceneGraph& scene, Renderer& renderer, const TileMap& tileMap, int seed)
 {
 	// 타일을 8x8칸씩 청크로 나누고, 청크마다 정점 색상 메시 하나(지형용, 물이 있으면 물용까지
 	// 최대 2개)로 구워서 드로우콜 1~2번으로 그린다. 예전엔 타일 하나하나가 독립된 액터라 청크
@@ -477,9 +356,6 @@ void SpawnTileActors(SceneGraph& scene, Renderer& renderer, const TileMap& tileM
 	int height = tileMap.GetHeight();
 	float halfWidth = width * 0.5f;
 	float halfHeight = height * 0.5f;
-
-	// 맵 배치가 매번 다르므로 꽃·풀 배치와 얼룩 무늬도 실행마다 달라지게 한다.
-	int seed = (int)(std::random_device{}() & 0x7FFFFFFFu);
 
 	for (int chunkY = 0; chunkY < height; chunkY += kChunkSize)
 	{
@@ -511,7 +387,7 @@ void SpawnTileActors(SceneGraph& scene, Renderer& renderer, const TileMap& tileM
 						for (int c = 0; c < 4; ++c)
 						{
 							extraX[c] = WaterShore(tileMap, cornerX[c], cornerY[c]);
-							float ripple = 0.95f + 0.1f * ValueNoise((float)cornerX[c] * 0.4f, (float)cornerY[c] * 0.4f, seed + 2);
+							float ripple = 0.95f + 0.1f * Terrain::Noise((float)cornerX[c] * 0.4f, (float)cornerY[c] * 0.4f, seed + 2);
 							colors[c] = Scale(WaterColor(extraX[c]), ripple);
 						}
 						AppendTileQuad(waterVertices, left, bottom, colors, extraX, 0.f);
@@ -579,183 +455,175 @@ void SpawnTileActors(SceneGraph& scene, Renderer& renderer, const TileMap& tileM
 	ocean->Build(renderer, oceanVertices);
 }
 
-LevelActors SpawnLevelActors(SceneGraph& scene, const LevelLayout& layout, const TileMap& tileMap)
+bool IsOpenGround(const TileMap& tileMap, float x, float y, float clearance)
 {
-	float vx = layout.villageCenterX;
-	float vy = layout.villageCenterY;
-	float lx = layout.lakeCenterX;
-	float ly = layout.lakeCenterY;
+	float limitX = tileMap.GetWidth() * 0.5f - 1.f;
+	float limitY = tileMap.GetHeight() * 0.5f - 1.f;
+	if (fabsf(x) > limitX || fabsf(y) > limitY)
+	{
+		return false;
+	}
+
+	return tileMap.IsWorldPositionWalkable(x, y)
+		&& tileMap.IsWorldPositionWalkable(x + clearance, y)
+		&& tileMap.IsWorldPositionWalkable(x - clearance, y)
+		&& tileMap.IsWorldPositionWalkable(x, y + clearance)
+		&& tileMap.IsWorldPositionWalkable(x, y - clearance);
+}
+
+Spot FindOpenGround(const TileMap& tileMap, float x, float y, float clearance)
+{
+	Spot spot = { x, y };
+	if (IsOpenGround(tileMap, x, y, clearance))
+	{
+		return spot;
+	}
+
+	const int kAngleSteps = 16;
+	for (float radius = 0.5f; radius <= 12.f; radius += 0.5f)
+	{
+		for (int i = 0; i < kAngleSteps; ++i)
+		{
+			float angle = (float)i * (6.2831853f / (float)kAngleSteps);
+			float candidateX = x + cosf(angle) * radius;
+			float candidateY = y + sinf(angle) * radius;
+
+			if (IsOpenGround(tileMap, candidateX, candidateY, clearance))
+			{
+				spot.x = candidateX;
+				spot.y = candidateY;
+				return spot;
+			}
+		}
+	}
+
+	return spot; // 찾지 못하면(현실적으로 없음) 원래 자리 그대로.
+}
+
+bool IsNearAny(const std::vector<Spot>& spots, float x, float y, float distance)
+{
+	for (const Spot& spot : spots)
+	{
+		if (DistanceSq(spot.x, spot.y, x, y) < distance * distance)
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
+std::vector<Spot> ScatterTrees(SceneGraph& scene, const TileMap& tileMap, std::mt19937& rng, int count,
+	const std::vector<Spot>& avoid, float avoidDistance, float cypressRatio)
+{
 	float mapHalfX = tileMap.GetWidth() * 0.5f;
 	float mapHalfY = tileMap.GetHeight() * 0.5f;
 
-	// ---- 1) 아이템·짐승 자리를 먼저 정한다(나무가 그 자리를 피해서 심어지도록) ----
-
-	// 퀘스트 아이템: 호수 가장자리 바로 바깥, 마을을 바라보는 쪽 물가. 예전엔 호수 중심 바로 옆(=물 한가운데)에
-	// 생겨서, 호수가 조금만 커도 상호작용 반경이 닿지 않아 메인 퀘스트를 끝낼 수 없는 맵이 절반 넘게 나왔다.
-	float toVillageX = vx - lx;
-	float toVillageY = vy - ly;
-	float toVillageLength = sqrtf(toVillageX * toVillageX + toVillageY * toVillageY);
-	if (toVillageLength < 0.001f)
-	{
-		toVillageX = 1.f;
-		toVillageY = 0.f;
-		toVillageLength = 1.f;
-	}
-
-	float shoreDistance = layout.lakeRadius + 0.9f;
-	Spot questSpot = FindOpenGround(tileMap, lx + toVillageX / toVillageLength * shoreDistance,
-		ly + toVillageY / toVillageLength * shoreDistance, 0.3f);
-
-	// 약초 8개: 마을 기준 원하는 자리 근처의 열린 땅.
-	const float kHerbOffsets[8][2] =
-	{
-		{ 4.5f, 3.f }, { -4.5f, -3.f }, { -3.f, 4.5f }, { 10.f, 6.f },
-		{ -10.f, -6.f }, { 7.f, -9.f }, { -8.f, 9.f }, { 1.f, -11.f },
-	};
-	std::vector<Spot> herbSpots;
-	for (int i = 0; i < 8; ++i)
-	{
-		herbSpots.push_back(FindOpenGround(tileMap, vx + kHerbOffsets[i][0], vy + kHerbOffsets[i][1], 0.4f));
-	}
-
-	// 야생 짐승 7마리의 배회 중심(anchor): 물가에서 한 칸 이상 떨어진 열린 땅.
-	struct AnimalSpawn
-	{
-		float offsetX, offsetY;
-		float size;
-		float r, g, b;
-		float phase;
-		int hp;
-		bool isAggressive;
-		const char* name;
-	};
-	const AnimalSpawn kAnimals[7] =
-	{
-		{ -6.f, 3.f, 0.9f, 0.52f, 0.36f, 0.20f, 0.f, 20, false, "Deer" },
-		{ 6.f, -3.5f, 0.9f, 0.56f, 0.40f, 0.22f, 2.1f, 20, false, "Deer" },
-		{ 10.f, 7.f, 0.9f, 0.54f, 0.38f, 0.21f, 1.3f, 20, false, "Deer" },
-		{ -9.f, -7.f, 0.9f, 0.50f, 0.35f, 0.19f, 3.4f, 20, false, "Deer" },
-		{ -3.f, 6.f, 1.0f, 0.36f, 0.36f, 0.38f, 4.2f, 30, true, "Wolf" },
-		{ 8.f, -6.f, 1.0f, 0.33f, 0.33f, 0.35f, 5.6f, 30, true, "Wolf" },
-		{ -2.f, -10.f, 1.0f, 0.38f, 0.37f, 0.40f, 0.7f, 30, true, "Wolf" },
-	};
-	std::vector<Spot> animalSpots;
-	for (int i = 0; i < 7; ++i)
-	{
-		animalSpots.push_back(FindOpenGround(tileMap, vx + kAnimals[i].offsetX, vy + kAnimals[i].offsetY, 1.f));
-	}
-
-	// 나무가 덮으면 안 되는 자리: 아이템, 짐승 배회 중심, 플레이어 시작 지점.
-	float spawnX = vx;
-	float spawnY = vy - 0.5f;
-	std::vector<Spot> reserved = herbSpots;
-	reserved.push_back(questSpot);
-	reserved.insert(reserved.end(), animalSpots.begin(), animalSpots.end());
-	reserved.push_back(Spot{ spawnX, spawnY });
-
-	std::vector<Spot> buildingSpots;
-	buildingSpots.push_back(Spot{ vx - 2.0f, vy + 2.0f });
-	buildingSpots.push_back(Spot{ vx + 2.0f, vy + 2.0f });
-
-	// ---- 2) 숲: 호수·마을·집·다른 나무·예약된 자리와 떨어진 잔디 위에만 나무 36그루 ----
-	// 35%는 지중해식 사이프러스, 나머지는 짙은 초록~올리브빛 활엽수로 섞는다.
-	std::mt19937 treeRng(std::random_device{}());
 	std::uniform_real_distribution<float> treeX(-(mapHalfX - 1.f), mapHalfX - 1.f);
 	std::uniform_real_distribution<float> treeY(-(mapHalfY - 1.f), mapHalfY - 1.f);
 	std::uniform_real_distribution<float> unit(0.f, 1.f);
 
+	// 잎 색: 활엽수는 짙은 초록 ~ 올리브(은빛 도는 녹색) 사이, 사이프러스는 짙은 초록 — 지중해 숲 느낌.
 	const Color kDeepLeaf = { 0.10f, 0.28f, 0.11f };
 	const Color kOliveLeaf = { 0.30f, 0.37f, 0.21f };
 	const Color kCypressLeaf = { 0.07f, 0.21f, 0.11f };
 
-	std::vector<Spot> treeSpots;
+	std::vector<Spot> trees;
 	int guard = 0;
-	while ((int)treeSpots.size() < 36 && guard < 3000)
+	while ((int)trees.size() < count && guard < count * 80)
 	{
 		++guard;
-		float tx = treeX(treeRng);
-		float ty = treeY(treeRng);
+		float tx = treeX(rng);
+		float ty = treeY(rng);
 
 		if (tileMap.GetTile(tileMap.GetGridX(tx), tileMap.GetGridY(ty)) != TileType::Grass || !IsOpenGround(tileMap, tx, ty, 0.7f))
 		{
 			continue;
 		}
 
-		float villageClear = layout.villageRadius + 1.5f;
-		if (DistanceSq(tx, ty, vx, vy) < villageClear * villageClear)
+		if (IsNearAny(avoid, tx, ty, avoidDistance) || IsNearAny(trees, tx, ty, 1.3f))
 		{
 			continue;
 		}
 
-		if (IsNearAny(buildingSpots, tx, ty, 2.f) || IsNearAny(treeSpots, tx, ty, 1.3f) || IsNearAny(reserved, tx, ty, 1.1f))
+		float tint = unit(rng) * 0.1f - 0.05f; // 그루마다 색조를 살짝 흔들어 단조로움을 줄임
+		if (unit(rng) < cypressRatio)
 		{
-			continue;
-		}
-
-		float tint = unit(treeRng) * 0.1f - 0.05f; // 그루마다 색조를 살짝 흔들어 단조로움을 줄임
-		if (unit(treeRng) < 0.35f)
-		{
-			scene.Spawn<TreeActor>(tx, ty, 1.3f + unit(treeRng) * 0.4f,
+			scene.Spawn<TreeActor>(tx, ty, 1.3f + unit(rng) * 0.4f,
 				kCypressLeaf.r + tint * 0.5f, kCypressLeaf.g + tint, kCypressLeaf.b + tint * 0.5f, TreeKind::Cypress);
 		}
 		else
 		{
-			Color leaf = Mix(kDeepLeaf, kOliveLeaf, unit(treeRng) * 0.8f);
-			scene.Spawn<TreeActor>(tx, ty, 1.4f + unit(treeRng) * 0.4f,
+			Color leaf = Mix(kDeepLeaf, kOliveLeaf, unit(rng) * 0.8f);
+			scene.Spawn<TreeActor>(tx, ty, 1.4f + unit(rng) * 0.4f,
 				leaf.r + tint, leaf.g + tint, leaf.b + tint * 0.5f, TreeKind::Broadleaf);
 		}
 
-		treeSpots.push_back(Spot{ tx, ty });
+		trees.push_back(Spot{ tx, ty });
 	}
 
-	// ---- 3) 마을: 집 2채(+횃불), 장로, 마을 사람 7명 ----
-	for (const Spot& spot : buildingSpots)
+	return trees;
+}
+
+void ScatterRocks(SceneGraph& scene, const TileMap& tileMap, std::mt19937& rng, float density, bool snowy)
+{
+	std::uniform_real_distribution<float> unit(0.f, 1.f);
+	int width = tileMap.GetWidth();
+	int height = tileMap.GetHeight();
+
+	for (int gy = 0; gy < height; ++gy)
 	{
-		SpawnBuildingWithTorch(scene, spot.x, spot.y);
+		for (int gx = 0; gx < width; ++gx)
+		{
+			if (tileMap.GetTile(gx, gy) != TileType::Rock)
+			{
+				continue;
+			}
+
+			// 걸을 수 있는 칸과 맞닿은 가장자리엔 촘촘히, 안쪽엔 드문드문 놓는다(안쪽은 바위 바닥색만으로도 산처럼 보임).
+			bool edge = tileMap.IsWalkable(gx + 1, gy) || tileMap.IsWalkable(gx - 1, gy)
+				|| tileMap.IsWalkable(gx, gy + 1) || tileMap.IsWalkable(gx, gy - 1);
+			float chance = edge ? density : density * 0.25f;
+			if (unit(rng) >= chance)
+			{
+				continue;
+			}
+
+			float x = tileMap.GetWorldX(gx) + (unit(rng) - 0.5f) * 0.5f;
+			float y = tileMap.GetWorldY(gy) + (unit(rng) - 0.5f) * 0.5f;
+			float size = 0.9f + unit(rng) * 0.6f;
+			scene.Spawn<RockActor>(x, y, size, gx * 131 + gy * 17, snowy);
+		}
 	}
+}
 
-	// 장로: 흰 머리·흰 수염·발목까지 내려오는 긴 옷·지팡이. 옷은 퀘스트 시작점으로 눈에 띄도록 금빛으로 빛난다.
-	HumanLook elderLook;
-	elderLook.hairR = 0.90f;
-	elderLook.hairG = 0.90f;
-	elderLook.hairB = 0.86f;
-	elderLook.robe = true;
-	elderLook.beard = true;
-	elderLook.staff = true;
-	scene.Spawn<NpcActor>(vx, vy + 1.5f, 1.f, 2.0f, 1.75f, 0.7f, elderLook, kInteractElder, "Elder");
+void SpawnHerb(SceneGraph& scene, const TileMap& tileMap, float x, float y)
+{
+	Spot spot = FindOpenGround(tileMap, x, y, 0.4f);
+	scene.Spawn<ItemActor>(spot.x, spot.y, 0.4f, 0.4f, 1.6f, 0.5f, ItemKind::Herb, kInteractLoot);
+}
 
-	SpawnVillager(scene, vx - 1.6f, vy - 1.6f, 0.72f, 0.46f, 0.26f, 0);
-	SpawnVillager(scene, vx + 1.6f, vy - 1.6f, 0.30f, 0.42f, 0.66f, 1);
-	SpawnVillager(scene, vx, vy - 2.2f, 0.74f, 0.28f, 0.24f, 2);
-	SpawnVillager(scene, vx - 2.0f, vy + 0.3f, 0.82f, 0.76f, 0.58f, 3);
-	SpawnVillager(scene, vx + 2.0f, vy + 0.3f, 0.40f, 0.52f, 0.34f, 4);
-	SpawnVillager(scene, vx - 1.0f, vy + 1.2f, 0.62f, 0.38f, 0.52f, 5);
-	SpawnVillager(scene, vx + 1.0f, vy + 1.2f, 0.78f, 0.62f, 0.30f, 6);
+AnimalActor* SpawnAnimal(SceneGraph& scene, const TileMap& tileMap, AnimalKind kind, float x, float y, float phase)
+{
+	Spot spot = FindOpenGround(tileMap, x, y, 1.f);
+	return scene.Spawn<AnimalActor>(kind, spot.x, spot.y, phase);
+}
 
-	// ---- 4) 아이템과 짐승(1단계에서 정한 자리) ----
+NpcActor* SpawnStoryNpc(SceneGraph& scene, float x, float y, float size, float r, float g, float b, const HumanLook& look,
+	const char* storyId, const char* nameTag, const char* presence)
+{
+	NpcActor* npc = scene.Spawn<NpcActor>(x, y, size, r, g, b, look, kInteractStory, nameTag);
+	npc->SetStoryId(storyId);
+	npc->SetPresence(presence);
+	npc->SetFacing(0.7853982f); // 기본은 카메라 쪽(+x,+y)을 바라보게 해서 얼굴이 보이도록
+	return npc;
+}
 
-	// 퀘스트 아이템: 호숫가에서 금빛으로 빛나는 잃어버린 제물(암포라).
-	scene.Spawn<ItemActor>(questSpot.x, questSpot.y, 0.6f, 2.2f, 1.7f, 0.5f, ItemKind::Offering, kInteractQuestItem);
-
-	// 약초: 경험치용, 넓은 숲 곳곳에 흩어져 있음.
-	for (const Spot& spot : herbSpots)
-	{
-		scene.Spawn<ItemActor>(spot.x, spot.y, 0.4f, 0.4f, 1.6f, 0.5f, ItemKind::Herb, kInteractLoot);
-	}
-
-	// 야생 짐승: 사슴 4마리(배회만 함) + 늑대 3마리(플레이어를 추적/공격하는 몬스터).
-	for (int i = 0; i < 7; ++i)
-	{
-		const AnimalSpawn& animal = kAnimals[i];
-		scene.Spawn<AnimalActor>(animalSpots[i].x, animalSpots[i].y, animal.size, animal.r, animal.g, animal.b,
-			animal.phase, animal.hp, animal.isAggressive, animal.name);
-	}
-
-	// ---- 5) 플레이어와 표시들 ----
+LevelActors SpawnPlayerAndMarkers(SceneGraph& scene, float x, float y)
+{
 	LevelActors result;
 
-	// 플레이어는 마을 중심 근처에서 시작한다(사망 시에도 여기로 되돌아옴).
-	result.player = scene.Spawn<PlayerActor>(spawnX, spawnY);
+	// 플레이어는 지역의 시작 지점(또는 도착한 이정표 앞)에서 시작한다(쓰러지면 여기로 되돌아옴).
+	result.player = scene.Spawn<PlayerActor>(x, y);
 	scene.SetPlayer(result.player);
 
 	// 플레이어 발밑 위치 마커: 플레이어의 자식이라 이동을 자동으로 따라다닌다.
@@ -769,8 +637,10 @@ LevelActors SpawnLevelActors(SceneGraph& scene, const LevelLayout& layout, const
 	RingStyle interactStyle = { 0.3f, 0.9f, 1.0f, 0.85f, 0.15f, 0.28f, 0.18f, 6.f };
 	result.interactRing = scene.Spawn<RingActor>(interactStyle, false);
 
-	// 섬 위를 떠다니는 빛 알갱이(분위기용 시각 효과).
-	scene.Spawn<AmbientMotesActor>(mapHalfX, mapHalfY, 70);
-
 	return result;
+}
+
+void SpawnAmbience(SceneGraph& scene, const TileMap& tileMap)
+{
+	scene.Spawn<AmbientMotesActor>(tileMap.GetWidth() * 0.5f, tileMap.GetHeight() * 0.5f, 70);
 }

@@ -99,7 +99,8 @@ namespace
 	{
 		for (const std::unique_ptr<Actor>& child : actor.GetChildren())
 		{
-			if (child->IsPendingDestroy())
+			// 숨은 액터(이야기 존재 조건이 거짓인 인물·괴물 등)는 그리기와 마찬가지로 서브트리째 없는 것으로 친다.
+			if (child->IsPendingDestroy() || !child->IsVisible())
 			{
 				continue;
 			}
@@ -131,7 +132,8 @@ namespace
 	{
 		for (const std::unique_ptr<Actor>& child : actor.GetChildren())
 		{
-			if (child->IsPendingDestroy())
+			// 숨은 액터는 길을 막지 않는다(아직 나타나지 않은 건물·괴물에 부딪히지 않도록).
+			if (child->IsPendingDestroy() || !child->IsVisible())
 			{
 				continue;
 			}

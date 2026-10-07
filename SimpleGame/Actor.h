@@ -15,15 +15,16 @@ enum class ActorType
 {
 	Group,     // 자식들을 묶기만 하는 빈 노드 (씬 그래프의 루트 등)
 	TileBatch, // 청크 하나(예: 8x8칸)의 바닥 타일들을 정점 색상 메시 하나로 구워 그리는 배치
-	Prop,      // 나무 같은 장식/장애물
-	Building,  // 건물
-	Item,      // 획득 가능한 아이템
-	Fire,      // 횃불 (렌더링 시 불 셰이더로 분기)
-	Marker,    // 발밑 링 같은 바닥 표시
+	Prop,      // 나무 같은 장식/장애물 (미니맵에 나무로 표시)
+	Building,  // 건물·신전·기둥·신상 같은 건축물 (미니맵에 건물로 표시)
+	Rock,      // 바위·동굴 입구 같은 지형지물 (미니맵엔 바위 타일로만 보이고 따로 표시하지 않음)
+	Item,      // 획득 가능한 아이템, 조사할 수 있는 이야기 소품
+	Fire,      // 횃불·모닥불 (렌더링 시 불 셰이더로 분기)
+	Marker,    // 발밑 링·이야기 트리거 영역 같은 바닥 표시
 	Player,
 	NPC,
-	Animal,    // 야생 짐승 (사슴/늑대)
-	Effect,    // 공중을 떠다니는 빛 알갱이 같은 순수 시각 효과(충돌·상호작용 없음)
+	Animal,    // 짐승·괴물 (사슴/늑대/그림자 괴물)
+	Effect,    // 공중을 떠다니는 빛 알갱이·목표 표시 같은 순수 시각 효과(충돌·상호작용 없음)
 };
 
 // 그리기 순서 그룹. 씬 그래프는 Ground → Decal → Object → Overlay 순서로 그리고,
@@ -107,6 +108,18 @@ public:
 	void SetInteractId(int id) { m_InteractId = id; }
 	int GetInteractId() const { return m_InteractId; }
 
+	// 이야기 데이터(Data/Story.txt)가 이 액터를 가리킬 때 쓰는 ID(STORY.md 규칙: "CHR_PYTHIA", "ITEM_LAUREL",
+	// "OBJ_SIGNPOST", "TRIGGER_CAVE" 등). 정적 문자열 리터럴만 받는다(소유권 없음). nullptr이면 이야기와 무관.
+	void SetStoryId(const char* id) { m_StoryId = id; }
+	const char* GetStoryId() const { return m_StoryId; }
+
+	// 이 액터가 세상에 "있는" 조건(이야기 변수 조건식, StoryState::Evaluate 형식 — 예: "CRACK_OPEN && !PYTHON_SLAIN").
+	// 정적 문자열 리터럴만 받는다. nullptr이면 항상 있다. 조건이 거짓이면 StoryDirector가 매 프레임
+	// SetVisible(false)로 숨기고, 숨은 액터는 그리기·검색·충돌·갱신에서 모두 빠진다. 그래서 이야기 진행에 따라
+	// 인물·괴물·물건이 나타나고 사라지는 것을 액터를 새로 만들고 지우지 않고 조건 하나로 표현한다.
+	void SetPresence(const char* condition) { m_Presence = condition; }
+	const char* GetPresence() const { return m_Presence; }
+
 	void SetVisible(bool visible) { m_Visible = visible; }
 	bool IsVisible() const { return m_Visible; }
 
@@ -178,6 +191,8 @@ private:
 	float m_R = 1.f, m_G = 1.f, m_B = 1.f, m_A = 1.f;
 	const char* m_Name = nullptr;
 	int m_InteractId = 0;
+	const char* m_StoryId = nullptr;
+	const char* m_Presence = nullptr;
 	bool m_Visible = true;
 	bool m_PendingDestroy = false;
 

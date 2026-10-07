@@ -33,6 +33,7 @@ namespace
 		"이름표",        // NameTags
 		"미니맵",        // MiniMap
 		"채팅창",        // ChatWindow
+		"이야기",        // Story
 		"화면출력",      // Present
 	};
 

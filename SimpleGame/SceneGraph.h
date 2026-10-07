@@ -66,9 +66,10 @@ public:
 	void ForEach(const std::function<void(Actor&)>& visitor);
 
 	// (x,y)에서 maxRadius 안에 있고 filter를 통과하는 가장 가까운 액터. 없으면 nullptr.
+	// 숨은 액터(IsVisible() == false)와 그 자손은 찾지 않는다.
 	Actor* FindNearest(float x, float y, float maxRadius, const std::function<bool(const Actor&)>& filter) const;
 
-	// (x,y)에 반지름 moverRadius의 원이 놓이면 충돌 반경이 있는 액터와 겹치는지.
+	// (x,y)에 반지름 moverRadius의 원이 놓이면 충돌 반경이 있는 액터와 겹치는지. 숨은 액터는 막지 않는다.
 	bool IsBlocked(float x, float y, float moverRadius) const;
 
 private:

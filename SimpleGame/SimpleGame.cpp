@@ -16,9 +16,12 @@ but WITHOUT ANY WARRANTY.
 #define NOMINMAX
 #endif
 #include <Windows.h>
+#include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <iostream>
+#include <random>
+#include <string>
 #include "Dependencies\glew.h"
 #include "Dependencies\freeglut.h"
 
@@ -29,7 +32,7 @@ but WITHOUT ANY WARRANTY.
 #include "GameLog.h"
 #include "Hud.h"
 #include "LevelBuilder.h"
-#include "LevelGenerator.h"
+#include "MapScreen.h"
 #include "Mesh.h"
 #include "MeshCache.h"
 #include "MiniMap.h"
@@ -37,19 +40,13 @@ but WITHOUT ANY WARRANTY.
 #include "Profiler.h"
 #include "Renderer.h"
 #include "SceneGraph.h"
+#include "StoryDirector.h"
 #include "TileMap.h"
 #include "WorldActors.h"
+#include "WorldMaps.h"
 
 namespace
 {
-	enum class QuestState
-	{
-		NotStarted,
-		ItemRequested,
-		ItemCollected,
-		Completed,
-	};
-
 	// 공격/상호작용 판정 반경. Try*()와 조준 링(RingActor) 대상 지정이 같은 값을
 	// 공유해야 "링이 보이면 실제로 닿는다"는 예측이 항상 맞는다.
 	const float kAttackRadius = 1.6f;
@@ -64,6 +61,20 @@ namespace
 	// 한 프레임의 dt가 수 초가 될 수 있는데, 이동 충돌은 도착 지점만 검사하므로 그 한 걸음에 건물·물을
 	// 건너뛸 수 있다. 상한을 두면 그 순간 게임 시간이 잠깐 느려질 뿐 벽을 뚫는 일은 없다.
 	const float kMaxDeltaSeconds = 0.1f;
+
+	// 약초를 주웠을 때의 경험치.
+	const int kHerbXP = 15;
+
+	// 수호신 축복 중 전투에 붙는 효과(나머지 상시 효과는 StoryDirector::GrantBlessing).
+	const float kZeusLightningChance = 0.15f; // 제우스: 공격할 때 벼락이 함께 떨어져 피해 2배가 될 확률
+	const float kZeusMisfireChance = 0.03f;   // 제우스: 벼락이 엉뚱한 데 떨어질 확률(피해 그대로, 웃음용)
+	const int kHadesHealOnKill = 8;           // 하데스: 적을 쓰러뜨릴 때 회복하는 체력
+
+	// 첫 지역과 이야기 데이터 파일(셰이더처럼 작업 폴더 기준 경로 — 다시 컴파일하지 않고 대사만 고칠 수 있게).
+	const char* kFirstLocation = "LOC_DELPHI";
+	const char* kStoryDataPath = "./Data/Story.txt";
+
+	const unsigned char kEscapeKey = 27;
 }
 
 Renderer *g_Renderer = NULL;
@@ -72,9 +83,14 @@ PostProcess *g_PostProcess = NULL;
 TileMap *g_TileMap = NULL;
 SceneGraph *g_Scene = NULL;
 MiniMap *g_MiniMap = NULL;
+MapScreen *g_MapScreen = NULL; // M 키로 여는 큰 지도(열려 있는 동안 게임이 멈춘다)
 ChatWindow *g_ChatWindow = NULL;
 
-// 씬 그래프가 소유하는 액터들을 게임 코드가 빠르게 참조하기 위한 포인터.
+// 이야기 진행(대화·진행 단계·지역 이동). 맵이 바뀌어도 계속 살아 있다.
+StoryDirector *g_Director = NULL;
+
+// 씬 그래프가 소유하는 액터들을 게임 코드가 빠르게 참조하기 위한 포인터. 지역을 옮기면 씬과 함께
+// 사라지므로 LoadMap이 새 맵의 것으로 바꿔 든다.
 PlayerActor *g_Player = NULL;
 RingActor *g_AttackRing = NULL;
 RingActor *g_InteractRing = NULL;
@@ -82,9 +98,19 @@ RingActor *g_InteractRing = NULL;
 MeshHandle g_CircleMesh;
 MeshHandle g_EllipseMesh; // 발밑 링(위치 마커/조준 링)에 쓰는 납작한 타원 메시
 
-QuestState g_QuestState = QuestState::NotStarted;
+// 이번 실행의 세계 시드. 실행마다 지역의 세부(나무·바위·바닥 장식)가 달라지고, 한 번 실행하는 동안엔
+// 같은 지역에 다시 와도 똑같은 모습이다.
+unsigned int g_SessionSeed = 0;
 
 bool g_KeyW = false, g_KeyA = false, g_KeyS = false, g_KeyD = false;
+
+// 키마다 지금 눌려 있는지(소문자 기준). 키를 누르고 있으면 운영체제가 같은 키를 반복해서 보내므로,
+// 대화를 넘길 때는 반복 입력을 걸러서 "한 번 누름 = 한 줄"이 되게 한다.
+bool g_KeyHeld[256] = {};
+
+// 대화를 넘기는 데 쓴 키. 대화가 끝난 뒤에도 그 키를 뗄 때까지는 반복 입력이 공격·상호작용으로
+// 이어지지 않게 한다(Space로 마지막 줄을 넘기자마자 허공에 창을 휘두르지 않도록).
+bool g_KeyConsumedByDialogue[256] = {};
 
 // 게임 창 핸들. 이 창이 맨 앞(키보드 입력을 받는 창)인지 확인하는 데 쓴다(IsGameWindowFocused).
 HWND g_GameWindow = NULL;
@@ -107,6 +133,39 @@ float g_BloomIntensity = 0.8f;
 
 namespace
 {
+	// 짐승·괴물의 한글 이름(채팅창 로그용). object는 목적격 조사("을/를")까지 붙인 꼴.
+	struct AnimalNames
+	{
+		const char* name;
+		const char* object;
+	};
+
+	AnimalNames GetAnimalNames(AnimalKind kind)
+	{
+		switch (kind)
+		{
+		case AnimalKind::Deer: return { "사슴", "사슴을" };
+		case AnimalKind::Wolf: return { "늑대", "늑대를" };
+		case AnimalKind::ShadowWolf: return { "그림자 늑대", "그림자 늑대를" };
+		case AnimalKind::ShadowPython: return { "그림자 퓌톤", "그림자 퓌톤을" };
+		}
+		return { "짐승", "짐승을" };
+	}
+
+	// 0~1 사이의 난수(축복 효과의 확률 판정).
+	float RollChance()
+	{
+		static std::mt19937 rng(std::random_device{}());
+		std::uniform_real_distribution<float> unit(0.f, 1.f);
+		return unit(rng);
+	}
+
+	// 키 코드를 소문자 기준으로 맞춘다(Shift를 누른 채 누르고 뗀 경우에도 같은 키로 보이게).
+	unsigned char NormalizeKey(unsigned char key)
+	{
+		return (key >= 'A' && key <= 'Z') ? (unsigned char)(key - 'A' + 'a') : key;
+	}
+
 	// 공격 사거리 안에 있는 가장 가까운 짐승. TryAttack()과 조준 링이 이 함수를
 	// 공유해서, 화면에 보이는 조준 표시와 실제 공격 결과가 항상 일치하게 한다.
 	AnimalActor* FindNearestAttackTarget()
@@ -149,79 +208,79 @@ namespace
 		// 공격 모션이 대상 쪽을 향하도록 캐릭터 방향을 맞춘다.
 		g_Player->FaceToward(target->GetWorldX(), target->GetWorldY());
 
+		AnimalNames names = GetAnimalNames(target->GetKind());
 		int damage = g_Player->GetStats().attackPower;
-		GameLog::Add(GameLog::Kind::Combat, "[공격!] 짐승에게 " + std::to_string(damage) + " 피해");
+
+		// 수호신의 축복 중 전투에 붙는 것: 제우스는 가끔 벼락이 함께 떨어져 피해가 두 배가 되고, 아주 가끔은
+		// 벼락이 엉뚱한 데 떨어진다(STORY.md 5장 — 제우스의 번개는 가끔 오발한다).
+		const StoryState& story = g_Director->GetStory();
+		bool blessed = story.IsTrue("BLESSING_GRANTED");
+		const std::string& patron = story.Get("PATRON");
+
+		if (blessed && patron == "ZEUS")
+		{
+			float roll = RollChance();
+			if (roll < kZeusLightningChance)
+			{
+				damage *= 2;
+				GameLog::Add(GameLog::Kind::Combat, "[번개의 축복] 하늘에서 벼락이 함께 내리꽂힌다!");
+			}
+			else if (roll < kZeusLightningChance + kZeusMisfireChance)
+			{
+				GameLog::Add(GameLog::Kind::Combat, "[번개의 축복] 벼락이… 저 멀리 애꿎은 올리브 나무에 떨어졌다. 어디선가 \"경고 사격이다\"라는 목소리가 들린다.");
+			}
+		}
+
+		GameLog::Add(GameLog::Kind::Combat, "[공격!] " + std::string(names.name) + "에게 " + std::to_string(damage) + " 피해");
 
 		if (target->TakeHit(damage))
 		{
-			GameLog::Add(GameLog::Kind::Combat, "[짐승을 쓰러뜨렸다]");
-			g_Player->GrantXP(30);
+			GameLog::Add(GameLog::Kind::Combat, "[" + std::string(names.object) + " 쓰러뜨렸다]");
+			g_Player->GrantXP(target->GetKillXP());
+
+			if (blessed && patron == "HADES")
+			{
+				g_Player->Heal(kHadesHealOnKill);
+				GameLog::Add(GameLog::Kind::Reward, "[망자의 축복] 스러진 생명의 온기가 스며든다. 체력 +" + std::to_string(kHadesHealOnKill));
+			}
+
+			// 이야기 속 괴물(그림자 퓌톤 등)이면 Data/Story.txt의 "on kill" 대화가 이어진다.
+			g_Director->OnKill(*target);
 		}
 	}
 
-	// target 액터와 상호작용한다. 아이템 획득처럼 그 액터 하나만 없애야 하는
-	// 경우 그 액터만 파괴 예약한다(같은 종류의 다른 아이템은 그대로 남는다).
+	// target 액터와 상호작용한다. 무엇을 할지(대사·선택지·진행)는 거의 전부 이야기 데이터(Data/Story.txt)가
+	// 정하고, 게임 코드는 상호작용 종류만 나눈다. 아이템 획득처럼 그 액터 하나만 없애야 하는 경우 그 액터만
+	// 파괴 예약한다(같은 종류의 다른 아이템은 그대로 남는다).
 	void HandleInteract(Actor& target)
 	{
 		int id = target.GetInteractId();
 
-		if (id == kInteractElder)
+		if (id == kInteractStory)
 		{
-			if (g_QuestState == QuestState::NotStarted)
+			// 인물·조사할 물건·이정표: "on talk <스토리ID>" 대화.
+			if (!g_Director->OnTalk(target))
 			{
-				GameLog::Add(GameLog::Kind::Dialogue, "[장로] 호수 근처에서 잃어버린 제물을 찾아다오.");
-				g_QuestState = QuestState::ItemRequested;
-			}
-			else if (g_QuestState == QuestState::ItemRequested)
-			{
-				GameLog::Add(GameLog::Kind::Dialogue, "[장로] 아직 제물을 찾지 못했구나. 호수 쪽을 살펴보게.");
-			}
-			else if (g_QuestState == QuestState::ItemCollected)
-			{
-				GameLog::Add(GameLog::Kind::Dialogue, "[장로] 오, 찾아왔구나! 그대에게 작은 축복을 내리네.");
-				g_QuestState = QuestState::Completed;
-				g_Player->GrantXP(50);
-				// 보상: 플레이어가 블룸이 걸릴 만큼 밝아진다 (작은 시각적 보상).
-				g_Player->SetColor(2.5f, 2.2f, 1.6f);
-			}
-			else
-			{
-				GameLog::Add(GameLog::Kind::Dialogue, "[장로] 마을을 지켜줘서 고맙네.");
+				GameLog::Add(GameLog::Kind::Info, "[지금은 별다른 반응이 없다]");
 			}
 		}
-		else if (id == kInteractQuestItem)
+		else if (id == kInteractPickup)
 		{
-			if (g_QuestState == QuestState::ItemRequested)
+			// 이야기 아이템: "on pickup <스토리ID>" 대화가 열렸으면(= 지금 필요한 물건이면) 주운 것으로 친다.
+			if (g_Director->OnPickup(target))
 			{
-				GameLog::Add(GameLog::Kind::Info, "[잃어버린 제물을 주웠다. 장로에게 가져다주자.]");
-				g_QuestState = QuestState::ItemCollected;
 				target.Destroy();
 			}
 			else
 			{
-				// 퀘스트를 받기 전(주운 뒤엔 아이템이 사라지므로 여기 올 수 있는 건 이 경우뿐). 예전엔
-				// 조사한 적도 없는데 "[이미 조사했다.]"가 나왔다.
-				GameLog::Add(GameLog::Kind::Info, "[금빛으로 빛나는 항아리다. 손대기 전에 마을 장로에게 먼저 가보자.]");
+				GameLog::Add(GameLog::Kind::Info, "[지금은 필요 없어 보인다]");
 			}
-		}
-		else if (id == kInteractVillager)
-		{
-			static const char* lines[] =
-			{
-				"[마을 사람] 요즘 호수 근처가 뒤숭숭하다더군.",
-				"[마을 사람] 장로님과 이야기해보게.",
-				"[마을 사람] 숲 속엔 함부로 들어가지 않는 게 좋을걸세.",
-				"[마을 사람] 밤이 되면 늑대 울음소리가 들린다네.",
-			};
-			static int lineIndex = 0;
-			GameLog::Add(GameLog::Kind::Dialogue, lines[lineIndex % 4]);
-			++lineIndex;
 		}
 		else if (id == kInteractLoot)
 		{
 			GameLog::Add(GameLog::Kind::Info, "[약초를 발견해 챙겼다]");
 			target.Destroy();
-			g_Player->GrantXP(15);
+			g_Player->GrantXP(kHerbXP);
 		}
 	}
 
@@ -267,6 +326,55 @@ namespace
 		}
 
 		return GetForegroundWindow() == g_GameWindow;
+	}
+
+	// 지역(맵)을 새로 짓고 그곳으로 옮긴다. 이전 지역의 씬·타일맵은 지우고(그 안의 액터 포인터도 전부
+	// 무효가 됨), 플레이어 능력치(레벨·경험치·체력)와 수호신 축복은 그대로 이어받는다.
+	// arrivedByTravel이면 그 지역의 이정표 앞에, 아니면(새 게임) 그 지역의 시작 지점에 선다.
+	void LoadMap(const std::string& locId, bool arrivedByTravel)
+	{
+		PlayerStats stats;
+		bool keepStats = (g_Player != NULL);
+		if (keepStats)
+		{
+			stats = g_Player->GetStats();
+		}
+
+		bool culling = (g_Scene != NULL) ? g_Scene->IsCullingEnabled() : true;
+
+		g_Player = NULL;
+		g_AttackRing = NULL;
+		g_InteractRing = NULL;
+		delete g_Scene;
+		g_Scene = NULL;
+		delete g_TileMap;
+		g_TileMap = NULL;
+
+		LoadedMap map = WorldMaps::Build(locId, *g_Renderer, g_SessionSeed, arrivedByTravel);
+		g_TileMap = map.tileMap;
+		g_Scene = map.scene;
+		g_Player = map.player;
+		g_AttackRing = map.attackRing;
+		g_InteractRing = map.interactRing;
+		g_Scene->SetCullingEnabled(culling);
+
+		if (keepStats)
+		{
+			g_Player->SetStats(stats);
+		}
+
+		// 이동 속도·괴물이 알아채는 거리 같은 축복 효과는 플레이어 액터에 붙어 있어서 맵마다 다시 건다.
+		const StoryState& story = g_Director->GetStory();
+		StoryDirector::ApplyPatronModifiers(*g_Player, story.IsTrue("BLESSING_GRANTED") ? story.Get("PATRON") : std::string());
+
+		g_MiniMap->Invalidate();
+		g_MapScreen->Invalidate();
+		g_Camera->SetFocus(g_Player->GetWorldX(), g_Player->GetWorldY(), 0.f);
+
+		// 마지막에: 지역 이름 배너, 목표 표시, 이 지역에 들어설 때의 대화("on enter").
+		g_Director->OnMapLoaded(map.locId, *g_Scene, *g_Player);
+
+		std::cout << "[지역] " << map.locId << " 로딩 완료\n";
 	}
 }
 
@@ -314,16 +422,38 @@ void RenderScene(void)
 	}
 
 	{
-		// 오른쪽 위 미니맵도 HUD처럼 후처리 이후 화면 고정 좌표계로 그린다.
+		// 오른쪽 위 미니맵도 HUD처럼 후처리 이후 화면 고정 좌표계로 그린다. 지금 목표 대상은 금빛 마름모(+ 퍼져
+		// 나가는 고리)로 표시하고, 구석에 큰 지도를 여는 키(M)를 적어 둔다.
 		Profiler::ScopedTimer timer(Profiler::Section::MiniMap);
-		g_MiniMap->Draw(*g_Renderer, *g_Scene, *g_TileMap, *g_Camera);
+		g_MiniMap->Draw(*g_Renderer, *g_Scene, *g_TileMap, *g_Camera, g_Director->GetObjectiveSpots(), g_ElapsedSeconds);
+		if (!g_MapScreen->IsOpen())
+		{
+			g_MapScreen->DrawMiniMapHint(*g_Renderer, *g_MiniMap);
+		}
+		g_Renderer->Flush();
+	}
+
+	// 왼쪽 아래 채팅창(NPC 대사와 전투/보상/알림 로그). 3초가 지나면 각 줄이 사라진다. 대화창이나 큰 지도가
+	// 열려 있으면 그리지 않는다(그동안은 채팅창 시간도 멈춰 있어서, 그 전에 뜬 줄을 놓치지 않는다).
+	if (!g_Director->IsDialogueActive() && !g_MapScreen->IsOpen())
+	{
+		Profiler::ScopedTimer timer(Profiler::Section::ChatWindow);
+		g_ChatWindow->Draw(*g_Renderer);
 		g_Renderer->Flush();
 	}
 
 	{
-		// 왼쪽 아래 채팅창(NPC 대사와 전투/보상/알림 로그). 3초가 지나면 각 줄이 사라진다.
-		Profiler::ScopedTimer timer(Profiler::Section::ChatWindow);
-		g_ChatWindow->Draw(*g_Renderer);
+		// 목표(미니맵 아래)·지역 이름 배너·대화창은 모든 UI 위에 그린다.
+		Profiler::ScopedTimer timer(Profiler::Section::Story);
+		g_Director->Draw(*g_Renderer);
+		g_Renderer->Flush();
+	}
+
+	if (g_MapScreen->IsOpen())
+	{
+		// 큰 지도(M)는 화면 전체를 덮으므로 맨 마지막에 그린다. 큰 미니맵이라 미니맵 구간에 함께 잰다.
+		Profiler::ScopedTimer timer(Profiler::Section::MiniMap);
+		g_MapScreen->Draw(*g_Renderer, *g_Scene, *g_TileMap, *g_Camera, *g_Director, g_ElapsedSeconds);
 		g_Renderer->Flush();
 	}
 
@@ -360,6 +490,23 @@ void Update(float deltaSeconds)
 		}
 	}
 
+	// 이야기 진행: 방금 끝난 대화의 효과 적용, 인물·괴물·물건의 존재 조건, 트리거 영역, 목표 표시.
+	// 대화창이나 큰 지도가 열려 있는 동안엔 세상이 멈춘다(이동·짐승 AI·공격 없음) — 대사를 읽거나 지도를 보는
+	// 동안 늑대에게 물리지 않게.
+	{
+		Profiler::ScopedTimer timer(Profiler::Section::Story);
+		g_Director->Update(deltaSeconds);
+	}
+
+	// 지도를 연 사이에 대화가 시작됐으면(대화를 넘기자마자 M을 눌러 대기 중이던 대화가 이어서 열린 경우 등)
+	// 지도를 닫는다 — 대화 중엔 키가 대화로 가서 지도를 닫을 수 없게 되므로.
+	bool inDialogue = g_Director->IsDialogueActive();
+	if (inDialogue && g_MapScreen->IsOpen())
+	{
+		g_MapScreen->Close();
+	}
+	bool paused = inDialogue || g_MapScreen->IsOpen();
+
 	// 좌우(A/D)와 상하(W/S) 이동 입력을 모두 반대로 뒤집는다: A는 월드 +x, D는 월드 -x,
 	// W는 월드 -y, S는 월드 +y 방향으로 간다. 카메라 화면을 좌우/상하 반전한 상태에서
 	// 키를 눌렀을 때 화면에 보이는 방향과 실제로 맞도록 맞춘 것이다. 원래대로 되돌리려면
@@ -374,34 +521,54 @@ void Update(float deltaSeconds)
 	if (!IsGameWindowFocused())
 	{
 		g_KeyW = g_KeyA = g_KeyS = g_KeyD = false;
+		std::fill(std::begin(g_KeyHeld), std::end(g_KeyHeld), false);
+		std::fill(std::begin(g_KeyConsumedByDialogue), std::end(g_KeyConsumedByDialogue), false);
 	}
 
 	float moveX = 0.f, moveY = 0.f;
-	if (g_KeyW) moveY += verticalStep;
-	if (g_KeyS) moveY -= verticalStep;
-	if (g_KeyA) moveX -= horizontalStep;
-	if (g_KeyD) moveX += horizontalStep;
+	if (!paused)
+	{
+		if (g_KeyW) moveY += verticalStep;
+		if (g_KeyS) moveY -= verticalStep;
+		if (g_KeyA) moveX -= horizontalStep;
+		if (g_KeyD) moveX += horizontalStep;
+	}
 	g_Player->SetMoveInput(moveX, moveY);
 
 	{
 		Profiler::ScopedTimer timer(Profiler::Section::Update);
 
 		// 플레이어 이동, 짐승 AI, 애니메이션 타이머 등 모든 액터 갱신은 씬 그래프가 한다.
-		g_Scene->Update(deltaSeconds, g_ElapsedSeconds, *g_TileMap);
+		if (!paused)
+		{
+			g_Scene->Update(deltaSeconds, g_ElapsedSeconds, *g_TileMap);
+		}
 
 		// 파괴 예약된 액터가 정리된 뒤에, 지금 Space/E를 누르면 뭐가 맞을지/
-		// 상호작용될지 미리 보여주는 조준 링의 대상을 갱신한다.
-		g_AttackRing->SetTarget(FindNearestAttackTarget());
-		g_InteractRing->SetTarget(FindNearestInteractable());
+		// 상호작용될지 미리 보여주는 조준 링의 대상을 갱신한다(대화 중·지도를 보는 중엔 숨긴다).
+		if (paused)
+		{
+			g_AttackRing->SetTarget(NULL);
+			g_InteractRing->SetTarget(NULL);
+		}
+		else
+		{
+			g_AttackRing->SetTarget(FindNearestAttackTarget());
+			g_InteractRing->SetTarget(FindNearestInteractable());
+		}
 	}
 
+	if (!paused)
 	{
 		// 채팅 메시지가 몰리면 GDI로 텍스처를 새로 굽는 비용이 튈 수 있어서 따로 잰다.
 		Profiler::ScopedTimer timer(Profiler::Section::ChatWindow);
 		g_ChatWindow->Update(deltaSeconds);
 	}
 
-	g_Camera->SetFocus(g_Player->GetWorldX(), g_Player->GetWorldY(), 0.f);
+	// 균열이 열릴 때 같은 순간엔 카메라가 흔들린다(EVENT SHAKE).
+	float shakeX, shakeY;
+	g_Director->GetShakeOffset(g_ElapsedSeconds, shakeX, shakeY);
+	g_Camera->SetFocus(g_Player->GetWorldX() + shakeX, g_Player->GetWorldY() + shakeY, 0.f);
 }
 
 void Idle(void)
@@ -409,6 +576,15 @@ void Idle(void)
 	// 이번 프레임의 프로파일러 구간별 누적치를 0으로 돌린다. Update()/RenderScene() 안의
 	// ScopedTimer들이 여기부터 EndFrame까지의 구간을 잰다.
 	Profiler::BeginFrame();
+
+	// 이야기가 지역 이동을 요청했으면(이정표 대화의 TRAVEL) 이번 프레임을 시작하기 전에 맵을 바꾼다.
+	// 맵을 짓는 시간이 다음 프레임의 dt로 들어가지 않도록 프레임 시각을 새로 잡는다.
+	std::string travelTo;
+	if (g_Director->TakeTravelRequest(travelTo))
+	{
+		LoadMap(travelTo, true);
+		g_LastFrameTime = std::chrono::steady_clock::now();
+	}
 
 	std::chrono::steady_clock::time_point now = std::chrono::steady_clock::now();
 	float deltaSeconds = std::chrono::duration<float>(now - g_LastFrameTime).count();
@@ -455,27 +631,75 @@ void MouseWheel(int wheel, int direction, int x, int y)
 
 void KeyInput(unsigned char key, int x, int y)
 {
+	key = NormalizeKey(key);
+	bool repeat = g_KeyHeld[key];
+	g_KeyHeld[key] = true;
+
+	// 이동 키는 대화 중에도 눌림 상태를 기록해 둔다(대화가 끝나는 순간 누르고 있던 방향으로 바로 걷도록).
 	switch (key)
 	{
-	case 'w': case 'W': g_KeyW = true; break;
-	case 'a': case 'A': g_KeyA = true; break;
-	case 's': case 'S': g_KeyS = true; break;
-	case 'd': case 'D': g_KeyD = true; break;
-	case 'e': case 'E': TryInteract(); break;
-	case 'c': case 'C': ToggleCulling(); break;
+	case 'w': g_KeyW = true; return;
+	case 'a': g_KeyA = true; return;
+	case 's': g_KeyS = true; return;
+	case 'd': g_KeyD = true; return;
+	default: break;
+	}
+
+	// 대화 중엔 E/Space/Enter가 다음 줄, 숫자키가 선택지다. 누르고 있을 때 오는 반복 입력은 무시한다.
+	if (g_Director->IsDialogueActive())
+	{
+		if (!repeat)
+		{
+			g_Director->HandleKey(key);
+		}
+		g_KeyConsumedByDialogue[key] = true;
+		return;
+	}
+
+	// 큰 지도가 열려 있으면 게임이 멈춰 있으므로, 지도를 닫는 키(M·Esc)만 받는다.
+	if (g_MapScreen->IsOpen())
+	{
+		if (!repeat && (key == 'm' || key == kEscapeKey))
+		{
+			g_MapScreen->Close();
+		}
+		return;
+	}
+
+	// 대화를 넘기던 키를 아직 누르고 있다(그 반복 입력이 공격·상호작용으로 이어지지 않게).
+	if (g_KeyConsumedByDialogue[key])
+	{
+		return;
+	}
+
+	switch (key)
+	{
+	case 'e': TryInteract(); break;
+	case 'c': ToggleCulling(); break;
 	case ' ': TryAttack(); break;
+	case 'm':
+		// 누르고 있는 동안의 반복 입력으로 열렸다 닫혔다 하지 않게 처음 누를 때만.
+		if (!repeat)
+		{
+			g_MapScreen->Open(*g_Director);
+		}
+		break;
 	default: break;
 	}
 }
 
 void KeyUp(unsigned char key, int x, int y)
 {
+	key = NormalizeKey(key);
+	g_KeyHeld[key] = false;
+	g_KeyConsumedByDialogue[key] = false;
+
 	switch (key)
 	{
-	case 'w': case 'W': g_KeyW = false; break;
-	case 'a': case 'A': g_KeyA = false; break;
-	case 's': case 'S': g_KeyS = false; break;
-	case 'd': case 'D': g_KeyD = false; break;
+	case 'w': g_KeyW = false; break;
+	case 'a': g_KeyA = false; break;
+	case 's': g_KeyS = false; break;
+	case 'd': g_KeyD = false; break;
 	default: break;
 	}
 }
@@ -541,24 +765,23 @@ int main(int argc, char **argv)
 	MeshData ellipseMeshData = MeshCache::GetOrCreate("ellipse_16", []() { return MeshGen::GenerateEllipse(0.5f, 0.35f, 16); });
 	g_EllipseMesh = g_Renderer->CreateMesh(ellipseMeshData);
 
-	// 가로/세로 2배 = 면적 4배. (32x32)
-	const int kMapWidth = 32;
-	const int kMapHeight = 32;
-	g_TileMap = new TileMap(kMapWidth, kMapHeight);
-	LevelLayout layout = GenerateVillageLevel(*g_TileMap);
-
-	// 화면에 배치되는 모든 것을 액터로 만들어 씬 그래프에 올린다.
-	g_Scene = new SceneGraph();
-	SpawnTileActors(*g_Scene, *g_Renderer, *g_TileMap);
-	LevelActors level = SpawnLevelActors(*g_Scene, layout, *g_TileMap);
-	g_Player = level.player;
-	g_AttackRing = level.attackRing;
-	g_InteractRing = level.interactRing;
-
 	g_MiniMap = new MiniMap();
-
+	g_MapScreen = new MapScreen();
 	g_ChatWindow = new ChatWindow();
-	GameLog::Add(GameLog::Kind::Info, "[튜토리얼] WASD로 이동, E로 상호작용, Space로 공격. 장로를 찾아가보자.");
+
+	// 이야기 데이터(대사·진행 단계·지역)를 읽는다. 파일이 없거나 깨져도 게임은 대화 없이 돌아간다.
+	g_Director = new StoryDirector();
+	if (!g_Director->Initialize(kStoryDataPath))
+	{
+		std::cout << "[이야기] " << kStoryDataPath << "를 읽지 못했습니다. 대화 없이 시작합니다.\n";
+	}
+
+	// 첫 지역(델포이)을 짓고 그곳에서 시작한다. 이후 지역 이동은 이야기(이정표 대화)가 요청한다.
+	g_SessionSeed = std::random_device{}();
+	LoadMap(kFirstLocation, false);
+
+	GameLog::Add(GameLog::Kind::Info, "[조작] WASD 이동, E 대화·조사, Space 공격, M 지도, 마우스 휠 확대/축소. 대화는 E/Space로 넘기고 숫자키로 고른다.");
+	GameLog::Add(GameLog::Kind::Info, "[길잡이] 발밑의 금빛 화살표와 미니맵의 금빛 점이 지금 목표를 가리킨다.");
 
 	g_LastFrameTime = std::chrono::steady_clock::now();
 
@@ -577,6 +800,8 @@ int main(int argc, char **argv)
 
 	g_Renderer->DestroyMesh(g_CircleMesh);
 	g_Renderer->DestroyMesh(g_EllipseMesh);
+	delete g_Director;
+	delete g_MapScreen;
 	delete g_ChatWindow;
 	delete g_MiniMap;
 	delete g_Scene;

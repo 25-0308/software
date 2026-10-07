@@ -68,7 +68,9 @@ public:
 enum class ItemKind
 {
 	Herb,     // 약초: 제자리에서 떠다니는 작은 잎 덤불
-	Offering, // 잃어버린 제물(퀘스트 아이템): 금빛 항아리(암포라)
+	Offering, // 제물: 금빛 항아리(암포라)
+	Laurel,   // 월계수 가지: 길쭉한 잎이 어긋나게 달린 가지(델포이 축제 준비)
+	Scroll,   // 두루마리·장부: 양끝이 말린 양피지(아테네 사제단의 장부 등 조사할 문서)
 };
 
 // 획득 가능한 아이템: 제자리에서 위아래로 떠다니고, 바닥엔 제 빛깔의 빛이 은은하게 번진다.
@@ -85,12 +87,17 @@ private:
 
 // 횃불: 바닥에서 세운 횃대 + 쇠 받침 + 일렁이는 불꽃(불 셰이더) + 바닥에 번지는 불빛.
 // 보통 건물의 자식으로 붙인다(위치는 부모 기준 로컬 좌표, localZ는 바닥에서 불꽃까지의 높이).
+// campfire면 모닥불: 횃대 대신 둥글게 두른 돌과 엇갈려 쌓은 장작 위에서 낮게 타오른다.
 class FireActor : public Actor
 {
 public:
-	FireActor(float localX, float localY, float localZ, float size);
+	FireActor(float localX, float localY, float localZ, float size, bool campfire = false);
 
 	void OnRender(const RenderContext& ctx) override;
+	float GetCollisionRadius() const override { return m_Campfire ? GetSize() * 0.7f : 0.f; }
+
+private:
+	bool m_Campfire;
 };
 
 // 바닥에 깔리는 반투명 펄스 링(Decal). 두 가지로 쓴다:

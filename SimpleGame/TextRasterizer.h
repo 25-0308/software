@@ -17,7 +17,8 @@ struct TextTexture
 class TextRasterizer
 {
 public:
-	explicit TextRasterizer(int fontPixelHeight);
+	// bold면 굵은 글꼴(대화창 이름표, 지역 이름 등 눈에 띄어야 하는 글자).
+	explicit TextRasterizer(int fontPixelHeight, bool bold = false);
 	~TextRasterizer();
 
 	TextRasterizer(const TextRasterizer&) = delete;
