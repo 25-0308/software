@@ -56,7 +56,7 @@ public:
 	MeshHandle CreateMesh(const MeshData& meshData);
 	void DestroyMesh(MeshHandle& mesh);
 	void DrawMesh(const MeshHandle& mesh, const Mat4& mvp, float r, float g, float b, float a);
-
+			
 	// CPU에서 만든 삼각형 목록(x,y,z 반복)을 단색으로(미니맵 표시, 지붕 같은 임의의 다각형 등).
 	void DrawTriangles(const float* vertices, int vertexCount, const Mat4& mvp, float r, float g, float b, float a);
 

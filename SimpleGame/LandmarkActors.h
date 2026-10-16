@@ -164,6 +164,34 @@ public:
 	bool CastsShadow() const override { return true; }
 };
 
+// 비석: 글자가 새겨진 돌판(서쪽 신전의 비문, 델포이 지하의 봉인 석판, 크로노스 배 속 벽의 이름 등). 글자 줄은
+// 카메라 쪽 +y면에 새기고, gold면 금빛으로 메운 글자. 색은 돌 색. 지나갈 수 없다. 조사할 이야기 대상으로 많이 쓴다.
+class SteleActor : public Actor
+{
+public:
+	SteleActor(float x, float y, float height, float r, float g, float b, bool gold);
+
+	void OnRender(const RenderContext& ctx) override;
+	float GetCollisionRadius() const override { return 0.42f; }
+	bool CastsShadow() const override { return true; }
+
+private:
+	float m_Height;
+	bool m_Gold;
+};
+
+// 운명의 베틀(올림포스 지하 베틀실): 나무 틀(기둥 둘 + 위아래 들보)에 금빛 날실이 세로로 걸려 있고, 짜다 만 천이
+// 아래 들보에 조금 감겨 있다. 20년 동안 멈춰 있었다. 틀 전체가 길을 막는다.
+class LoomActor : public Actor
+{
+public:
+	LoomActor(float x, float y);
+
+	void OnRender(const RenderContext& ctx) override;
+	bool BlocksCircle(float x, float y, float moverRadius) const override;
+	bool CastsShadow() const override { return true; }
+};
+
 // 바닥의 균열(델포이 신탁의 균열): 검게 갈라진 틈 + 그 틈에서 피어오르는 보랏빛 그림자 김. Decal 레이어.
 class CrackActor : public Actor
 {

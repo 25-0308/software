@@ -4,6 +4,7 @@
 #include <vector>
 
 #include "DialogueData.h"
+#include "Portrait.h"
 #include "TextRasterizer.h"
 
 class Renderer;
@@ -12,6 +13,8 @@ class StoryState;
 // 화면 아래쪽 대화창: 대사를 한 줄씩 넘겨 보여주고(화자 이름표 + 본문), 마지막에 선택지를 띄운다.
 // 대사를 다 보거나 선택지를 고르면 대화가 끝나고, 그 대화의 효과(do + 고른 선택지의 효과)를 꺼내 갈 수 있다.
 // 효과를 실제로 적용하는 건 StoryDirector다(맵 이동·경험치처럼 게임 쪽 일이 섞여 있어서).
+// 신·주요 인물이 말하면 패널 오른쪽 위에 그 인물의 초상화(PortraitLibrary)가 서고, 플레이어·지문 차례엔 듣고 있는
+// 인물의 초상화를 어둡게 남겨 둔다.
 // HUD와 같은 화면 고정 좌표계(800x600)로 후처리 이후에 그린다.
 class DialogueBox
 {
@@ -47,6 +50,8 @@ public:
 private:
 	void ShowLine(size_t index);
 	void ShowChoices(const StoryState& story);
+	void SetPortrait(const std::string& speakerId, bool listening);
+	void DrawPortrait(Renderer& renderer);
 	void Finish(int chosenIndex);
 	void ReleaseTextures();
 
@@ -80,4 +85,14 @@ private:
 	// 지금 대사의 종류(글자 색을 다르게): 지문(이름 없음) / 플레이어 / 그 밖의 인물
 	bool m_LineIsNarration = false;
 	bool m_LineIsPlayer = false;
+
+	// 초상화: 대사마다 보여 줄 인물 — 그 줄의 화자에게 초상화가 있으면 화자, 아니면(플레이어·지문·초상화 없는 사람)
+	// 같은 대화에서 가장 가까운 앞(없으면 뒤) 인물을 "듣는 중"으로 어둡게. 선택지를 고르는 동안엔 마지막으로 말한 인물.
+	PortraitLibrary m_Portraits;
+	std::vector<std::string> m_LinePortraits;
+	std::vector<bool> m_LinePortraitListening;
+	std::string m_ChoicePortrait;
+	std::string m_Portrait;            // 지금 보여 주는 인물(없으면 빈 문자열)
+	bool m_PortraitListening = false;  // 지금 말하는 사람이 아니라 듣고 있다(어둡게)
+	float m_PortraitAge = 0.f;         // 지금 인물이 나타난 뒤 지난 시간(아래에서 떠오르는 연출)
 };

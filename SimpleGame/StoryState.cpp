@@ -162,11 +162,6 @@ void StoryState::RegisterStep(const std::string& step)
 	m_Steps.push_back(step);
 }
 
-bool StoryState::IsKnownStep(const std::string& step) const
-{
-	return m_StepOrder.find(step) != m_StepOrder.end();
-}
-
 bool StoryState::Evaluate(const std::string& condition) const
 {
 	std::string trimmed = Trim(condition);

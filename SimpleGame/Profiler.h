@@ -25,6 +25,7 @@ namespace Profiler
 		MiniMap,       // 오른쪽 위 미니맵
 		ChatWindow,    // 왼쪽 아래 채팅창(메시지 텍스처 생성 포함)
 		Story,         // 이야기 진행(존재 조건·트리거·목표 갱신) + 대화창·목표·지역 배너 그리기(글자 텍스처 생성 포함)
+		Monitor,       // 월드 모니터(마을별 집계 + 브라우저 요청 처리·JSON 만들기)
 		Present,       // glutSwapBuffers (수직동기화 대기가 여기 섞여 들어올 수 있음)
 		Count,         // 배열 크기로만 씀 — Section 값으로 쓰지 않음
 	};

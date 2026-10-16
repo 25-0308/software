@@ -615,6 +615,9 @@ NpcActor* SpawnStoryNpc(SceneGraph& scene, float x, float y, float size, float r
 	npc->SetStoryId(storyId);
 	npc->SetPresence(presence);
 	npc->SetFacing(0.7853982f); // 기본은 카메라 쪽(+x,+y)을 바라보게 해서 얼굴이 보이도록
+
+	// 믿는 신·돌아다니는 반경·다혈질·교류 여부(Faith.cpp의 표 — 마을 사람은 자기 자리 둘레를 거닐며 서로 어울린다).
+	npc->SetTraits(FaithInfo::TraitsFor(storyId));
 	return npc;
 }
 

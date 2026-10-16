@@ -9,6 +9,8 @@ namespace
 	const size_t kMaxPending = 64;
 
 	std::deque<GameLog::Message> g_Pending;
+
+	std::function<void(GameLog::Kind, const std::string&)> g_Listener;
 }
 
 void GameLog::Add(Kind kind, const std::string& text)
@@ -22,6 +24,16 @@ void GameLog::Add(Kind kind, const std::string& text)
 	{
 		g_Pending.pop_front();
 	}
+
+	if (g_Listener)
+	{
+		g_Listener(kind, text);
+	}
+}
+
+void GameLog::SetListener(const std::function<void(Kind, const std::string&)>& listener)
+{
+	g_Listener = listener;
 }
 
 bool GameLog::Pop(Message& out)

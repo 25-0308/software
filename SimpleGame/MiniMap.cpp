@@ -378,7 +378,8 @@ void MiniMap::Draw(Renderer& renderer, SceneGraph& scene, const TileMap& tileMap
 				const AnimalActor& animal = static_cast<const AnimalActor&>(actor);
 				m_Transform.Apply(actor.GetWorldX(), actor.GetWorldY(), screenX, screenY);
 
-				if (animal.GetKind() == AnimalKind::ShadowWolf || animal.GetKind() == AnimalKind::ShadowPython)
+				AnimalKind kind = animal.GetKind();
+				if (kind == AnimalKind::ShadowWolf || kind == AnimalKind::ShadowPython || kind == AnimalKind::KronosEcho)
 				{
 					AppendSquare(m_Shadows, screenX, screenY, kShadowHalf * markerScale);
 				}

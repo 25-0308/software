@@ -21,6 +21,13 @@ namespace
 	const int kChoiceWrapWidth = 590;    // 선택지 줄바꿈 폭(픽셀)
 	const float kFadeInSeconds = 0.15f;  // 대사가 바뀔 때 글자가 떠오르는 시간
 
+	// 초상화: 패널 윗변 오른쪽에 선다. 초상화가 있으면 선택지는 그 왼쪽까지만 펼친다.
+	const float kPortraitRight = kPanelRight - 10.f;
+	const int kChoiceWrapBesidePortrait = 390;
+	const float kPortraitAppearSeconds = 0.18f; // 아래에서 떠오르며 나타나는 시간
+	const float kPortraitRise = 12.f;           // 그동안 떠오르는 높이(픽셀)
+	const float kListeningShade = 0.55f;        // 듣고 있는 쪽 초상화의 밝기
+
 	// 선택지 효과 중에 locId로 가는 지역 이동(TRAVEL 지역ID)이 있는지. 효과 문자열은 파서가 앞뒤 공백을 떼어 둔다.
 	bool TravelsTo(const DialogueChoice& choice, const std::string& locId)
 	{
@@ -104,6 +111,38 @@ void DialogueBox::Start(const DialogueVariant& variant, const DialogueDatabase& 
 		m_Choices.push_back(choice);
 	}
 
+	// 대사마다 보여 줄 초상화: 화자에게 초상화가 있으면 그 화자, 아니면 가장 가까운 앞(없으면 뒤) 인물을 듣는 중으로.
+	m_LinePortraits.assign(m_Lines.size(), std::string());
+	m_LinePortraitListening.assign(m_Lines.size(), false);
+	m_ChoicePortrait.clear();
+	for (size_t i = 0; i < m_Lines.size(); ++i)
+	{
+		const std::string& speaker = m_Lines[i].speaker;
+		if (m_Portraits.Has(speaker))
+		{
+			m_LinePortraits[i] = speaker;
+			m_ChoicePortrait = speaker;
+			continue;
+		}
+
+		for (size_t j = i; j-- > 0;)
+		{
+			if (m_Portraits.Has(m_Lines[j].speaker))
+			{
+				m_LinePortraits[i] = m_Lines[j].speaker;
+				break;
+			}
+		}
+		for (size_t j = i + 1; m_LinePortraits[i].empty() && j < m_Lines.size(); ++j)
+		{
+			if (m_Portraits.Has(m_Lines[j].speaker))
+			{
+				m_LinePortraits[i] = m_Lines[j].speaker;
+			}
+		}
+		m_LinePortraitListening[i] = !m_LinePortraits[i].empty();
+	}
+
 	// 대사도 선택지도 없으면 효과만 있는 대화: 창을 띄우지 않고 곧바로 끝낸다.
 	if (m_Lines.empty() && m_Choices.empty())
 	{
@@ -136,6 +175,7 @@ void DialogueBox::ShowLine(size_t index)
 
 	m_LineIsNarration = speakerName.empty();
 	m_LineIsPlayer = (line.speaker == "PLAYER");
+	SetPortrait(m_LinePortraits[index], m_LinePortraitListening[index]);
 
 	m_LineTexture = m_BodyText.Create(line.text, kTextWrapWidth);
 	if (!speakerName.empty())
@@ -162,6 +202,10 @@ void DialogueBox::ShowChoices(const StoryState& story)
 		return;
 	}
 
+	// 선택지를 고르는 동안엔 마지막으로 말한 인물이 대답을 기다린다(선택지는 그 초상화 왼쪽까지만).
+	SetPortrait(m_ChoicePortrait, false);
+	int wrapWidth = m_ChoicePortrait.empty() ? kChoiceWrapWidth : kChoiceWrapBesidePortrait;
+
 	for (size_t i = 0; i < m_VisibleChoices.size(); ++i)
 	{
 		const DialogueChoice& choice = m_Choices[m_VisibleChoices[i]];
@@ -173,7 +217,7 @@ void DialogueBox::ShowChoices(const StoryState& story)
 			label += "   ◆ 목표";
 		}
 
-		m_ChoiceTextures.push_back(m_ChoiceText.Create(label, kChoiceWrapWidth));
+		m_ChoiceTextures.push_back(m_ChoiceText.Create(label, wrapWidth));
 		m_ChoiceHighlighted.push_back(highlighted);
 	}
 
@@ -230,7 +274,46 @@ void DialogueBox::Finish(int chosenIndex)
 	m_HasFinished = true;
 	m_Active = false;
 	m_ShowingChoices = false;
+	m_Portrait.clear(); // 다음 대화의 초상화는 다시 떠오르며 나타난다
 	ReleaseTextures();
+}
+
+void DialogueBox::SetPortrait(const std::string& speakerId, bool listening)
+{
+	if (speakerId != m_Portrait)
+	{
+		m_Portrait = speakerId;
+		m_PortraitAge = 0.f;
+	}
+	m_PortraitListening = listening;
+}
+
+// 패널 윗변 오른쪽에 선 초상화(금빛 테두리). 패널보다 먼저 그려서 떠오르는 동안 아래쪽이 패널 뒤에 가려진다.
+// 그 줄의 화자가 아니라 듣고 있는 인물이면 어둡게 그린다. 초상화는 처음 보여 줄 때 그려지므로 그 프레임만 조금 걸린다.
+void DialogueBox::DrawPortrait(Renderer& renderer)
+{
+	if (m_Portrait.empty())
+	{
+		return;
+	}
+
+	const TextTexture* texture = m_Portraits.Get(m_Portrait);
+	if (texture == nullptr)
+	{
+		return;
+	}
+
+	Mat4 ui = UiDraw::ScreenProjection();
+	float appear = (m_PortraitAge < kPortraitAppearSeconds) ? m_PortraitAge / kPortraitAppearSeconds : 1.f;
+	float width = (float)PortraitLibrary::kWidth;
+	float height = (float)PortraitLibrary::kHeight;
+	float left = kPortraitRight - width;
+	float bottom = kPanelTop - (1.f - appear) * kPortraitRise;
+	float shade = m_PortraitListening ? kListeningShade : 1.f;
+	float blueShade = m_PortraitListening ? kListeningShade * 1.08f : 1.f; // 어두울 땐 살짝 푸르스름하게
+
+	UiDraw::Rect(renderer, ui, left - 2.f, bottom - 2.f, width + 4.f, height + 4.f, 0.72f, 0.58f, 0.3f, 0.9f * appear);
+	UiDraw::Image(renderer, ui, *texture, left, bottom, width, height, shade, shade, blueShade, appear);
 }
 
 bool DialogueBox::TakeFinishedEffects(std::vector<std::string>& outEffects)
@@ -250,6 +333,7 @@ void DialogueBox::Update(float deltaSeconds)
 {
 	m_LineAge += deltaSeconds;
 	m_Time += deltaSeconds;
+	m_PortraitAge += deltaSeconds;
 }
 
 void DialogueBox::Draw(Renderer& renderer)
@@ -261,6 +345,8 @@ void DialogueBox::Draw(Renderer& renderer)
 
 	Mat4 ui = UiDraw::ScreenProjection();
 	float fade = (m_LineAge < kFadeInSeconds) ? m_LineAge / kFadeInSeconds : 1.f;
+
+	DrawPortrait(renderer);
 
 	// 패널: 금빛 테두리 + 어두운 바탕.
 	float panelWidth = kPanelRight - kPanelLeft;

@@ -6,6 +6,7 @@
 #include <string>
 
 #include "GameLog.h"
+#include "PatronPowers.h"
 #include "Renderer.h"
 #include "SceneGraph.h"
 #include "Shapes.h"
@@ -35,6 +36,23 @@ namespace
 	// 흐려진 신이 이름을 불린 뒤: 이 시간 동안 또렷하게 있다가, 다음 시간 동안 천천히 다시 흐려진다.
 	const float kFlareHoldSeconds = 8.f;
 	const float kFlareFadeSeconds = 6.f;
+
+	// 마을 사람의 자율 행동.
+	const float kStrollSpeed = 1.1f;        // 거니는 속도(플레이어 4.0보다 훨씬 느긋하게)
+	const float kIdleMinSeconds = 2.f;      // 한자리에 서서 둘러보는 시간(이 범위에서 고름)
+	const float kIdleMaxSeconds = 6.f;
+	const float kSwingSeconds = 0.3f;       // 주먹을 휘두르는 모션 시간
+	const float kBrawlSpeed = 2.8f;         // 시비를 건 마을 사람이 쫓아오는 속도(플레이어보다 느림)
+	const float kBrawlStopDistance = 0.85f; // 이만큼 붙으면 멈춰 서서 주먹을 휘두른다
+	const float kBrawlReach = 1.15f;        // 주먹이 닿는 거리
+	const float kBrawlPunchCooldown = 1.4f;
+	const int kBrawlPunchDamage = 2;
+	const float kBrawlGiveUpDistance = 9.f; // 플레이어가 이보다 멀어지면 그만둔다
+
+	// 스킬로 걸린 상태 표시(머리 위를 도는 작은 빛) 색.
+	const Shapes::Rgb kStunMarkColor = { 1.5f, 1.3f, 0.5f };  // 기절: 노란 별빛
+	const Shapes::Rgb kCharmMarkColor = { 1.6f, 0.6f, 1.0f }; // 홀림: 분홍빛
+	const Shapes::Rgb kFearMarkColor = { 0.8f, 0.5f, 1.6f };  // 겁: 보랏빛
 
 	// 화면 가로 방향(월드 (1,-1)/√2). 카메라를 향해 세운 도형을 좌우로 펼칠 때 쓴다.
 	const float kScreenAxisX = 0.7071f;
@@ -88,6 +106,9 @@ namespace
 		{ "Wolf", BodyShape::Wolf, 1.0f, 0.36f, 0.36f, 0.38f, 30, true, false, 4.5f, 7.f, 6.f, 2.3f, 1.1f, 6, 1.1f, 35 },
 		{ "Shade", BodyShape::Wolf, 0.9f, 0.16f, 0.10f, 0.22f, 18, true, true, 7.f, 12.f, 14.f, 2.1f, 1.1f, 3, 1.3f, 20 },
 		{ "Shadow Python", BodyShape::Serpent, 1.6f, 0.15f, 0.09f, 0.21f, 45, true, true, 9.f, 30.f, 40.f, 1.9f, 1.6f, 4, 1.4f, 60 },
+		{ "Bronze Warrior", BodyShape::Human, 1.0f, 0.55f, 0.36f, 0.17f, 34, true, false, 6.f, 11.f, 10.f, 2.2f, 1.2f, 6, 1.3f, 40 },
+		{ "Kronos", BodyShape::Human, 2.1f, 0.17f, 0.13f, 0.22f, 150, true, true, 12.f, 40.f, 40.f, 1.6f, 2.2f, 9, 1.7f, 150 },
+		{ "White Cow", BodyShape::Cow, 1.05f, 0.95f, 0.94f, 0.9f, 50, false, false, 0.f, 0.f, 0.f, 0.f, 0.f, 0, 0.f, 0 },
 	};
 
 	const AnimalSpec& GetSpec(AnimalKind kind)
@@ -239,6 +260,9 @@ namespace
 		float lift = pose.breathe + pose.walkBob; // 몸통·머리가 같이 들썩이는 양
 		bool facesCamera = IsFacingCamera(ctx, pose);
 
+		// 살 색: 보통은 살색, 청동 전사는 몸 전체가 청동.
+		const Shapes::Rgb& skin = look.bronzeBody ? kBronzeColor : kSkinColor;
+
 		Shapes::Rgb hair = { look.hairR, look.hairG, look.hairB };
 		Shapes::Rgb hood = { look.hoodR, look.hoodG, look.hoodB };
 		Shapes::Rgb beard = { look.beardR, look.beardG, look.beardB };
@@ -269,7 +293,7 @@ namespace
 			}
 			else
 			{
-				DrawPart(ctx, pose, legX, legY, z, s * 0.16f, s * 0.16f, s * 0.3f, kSkinColor);
+				DrawPart(ctx, pose, legX, legY, z, s * 0.16f, s * 0.16f, s * 0.3f, skin);
 				DrawPart(ctx, pose, legX, legY, z, s * 0.19f, s * 0.19f, s * 0.05f, kSandalColor);
 			}
 		}
@@ -282,8 +306,8 @@ namespace
 		float leftArmX, leftArmY, rightArmX, rightArmY;
 		Offset(pose, armSwing, -s * 0.42f, leftArmX, leftArmY);
 		Offset(pose, -armSwing + reach, s * 0.42f, rightArmX, rightArmY);
-		DrawPart(ctx, pose, leftArmX, leftArmY, armBaseZ, s * 0.14f, s * 0.14f, s * 0.3f, kSkinColor);
-		DrawPart(ctx, pose, rightArmX, rightArmY, armBaseZ, s * 0.14f, s * 0.14f, s * 0.3f, kSkinColor);
+		DrawPart(ctx, pose, leftArmX, leftArmY, armBaseZ, s * 0.14f, s * 0.14f, s * 0.3f, skin);
+		DrawPart(ctx, pose, rightArmX, rightArmY, armBaseZ, s * 0.14f, s * 0.14f, s * 0.3f, skin);
 
 		// 오른손에 든 물건: 팔과 같이 움직여서, 공격하면 창이 앞으로 찔러 나간다.
 		if (look.spear)
@@ -356,7 +380,7 @@ namespace
 			DrawPart(ctx, pose, beardX, beardY, headBase - s * 0.07f, s * 0.2f, s * 0.2f, s * 0.16f, beard);
 		}
 
-		DrawCylinderPart(ctx, pose, pose.x, pose.y, headBase, s * 0.2f, s * 0.25f, kSkinColor, Shapes::Shade(kSkinColor, 1.1f));
+		DrawCylinderPart(ctx, pose, pose.x, pose.y, headBase, s * 0.2f, s * 0.25f, skin, Shapes::Shade(skin, 1.1f));
 
 		if (look.hood)
 		{
@@ -411,23 +435,38 @@ namespace
 		{
 			DrawPart(ctx, pose, backHairX, backHairY, z + s * 0.5f + lift, s * 0.46f, s * 0.46f, s * 0.55f, backHairColor);
 		}
+
+		// 빛나는 눈(크로노스의 잔향 같은 그림자 괴물): 얼굴이 카메라를 향할 때만 보인다.
+		if (pose.glowEyes && facesCamera)
+		{
+			float eyeX, eyeY;
+			Offset(pose, s * 0.2f, 0.f, eyeX, eyeY);
+			for (int side = -1; side <= 1; side += 2)
+			{
+				Shapes::DrawUprightEllipse(ctx, eyeX + kScreenAxisX * s * 0.07f * (float)side, eyeY + kScreenAxisY * s * 0.07f * (float)side,
+					headBase + s * 0.13f, s * 0.06f, s * 0.04f, kEyeGlowColor, pose.alpha);
+			}
+		}
 	}
 
-	// 네 발 짐승(사슴/늑대). 다리 4개를 먼저 깔고(먼 다리부터), 몸통·목·머리·귀·꼬리·뿔은 파츠마다 깊이를
+	// 네 발 짐승(사슴/늑대/소). 다리 4개를 먼저 깔고(먼 다리부터), 몸통·목·머리·귀·꼬리·뿔은 파츠마다 깊이를
 	// 재서 먼 것부터 그린다. 상자는 회전하지 않으므로 몸통을 앞(가슴)·뒤(엉덩이) 두 덩어리로 바라보는
 	// 방향을 따라 나란히 놓아서, 어느 방향을 봐도 몸이 그 방향으로 길쭉해 보이게 한다.
-	void DrawQuadruped(const RenderContext& ctx, const Pose& pose, const Shapes::Rgb& fur, bool isWolf)
+	void DrawQuadruped(const RenderContext& ctx, const Pose& pose, const Shapes::Rgb& fur, BodyShape shape)
 	{
 		float s = pose.size;
 		float z = pose.z;
+		bool isWolf = (shape == BodyShape::Wolf);
+		bool isCow = (shape == BodyShape::Cow);
 
-		// 체형: 늑대는 낮고 다리가 굵으며, 사슴은 다리가 길고 가늘며 목이 솟아 있다.
-		float legHeight = isWolf ? s * 0.3f : s * 0.4f;
-		float legWidth = isWolf ? s * 0.09f : s * 0.07f;
+		// 체형: 늑대는 낮고 다리가 굵으며, 사슴은 다리가 길고 가늘며 목이 솟아 있고, 소는 몸통이 넓고 묵직하다.
+		float legHeight = isWolf ? s * 0.3f : (isCow ? s * 0.32f : s * 0.4f);
+		float legWidth = isWolf ? s * 0.09f : (isCow ? s * 0.11f : s * 0.07f);
 		float halfSpan = s * 0.24f; // 앞다리~뒷다리 거리의 절반
 		float legSide = s * 0.1f;
 		float bodyBase = z + legHeight + pose.walkBob + pose.breathe;
-		float bodyHeight = s * 0.26f;
+		float bodyHeight = isCow ? s * 0.32f : s * 0.26f;
+		float bodyWidth = isCow ? s * 0.36f : s * 0.3f;
 		float lunge = pose.attack * s * 0.18f; // 물 때 몸을 앞으로 내미는 거리
 
 		Shapes::Rgb legColor = Shapes::Shade(fur, 0.72f);
@@ -453,13 +492,33 @@ namespace
 		float px, py;
 
 		Offset(pose, s * 0.13f + lunge * 0.5f, 0.f, px, py);
-		body.Add(px, py, bodyBase, s * 0.3f, s * 0.3f, bodyHeight, fur);
+		body.Add(px, py, bodyBase, bodyWidth, bodyWidth, bodyHeight, fur);
 		Offset(pose, -s * 0.13f, 0.f, px, py);
-		body.Add(px, py, bodyBase, s * 0.3f, s * 0.3f, bodyHeight * 0.94f, fur);
+		body.Add(px, py, bodyBase, bodyWidth, bodyWidth, bodyHeight * 0.94f, fur);
 
-		float headBase = isWolf ? bodyBase + s * 0.1f : bodyBase + s * 0.32f;
+		float headBase = isWolf ? bodyBase + s * 0.1f : (isCow ? bodyBase + s * 0.12f : bodyBase + s * 0.32f);
 
-		if (isWolf)
+		if (isCow)
+		{
+			// 몸통 앞쪽에 낮게 내민 넓은 머리 + 연분홍 주둥이 + 짧게 휜 뿔 두 개 + 옆으로 난 귀 + 끝에 털 뭉치가 달린 가는 꼬리.
+			Offset(pose, s * 0.38f, 0.f, px, py);
+			body.Add(px, py, headBase, s * 0.22f, s * 0.2f, s * 0.2f, headColor);
+			Offset(pose, s * 0.5f, 0.f, px, py);
+			body.Add(px, py, headBase + s * 0.01f, s * 0.13f, s * 0.13f, s * 0.1f, Shapes::Rgb{ 0.92f, 0.72f, 0.7f });
+
+			for (int side = -1; side <= 1; side += 2)
+			{
+				Offset(pose, s * 0.36f, s * 0.1f * (float)side, px, py);
+				body.Add(px, py, headBase + s * 0.18f, s * 0.05f, s * 0.05f, s * 0.08f, kHornColor);
+				Offset(pose, s * 0.33f, s * 0.15f * (float)side, px, py);
+				body.Add(px, py, headBase + s * 0.12f, s * 0.07f, s * 0.07f, s * 0.04f, darkColor);
+			}
+
+			Offset(pose, -s * 0.33f, 0.f, px, py);
+			body.Add(px, py, bodyBase - s * 0.06f, s * 0.04f, s * 0.04f, s * 0.26f, fur);
+			body.Add(px, py, bodyBase - s * 0.1f, s * 0.07f, s * 0.07f, s * 0.06f, darkColor);
+		}
+		else if (isWolf)
 		{
 			// 몸통 앞쪽 위의 머리 + 앞으로 튀어나온 주둥이 + 뾰족한 귀 두 개 + 뒤로 치켜든 꼬리.
 			Offset(pose, s * 0.36f + lunge, 0.f, px, py);
@@ -675,8 +734,9 @@ void CharacterActor::OnRender(const RenderContext& ctx)
 	switch (m_Shape)
 	{
 	case BodyShape::Human:   DrawHuman(ctx, pose, bodyColor, m_Look); break;
-	case BodyShape::Deer:    DrawQuadruped(ctx, pose, bodyColor, false); break;
-	case BodyShape::Wolf:    DrawQuadruped(ctx, pose, bodyColor, true); break;
+	case BodyShape::Deer:    DrawQuadruped(ctx, pose, bodyColor, m_Shape); break;
+	case BodyShape::Wolf:    DrawQuadruped(ctx, pose, bodyColor, m_Shape); break;
+	case BodyShape::Cow:     DrawQuadruped(ctx, pose, bodyColor, m_Shape); break;
 	case BodyShape::Serpent: DrawSerpent(ctx, pose, bodyColor); break;
 	}
 }
@@ -706,6 +766,86 @@ void CharacterActor::OnRenderShadow(const RenderContext& ctx)
 	}
 
 	ctx.renderer.DrawShadow(ctx.viewProjection * model, 0.45f * m_Opacity);
+}
+
+// 걸어서 이동한다. 예전엔 짐승만 쓰던 것을 마을 사람도 같이 쓰도록 여기로 옮겼다.
+bool CharacterActor::MoveToward(const UpdateContext& ctx, float targetX, float targetY, float speed, float stopDistance)
+{
+	float x = GetX();
+	float y = GetY();
+	float dx = targetX - x;
+	float dy = targetY - y;
+	float distance = sqrtf(dx * dx + dy * dy);
+
+	if (distance <= stopDistance)
+	{
+		return false;
+	}
+
+	// 목표를 지나쳐 앞뒤로 떨지 않도록, 남은 거리보다 멀리는 가지 않는다.
+	float step = speed * ctx.deltaSeconds;
+	if (step > distance - stopDistance)
+	{
+		step = distance - stopDistance;
+	}
+
+	float newX = x + dx / distance * step;
+	if (CanStepTo(ctx, x, y, newX, y))
+	{
+		x = newX;
+	}
+
+	float newY = y + dy / distance * step;
+	if (CanStepTo(ctx, x, y, x, newY))
+	{
+		y = newY;
+	}
+
+	float movedX = x - GetX();
+	float movedY = y - GetY();
+	if (movedX * movedX + movedY * movedY < 0.0000001f)
+	{
+		return false; // 사방이 막혀서 못 움직임
+	}
+
+	SetFacing(atan2f(movedY, movedX));
+	SetPosition(x, y, GetZ());
+	return true;
+}
+
+bool CharacterActor::CanStepTo(const UpdateContext& ctx, float fromX, float fromY, float toX, float toY) const
+{
+	if (!ctx.tileMap.IsWorldPositionWalkable(toX, toY) || ctx.scene.IsBlocked(toX, toY, kMoverRadius))
+	{
+		return false;
+	}
+
+	// 다른 캐릭터(플레이어/짐승/NPC)와 몸이 겹치게 되는 걸음은 막는다 — 예전엔 늑대 여러 마리가 한 점에
+	// 겹쳐 한 마리처럼 보이고 플레이어 몸속으로 파고들었다. 이미 겹친 상태에서 멀어지는 걸음은 허용해서,
+	// 겹친 채로 둘 다 꼼짝 못 하게 되는 일은 없게 한다.
+	const Actor* self = this;
+	Actor* other = ctx.scene.FindNearest(toX, toY, PersonalSpace(), [self](const Actor& actor)
+	{
+		ActorType type = actor.GetType();
+		return &actor != self && (type == ActorType::Animal || type == ActorType::Player || type == ActorType::NPC);
+	});
+
+	if (other == nullptr)
+	{
+		return true;
+	}
+
+	float otherX = other->GetWorldX();
+	float otherY = other->GetWorldY();
+	float before = (fromX - otherX) * (fromX - otherX) + (fromY - otherY) * (fromY - otherY);
+	float after = (toX - otherX) * (toX - otherX) + (toY - otherY) * (toY - otherY);
+
+	return after >= before;
+}
+
+float CharacterActor::PersonalSpace() const
+{
+	return kMoverRadius * 2.f;
 }
 
 // ---------------------------------------------------------------- NpcActor
@@ -753,10 +893,324 @@ void NpcActor::OnUpdate(const UpdateContext& ctx)
 		SetOpacity(m_BaseOpacity + (0.92f - m_BaseOpacity) * flare);
 	}
 
+	// NpcSociety가 적어 둔 쿨타임은 NPC 자신이 줄인다.
+	m_Memory.socialCooldown = (std::max)(0.f, m_Memory.socialCooldown - ctx.deltaSeconds);
+	m_Memory.reactionCooldown = (std::max)(0.f, m_Memory.reactionCooldown - ctx.deltaSeconds);
+
+	// 주먹을 휘두르는 모션(말다툼의 삿대질·주먹다짐).
+	if (m_SwingTimer > 0.f)
+	{
+		m_SwingTimer = (std::max)(0.f, m_SwingTimer - ctx.deltaSeconds);
+	}
+	SetAttackProgress(m_SwingTimer > 0.f ? 1.f - m_SwingTimer / kSwingSeconds : -1.f);
+
 	if (m_FollowTarget != nullptr && IsVisible())
 	{
+		m_Activity = NpcActivity::Follow;
+		m_Partner = nullptr;
 		Follow(ctx);
+		return;
 	}
+
+	UpdateRoutine(ctx);
+}
+
+void NpcActor::SetTraits(const NpcTraits& traits)
+{
+	m_Traits = traits;
+	m_AnchorX = GetX();
+	m_AnchorY = GetY();
+
+	// 자리마다 다른 난수 씨앗 — 사람마다 걸음과 쉬는 시간이 엇갈려서 다 같이 한꺼번에 움직이지 않는다.
+	unsigned int seed = (unsigned int)((m_AnchorX + 100.f) * 7919.f) ^ (unsigned int)((m_AnchorY + 100.f) * 104729.f);
+	m_RandomState = (seed != 0u) ? seed : 1u;
+	m_ActivityTimer = 0.5f + kIdleMinSeconds * NextRandom();
+}
+
+bool NpcActor::IsFree() const
+{
+	return m_Traits.social && m_FollowTarget == nullptr && IsVisible()
+		&& (m_Activity == NpcActivity::Idle || m_Activity == NpcActivity::Stroll);
+}
+
+void NpcActor::BeginEncounter(NpcActor& partner, NpcActivity kind, float seconds)
+{
+	m_Activity = kind;
+	m_ActivityTimer = seconds;
+	m_Partner = &partner;
+	m_StuckTimer = 0.f;
+	SetWalking(false);
+	FaceToward(partner.GetWorldX(), partner.GetWorldY());
+}
+
+void NpcActor::BeginBrawl(float seconds, int stamina)
+{
+	m_Activity = NpcActivity::Brawl;
+	m_ActivityTimer = seconds;
+	m_Partner = nullptr;
+	m_BrawlStamina = stamina;
+	m_PunchCooldown = 0.8f;
+	m_BrawlOutcome = BrawlOutcome::None;
+}
+
+bool NpcActor::TakeBrawlHit()
+{
+	TriggerFlash(FlashKind::White, kAnimalHitFlashDuration);
+
+	if (m_Activity != NpcActivity::Brawl)
+	{
+		return false;
+	}
+
+	--m_BrawlStamina;
+	if (m_BrawlStamina > 0)
+	{
+		return false;
+	}
+
+	m_BrawlOutcome = BrawlOutcome::Yielded;
+	EndActivity(kIdleMaxSeconds);
+	return true;
+}
+
+BrawlOutcome NpcActor::ConsumeBrawlOutcome()
+{
+	BrawlOutcome outcome = m_BrawlOutcome;
+	m_BrawlOutcome = BrawlOutcome::None;
+	return outcome;
+}
+
+void NpcActor::FaceToward(float x, float y)
+{
+	float dx = x - GetWorldX();
+	float dy = y - GetWorldY();
+	if (dx * dx + dy * dy > 0.0001f)
+	{
+		SetFacing(atan2f(dy, dx));
+	}
+}
+
+// 스스로 하는 일: 서서 둘러보기 → 자기 자리 둘레 거닐기 → 다시 쉬기. NpcSociety가 짝지어 준 수다·말다툼·
+// 주먹다짐은 정해진 시간 동안 상대를 마주 보고 하다가 끝나면 다시 거닌다. 플레이어와의 주먹다짐은 쫓아가며
+// 주먹을 휘두르다가, 플레이어가 멀리 달아나거나 시간이 다 되면 그만둔다.
+void NpcActor::UpdateRoutine(const UpdateContext& ctx)
+{
+	float dt = ctx.deltaSeconds;
+
+	switch (m_Activity)
+	{
+	case NpcActivity::Chat:
+	case NpcActivity::Argue:
+	case NpcActivity::Scuffle:
+		{
+			SetWalking(false);
+
+			if (m_Partner == nullptr || !m_Partner->IsVisible())
+			{
+				EndActivity(kIdleMinSeconds);
+				break;
+			}
+
+			FaceToward(m_Partner->GetWorldX(), m_Partner->GetWorldY());
+
+			// 주먹다짐은 자주 주먹을 휘두르고 맞은 쪽이 번쩍인다(목숨은 걸지 않는 실랑이라 체력은 없다).
+			// 말다툼은 가끔 삿대질만 한다.
+			float swingsPerSecond = (m_Activity == NpcActivity::Scuffle) ? 1.8f : ((m_Activity == NpcActivity::Argue) ? 0.5f : 0.f);
+			if (m_SwingTimer <= 0.f && NextRandom() < swingsPerSecond * dt)
+			{
+				m_SwingTimer = kSwingSeconds;
+				if (m_Activity == NpcActivity::Scuffle)
+				{
+					m_Partner->TriggerFlash(FlashKind::White, 0.12f);
+				}
+			}
+
+			m_ActivityTimer -= dt;
+			if (m_ActivityTimer <= 0.f)
+			{
+				// 다투고 나면 서로 등을 돌려 떨어져 걷고, 수다를 떨고 나면 그 자리에서 잠깐 쉰다.
+				NpcActor* partner = m_Partner;
+				bool parted = (m_Activity != NpcActivity::Chat);
+				EndActivity(kIdleMinSeconds);
+				if (parted && m_Traits.wanderRadius > 0.f && PickStrollTarget(ctx, partner->GetWorldX(), partner->GetWorldY(), true))
+				{
+					m_Activity = NpcActivity::Stroll;
+				}
+			}
+		}
+		break;
+
+	case NpcActivity::Brawl:
+		{
+			m_ActivityTimer -= dt;
+
+			PlayerActor* player = ctx.scene.GetPlayer();
+			if (player == nullptr)
+			{
+				m_BrawlOutcome = BrawlOutcome::GaveUp;
+				EndActivity(kIdleMaxSeconds);
+				break;
+			}
+
+			float playerX = player->GetWorldX();
+			float playerY = player->GetWorldY();
+			float dx = playerX - GetX();
+			float dy = playerY - GetY();
+			float distance = sqrtf(dx * dx + dy * dy);
+
+			if (distance > kBrawlGiveUpDistance || m_ActivityTimer <= 0.f)
+			{
+				m_BrawlOutcome = BrawlOutcome::GaveUp;
+				EndActivity(kIdleMaxSeconds);
+				break;
+			}
+
+			bool moved = MoveToward(ctx, playerX, playerY, kBrawlSpeed, kBrawlStopDistance);
+			SetWalking(moved);
+			FaceToward(playerX, playerY);
+
+			m_PunchCooldown = (std::max)(0.f, m_PunchCooldown - dt);
+			if (distance <= kBrawlReach && m_PunchCooldown <= 0.f)
+			{
+				m_SwingTimer = kSwingSeconds;
+				m_PunchCooldown = kBrawlPunchCooldown;
+				player->TakeDamage(kBrawlPunchDamage, true);
+			}
+		}
+		break;
+
+	case NpcActivity::Stroll:
+		{
+			float dx = m_StrollX - GetX();
+			float dy = m_StrollY - GetY();
+			if (dx * dx + dy * dy <= 0.15f * 0.15f)
+			{
+				EndActivity(kIdleMinSeconds + (kIdleMaxSeconds - kIdleMinSeconds) * NextRandom());
+				break;
+			}
+
+			bool moved = MoveToward(ctx, m_StrollX, m_StrollY, kStrollSpeed, 0.1f);
+			SetWalking(moved);
+
+			// 누가 길을 막고 서 있거나 담에 걸려 못 가면 잠깐 서 있다가 다른 데로 간다.
+			m_StuckTimer = moved ? 0.f : m_StuckTimer + dt;
+			if (m_StuckTimer > 1.2f)
+			{
+				EndActivity(1.f + 2.f * NextRandom());
+			}
+		}
+		break;
+
+	case NpcActivity::Follow:
+		// 따라다니다 풀려났으면 그 자리에서 쉰다.
+		EndActivity(kIdleMinSeconds);
+		break;
+
+	case NpcActivity::Idle:
+	default:
+		{
+			SetWalking(false);
+
+			m_ActivityTimer -= dt;
+			if (m_ActivityTimer > 0.f)
+			{
+				break;
+			}
+
+			if (m_Traits.wanderRadius > 0.f && PickStrollTarget(ctx, 0.f, 0.f, false))
+			{
+				m_Activity = NpcActivity::Stroll;
+				m_StuckTimer = 0.f;
+				break;
+			}
+
+			// 제자리를 지키는 마을 사람도 가끔 고개를 돌려 둘러본다(이야기 인물·신은 정해 둔 방향을 지킨다).
+			if (m_Traits.social)
+			{
+				SetFacing(GetFacing() + (NextRandom() - 0.5f) * 1.6f);
+			}
+			m_ActivityTimer = kIdleMinSeconds + (kIdleMaxSeconds - kIdleMinSeconds) * NextRandom();
+		}
+		break;
+	}
+}
+
+void NpcActor::EndActivity(float idleSeconds)
+{
+	m_Activity = NpcActivity::Idle;
+	m_ActivityTimer = idleSeconds;
+	m_Partner = nullptr;
+	m_StuckTimer = 0.f;
+	SetWalking(false);
+}
+
+// 거닐 곳을 고른다. away면 지금 자리에서 (awayFromX, awayFromY)의 반대쪽으로(다툰 상대에게서 멀어지게), 아니면
+// 자기 자리(anchor) 둘레 아무 데나. 걸을 수 있는 곳을 몇 번 찾아보고 못 찾으면 false.
+bool NpcActor::PickStrollTarget(const UpdateContext& ctx, float awayFromX, float awayFromY, bool away)
+{
+	float radius = m_Traits.wanderRadius;
+
+	for (int attempt = 0; attempt < 6; ++attempt)
+	{
+		float x;
+		float y;
+
+		if (away)
+		{
+			float dx = GetX() - awayFromX;
+			float dy = GetY() - awayFromY;
+			float length = sqrtf(dx * dx + dy * dy);
+			if (length < 0.01f)
+			{
+				dx = 1.f;
+				dy = 0.f;
+				length = 1.f;
+			}
+
+			float angle = atan2f(dy, dx) + (NextRandom() - 0.5f) * 1.2f;
+			float step = 1.2f + NextRandom();
+			x = GetX() + cosf(angle) * step;
+			y = GetY() + sinf(angle) * step;
+
+			// 자기 자리에서 너무 멀어지지 않게 안쪽으로 당긴다.
+			float fromAnchorX = x - m_AnchorX;
+			float fromAnchorY = y - m_AnchorY;
+			float fromAnchor = sqrtf(fromAnchorX * fromAnchorX + fromAnchorY * fromAnchorY);
+			float limit = radius + 1.f;
+			if (fromAnchor > limit)
+			{
+				x = m_AnchorX + fromAnchorX / fromAnchor * limit;
+				y = m_AnchorY + fromAnchorY / fromAnchor * limit;
+			}
+		}
+		else
+		{
+			float angle = NextRandom() * 6.2831853f;
+			float distance = radius * (0.3f + 0.7f * NextRandom());
+			x = m_AnchorX + cosf(angle) * distance;
+			y = m_AnchorY + sinf(angle) * distance;
+		}
+
+		if (ctx.tileMap.IsWorldPositionWalkable(x, y) && !ctx.scene.IsBlocked(x, y, kMoverRadius))
+		{
+			m_StrollX = x;
+			m_StrollY = y;
+			return true;
+		}
+	}
+
+	return false;
+}
+
+float NpcActor::NextRandom()
+{
+	// xorshift32 — NPC마다 따로 굴러가는 가벼운 난수.
+	unsigned int state = m_RandomState;
+	state ^= state << 13;
+	state ^= state >> 17;
+	state ^= state << 5;
+	m_RandomState = (state != 0u) ? state : 0x9E3779B9u;
+	return (float)(m_RandomState & 0xFFFFFFu) / 16777216.f;
 }
 
 void NpcActor::Follow(const UpdateContext& ctx)
@@ -853,7 +1307,8 @@ void PlayerActor::OnUpdate(const UpdateContext& ctx)
 		moveY /= length;
 		SetFacing(atan2f(moveY, moveX));
 
-		float step = kPlayerSpeed * m_SpeedScale * ctx.deltaSeconds;
+		float buffSpeed = (m_BuffTimer > 0.f) ? m_BuffSpeedScale : 1.f;
+		float step = kPlayerSpeed * m_SpeedScale * buffSpeed * ctx.deltaSeconds;
 		float x = GetX();
 		float y = GetY();
 
@@ -891,6 +1346,41 @@ void PlayerActor::OnUpdate(const UpdateContext& ctx)
 		}
 	}
 	SetAttackProgress(m_AttackTimer > 0.f ? 1.f - m_AttackTimer / kAttackAnimDuration : -1.f);
+
+	if (m_BuffTimer > 0.f)
+	{
+		m_BuffTimer -= ctx.deltaSeconds;
+		if (m_BuffTimer <= 0.f)
+		{
+			m_BuffTimer = 0.f;
+			GameLog::Add(GameLog::Kind::Info, "[신속의 날개] 날개의 힘이 가라앉았다.");
+		}
+	}
+}
+
+// 각성의 기운: 보통 그림자 위에 수호신 색의 빛이 숨 쉬듯 번진다(밝기가 1을 넘어 블룸으로 은은하게 빛남).
+// 신속의 날개(버프)가 걸려 있는 동안엔 발밑에 하늘빛 바람이 더 빠르게 맥박친다.
+void PlayerActor::OnRenderShadow(const RenderContext& ctx)
+{
+	CharacterActor::OnRenderShadow(ctx);
+
+	float x = GetWorldX();
+	float y = GetWorldY();
+	float size = GetSize();
+
+	if (m_Aura)
+	{
+		float pulse = 0.75f + 0.25f * sinf(ctx.time * 2.4f);
+		Mat4 model = Mat4::Translate(x, y, 0.002f) * Mat4::Scale(size * 2.2f * pulse, size * 2.2f * pulse, 1.f);
+		ctx.renderer.DrawSoftDisc(ctx.viewProjection * model, m_AuraR * 1.4f, m_AuraG * 1.4f, m_AuraB * 1.4f, 0.38f);
+	}
+
+	if (m_BuffTimer > 0.f)
+	{
+		float pulse = 0.7f + 0.3f * sinf(ctx.time * 9.f);
+		Mat4 model = Mat4::Translate(x, y, 0.003f) * Mat4::Scale(size * 1.7f * pulse, size * 1.7f * pulse, 1.f);
+		ctx.renderer.DrawSoftDisc(ctx.viewProjection * model, 0.8f, 1.3f, 1.6f, 0.35f);
+	}
 }
 
 void PlayerActor::StartAttack()
@@ -914,30 +1404,101 @@ void PlayerActor::GrantXP(int amount)
 		m_Stats.xp -= m_Stats.xpToNext;
 		m_Stats.level += 1;
 		m_Stats.xpToNext = (int)(m_Stats.xpToNext * 1.5f);
-		m_Stats.attackPower += 3;
-		m_Stats.maxHp += 8;
+
+		// 기본 성장 + 수호신마다 더 얹히는 몫(제우스는 공격력, 포세이돈은 체력, 하데스는 처치 회복 등).
+		m_Stats.attackPower += 3 + m_Stats.growthAttack;
+		m_Stats.maxHp += 8 + m_Stats.growthMaxHp;
+		m_Stats.defense += m_Stats.growthDefense;
+		m_Stats.lifeOnKill += m_Stats.growthLifeOnKill;
 		m_Stats.hp = m_Stats.maxHp;
 
-		GameLog::Add(GameLog::Kind::Reward, "[레벨업!] Lv." + std::to_string(m_Stats.level)
+		std::string message = "[레벨업!] Lv." + std::to_string(m_Stats.level)
 			+ " (공격력 " + std::to_string(m_Stats.attackPower)
-			+ ", 최대체력 " + std::to_string(m_Stats.maxHp) + ")");
+			+ ", 최대체력 " + std::to_string(m_Stats.maxHp);
+		if (m_Stats.defense > 0)
+		{
+			message += ", 방어 " + std::to_string(m_Stats.defense);
+		}
+		if (m_Stats.lifeOnKill > 0)
+		{
+			message += ", 처치 회복 " + std::to_string(m_Stats.lifeOnKill);
+		}
+		GameLog::Add(GameLog::Kind::Reward, message + ")");
 	}
 }
 
-// 몬스터의 공격을 적용한다: 데미지, 붉은 피격 플래시, 사망 시 리스폰.
-void PlayerActor::TakeDamage(int amount)
+// 피해를 적용한다: 방어만큼 줄이고(최소 1), 붉은 피격 플래시, 쓰러지면 리스폰. 마을 사람과의 주먹다짐(nonLethal)은
+// 체력이 1 밑으로 내려가지 않는다 — 목숨까지 걸 싸움은 아니다.
+void PlayerActor::TakeDamage(int amount, bool nonLethal)
 {
-	m_Stats.hp -= amount;
+	int taken = amount - m_Stats.defense;
+	if (taken < 1)
+	{
+		taken = 1;
+	}
+	if (nonLethal && m_Stats.hp - taken < 1)
+	{
+		taken = (m_Stats.hp > 1) ? m_Stats.hp - 1 : 0;
+	}
+
 	TriggerFlash(FlashKind::Red, kPlayerHitFlashDuration);
+	if (taken <= 0)
+	{
+		GameLog::Add(GameLog::Kind::Damage, "[주먹다짐] 비틀거리며 겨우 버틴다. 맞서 쓰러뜨리거나 멀리 피하자.");
+		return;
+	}
+
+	m_Stats.hp -= taken;
 
 	int shownHp = (m_Stats.hp > 0) ? m_Stats.hp : 0;
-	GameLog::Add(GameLog::Kind::Damage, "[피격!] " + std::to_string(amount)
+	GameLog::Add(GameLog::Kind::Damage, std::string(nonLethal ? "[주먹다짐] " : "[피격!] ") + std::to_string(taken)
 		+ " 피해를 입었다 (체력 " + std::to_string(shownHp) + "/" + std::to_string(m_Stats.maxHp) + ")");
 
 	if (m_Stats.hp <= 0)
 	{
 		Respawn();
 	}
+}
+
+void PlayerActor::ApplyPatronPassive(const PatronDef& def)
+{
+	m_Stats.attackPower += def.attack;
+	m_Stats.maxHp += def.maxHp;
+	m_Stats.hp += def.maxHp;
+	m_Stats.defense += def.defense;
+	m_Stats.critChance += def.critChance;
+	m_Stats.lifeOnKill += def.lifeOnKill;
+	m_Stats.cooldownScale *= def.cooldownScale;
+	m_Stats.growthAttack += def.growthAttack;
+	m_Stats.growthMaxHp += def.growthMaxHp;
+	m_Stats.growthDefense += def.growthDefense;
+	m_Stats.growthLifeOnKill += def.growthLifeOnKill;
+}
+
+float PlayerActor::GetDetectScale() const
+{
+	return m_DetectScale * ((m_BuffTimer > 0.f) ? m_BuffDetectScale : 1.f);
+}
+
+float PlayerActor::GetCooldownScale() const
+{
+	return m_Stats.cooldownScale * ((m_BuffTimer > 0.f) ? m_BuffCooldownScale : 1.f);
+}
+
+void PlayerActor::StartBuff(float seconds, float speedScale, float cooldownScale, float detectScale)
+{
+	m_BuffTimer = seconds;
+	m_BuffSpeedScale = speedScale;
+	m_BuffCooldownScale = cooldownScale;
+	m_BuffDetectScale = detectScale;
+}
+
+void PlayerActor::SetAura(bool enabled, float r, float g, float b)
+{
+	m_Aura = enabled;
+	m_AuraR = r;
+	m_AuraG = g;
+	m_AuraB = b;
 }
 
 void PlayerActor::Heal(int amount)
@@ -949,12 +1510,6 @@ void PlayerActor::Heal(int amount)
 	}
 }
 
-void PlayerActor::AddMaxHp(int amount)
-{
-	m_Stats.maxHp += amount;
-	m_Stats.hp += amount;
-}
-
 // 체력이 0 이하로 떨어져 쓰러졌을 때: 이 지역의 시작 지점으로 되돌리고 체력을 채워 다시
 // 시작한다(세이브/로드가 없는 프로토타입이라 페널티 없는 리스폰으로 단순하게 처리).
 void PlayerActor::Respawn()
@@ -962,6 +1517,7 @@ void PlayerActor::Respawn()
 	GameLog::Add(GameLog::Kind::Damage, "[쓰러졌다...] 정신을 차려 보니 처음 자리로 돌아와 있다.");
 	SetPosition(m_SpawnX, m_SpawnY, GetZ());
 	m_Stats.hp = m_Stats.maxHp;
+	m_JustDied = true;
 }
 
 // ------------------------------------------------------------- AnimalActor
@@ -984,6 +1540,30 @@ AnimalActor::AnimalActor(AnimalKind kind, float anchorX, float anchorY, float ph
 	SetColor(spec.r * tint, spec.g * tint, spec.b * tint);
 	SetName(spec.name);
 	SetGlowingEyes(spec.shadow);
+
+	// 사람 모양 괴물의 겉모습: 청동 전사는 온몸이 청동인 창병, 크로노스의 잔향은 반쯤 비치는 거대한 옛 왕.
+	if (kind == AnimalKind::BronzeWarrior)
+	{
+		HumanLook look;
+		look.bronzeBody = true;
+		look.helmet = true;
+		look.spear = true;
+		SetLook(look);
+	}
+	else if (kind == AnimalKind::KronosEcho)
+	{
+		HumanLook look;
+		look.hairR = 0.32f; look.hairG = 0.3f; look.hairB = 0.36f;
+		look.beardR = 0.36f; look.beardG = 0.34f; look.beardB = 0.4f;
+		look.beard = true;
+		look.longHair = true;
+		look.robe = true;
+		look.staff = true;
+		look.wreath = true; look.wreathR = 0.22f; look.wreathG = 0.18f; look.wreathB = 0.26f; // 녹슨 옛 왕관
+		SetLook(look);
+		SetOpacity(0.82f);
+	}
+
 	FitBoundsToSize();
 }
 
@@ -997,6 +1577,26 @@ int AnimalActor::GetKillXP() const
 	return GetSpec(m_Kind).xp;
 }
 
+int AnimalActor::GetMaxHp() const
+{
+	return GetSpec(m_Kind).hp;
+}
+
+AnimalNames GetAnimalNames(AnimalKind kind)
+{
+	switch (kind)
+	{
+	case AnimalKind::Deer: return { "사슴", "사슴을" };
+	case AnimalKind::Wolf: return { "늑대", "늑대를" };
+	case AnimalKind::ShadowWolf: return { "그림자 늑대", "그림자 늑대를" };
+	case AnimalKind::ShadowPython: return { "그림자 퓌톤", "그림자 퓌톤을" };
+	case AnimalKind::BronzeWarrior: return { "청동 전사", "청동 전사를" };
+	case AnimalKind::KronosEcho: return { "크로노스의 잔향", "크로노스의 잔향을" };
+	case AnimalKind::WhiteCow: return { "하얀 암소", "하얀 암소를" };
+	}
+	return { "짐승", "짐승을" };
+}
+
 void AnimalActor::OnUpdate(const UpdateContext& ctx)
 {
 	// 아직 나타나지 않은(이야기 존재 조건이 거짓인) 괴물은 움직이지도 공격하지도 않는다.
@@ -1007,8 +1607,31 @@ void AnimalActor::OnUpdate(const UpdateContext& ctx)
 
 	CharacterActor::OnUpdate(ctx);
 
+	m_StunTimer = (std::max)(0.f, m_StunTimer - ctx.deltaSeconds);
+	m_CharmTimer = (std::max)(0.f, m_CharmTimer - ctx.deltaSeconds);
+	m_FearTimer = (std::max)(0.f, m_FearTimer - ctx.deltaSeconds);
+
 	// 실제로 움직였을 때만 걷는 모션을 켠다(예전엔 제자리에 서 있어도 늘 다리를 흔들었다).
-	bool moved = IsAggressive() ? UpdateMonsterAI(ctx) : Wander(ctx);
+	// 스킬에 걸린 동안: 기절이면 꼼짝 못 하고, 홀리면 헤매고, 겁먹으면 달아난다(셋 다 물지 않는다).
+	bool moved = false;
+	if (m_StunTimer > 0.f)
+	{
+		moved = false;
+	}
+	else if (m_CharmTimer > 0.f)
+	{
+		m_IsChasing = false;
+		moved = Wander(ctx);
+	}
+	else if (m_FearTimer > 0.f)
+	{
+		m_IsChasing = false;
+		moved = Flee(ctx);
+	}
+	else
+	{
+		moved = IsAggressive() ? UpdateMonsterAI(ctx) : Wander(ctx);
+	}
 	SetWalking(moved);
 
 	if (m_AttackCooldown > 0.f)
@@ -1071,79 +1694,96 @@ bool AnimalActor::Wander(const UpdateContext& ctx)
 	return MoveToward(ctx, targetX, targetY, kWanderSpeed, 0.05f);
 }
 
-bool AnimalActor::MoveToward(const UpdateContext& ctx, float targetX, float targetY, float speed, float stopDistance)
+// 큰 몸(뱀)은 다른 캐릭터와 그만큼 넓게 떨어진다.
+float AnimalActor::PersonalSpace() const
 {
-	float x = GetX();
-	float y = GetY();
-	float dx = targetX - x;
-	float dy = targetY - y;
-	float distance = sqrtf(dx * dx + dy * dy);
-
-	if (distance <= stopDistance)
-	{
-		return false;
-	}
-
-	// 목표를 지나쳐 앞뒤로 떨지 않도록, 남은 거리보다 멀리는 가지 않는다.
-	float step = speed * ctx.deltaSeconds;
-	if (step > distance - stopDistance)
-	{
-		step = distance - stopDistance;
-	}
-
-	float newX = x + dx / distance * step;
-	if (CanStepTo(ctx, x, y, newX, y))
-	{
-		x = newX;
-	}
-
-	float newY = y + dy / distance * step;
-	if (CanStepTo(ctx, x, y, x, newY))
-	{
-		y = newY;
-	}
-
-	float movedX = x - GetX();
-	float movedY = y - GetY();
-	if (movedX * movedX + movedY * movedY < 0.0000001f)
-	{
-		return false; // 사방이 막혀서 못 움직임
-	}
-
-	SetFacing(atan2f(movedY, movedX));
-	SetPosition(x, y, GetZ());
-	return true;
+	return kMoverRadius * 2.f + ((m_Kind == AnimalKind::ShadowPython) ? 0.4f : 0.f);
 }
 
-bool AnimalActor::CanStepTo(const UpdateContext& ctx, float fromX, float fromY, float toX, float toY) const
+void AnimalActor::Stun(float seconds)
 {
-	if (!ctx.tileMap.IsWorldPositionWalkable(toX, toY) || ctx.scene.IsBlocked(toX, toY, kMoverRadius))
+	m_StunTimer = (std::max)(m_StunTimer, seconds);
+}
+
+void AnimalActor::Charm(float seconds)
+{
+	m_CharmTimer = (std::max)(m_CharmTimer, seconds);
+	m_IsChasing = false;
+}
+
+void AnimalActor::Frighten(float seconds)
+{
+	m_FearTimer = (std::max)(m_FearTimer, seconds);
+	m_IsChasing = false;
+}
+
+void AnimalActor::LoseTrack()
+{
+	if (m_IsChasing)
 	{
-		return false;
+		m_IsChasing = false;
+		m_IsReturning = true;
+	}
+}
+
+// 겁: 플레이어에게서 반대쪽으로 달아난다(자기 자리에서 너무 멀어지지 않게 목줄 반경 안에서).
+bool AnimalActor::Flee(const UpdateContext& ctx)
+{
+	PlayerActor* player = ctx.scene.GetPlayer();
+	if (player == nullptr)
+	{
+		return Wander(ctx);
 	}
 
-	// 다른 캐릭터(플레이어/짐승/NPC)와 몸이 겹치게 되는 걸음은 막는다 — 예전엔 늑대 여러 마리가 한 점에
-	// 겹쳐 한 마리처럼 보이고 플레이어 몸속으로 파고들었다. 이미 겹친 상태에서 멀어지는 걸음은 허용해서,
-	// 겹친 채로 둘 다 꼼짝 못 하게 되는 일은 없게 한다. 큰 몸(뱀)은 그만큼 넓게 잡는다.
-	const Actor* self = this;
-	float personalSpace = kMoverRadius * 2.f + ((m_Kind == AnimalKind::ShadowPython) ? 0.4f : 0.f);
-	Actor* other = ctx.scene.FindNearest(toX, toY, personalSpace, [self](const Actor& actor)
+	float dx = GetX() - player->GetWorldX();
+	float dy = GetY() - player->GetWorldY();
+	float length = sqrtf(dx * dx + dy * dy);
+	if (length < 0.01f)
 	{
-		ActorType type = actor.GetType();
-		return &actor != self && (type == ActorType::Animal || type == ActorType::Player || type == ActorType::NPC);
-	});
-
-	if (other == nullptr)
-	{
-		return true;
+		dx = 1.f;
+		dy = 0.f;
+		length = 1.f;
 	}
 
-	float otherX = other->GetWorldX();
-	float otherY = other->GetWorldY();
-	float before = (fromX - otherX) * (fromX - otherX) + (fromY - otherY) * (fromY - otherY);
-	float after = (toX - otherX) * (toX - otherX) + (toY - otherY) * (toY - otherY);
+	const AnimalSpec& spec = GetSpec(m_Kind);
+	float speed = (spec.chaseSpeed > 0.f) ? spec.chaseSpeed : kWanderSpeed * 1.5f;
+	return MoveToward(ctx, GetX() + dx / length * 3.f, GetY() + dy / length * 3.f, speed, 0.05f);
+}
 
-	return after >= before;
+// 스킬로 걸린 상태는 머리 위를 도는 작은 빛 셋으로 보여 준다(기절 노랑·홀림 분홍·겁 보라).
+void AnimalActor::OnRender(const RenderContext& ctx)
+{
+	CharacterActor::OnRender(ctx);
+
+	const Shapes::Rgb* mark = nullptr;
+	if (m_StunTimer > 0.f)
+	{
+		mark = &kStunMarkColor;
+	}
+	else if (m_CharmTimer > 0.f)
+	{
+		mark = &kCharmMarkColor;
+	}
+	else if (m_FearTimer > 0.f)
+	{
+		mark = &kFearMarkColor;
+	}
+
+	if (mark == nullptr)
+	{
+		return;
+	}
+
+	float size = GetSize();
+	float headZ = GetWorldZ() + size * ((m_Kind == AnimalKind::ShadowPython) ? 1.3f : 1.45f);
+	float orbit = size * 0.35f;
+	for (int i = 0; i < 3; ++i)
+	{
+		float angle = ctx.time * 4.f + (float)i * 2.0944f;
+		float x = GetWorldX() + cosf(angle) * orbit;
+		float y = GetWorldY() + sinf(angle) * orbit;
+		Shapes::DrawUprightEllipse(ctx, x, y, headZ + 0.05f * sinf(angle * 2.f), 0.11f, 0.11f, *mark, 0.9f);
+	}
 }
 
 // 공격형 괴물의 추적/공격 AI. 감지 반경 안에 플레이어가 들어오면 추적을 시작하고, 공격 사거리에 닿으면

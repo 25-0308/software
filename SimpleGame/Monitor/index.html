@@ -1,0 +1,1387 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>월드 모니터</title>
+<!--
+  황혼의 신탁 — 월드 모니터.
+  게임(SimpleGame)이 켜져 있으면 http://127.0.0.1:8765/ 에서 이 화면을 보내 주고, 이 화면은 /api/state 에서
+  JSON 메시지(형식은 SimpleGame/Monitor.h 머리말 — schema "world-monitor/1")를 주기적으로 받아 그린다.
+  파일로 직접 열어도(file://) 위쪽 주소 칸의 서버에서 받아 온다. 바깥 파일·인터넷 없이 이 파일 하나로 동작한다.
+-->
+<style>
+	:root {
+		--bg: #0f1218;
+		--panel: #171c25;
+		--panel-2: #1d2430;
+		--line: #2a3342;
+		--text: #e6e9ef;
+		--muted: #8d97a8;
+		--accent: #e8b84a;
+		--calm: #4cc38a;
+		--alert: #e8a23c;
+		--danger: #ec5f5f;
+		--idle: #7b8698;
+		--info: #6cb2ff;
+		--violet: #b48cff;
+		--teal: #46c7c0;
+		--hp: #e0574f;
+		--hp-bg: #3a2326;
+		color-scheme: dark;
+	}
+
+	@media (prefers-color-scheme: light) {
+		:root {
+			--bg: #f3f4f7;
+			--panel: #ffffff;
+			--panel-2: #f6f7fa;
+			--line: #dde1e8;
+			--text: #1d2330;
+			--muted: #667085;
+			--accent: #b07d12;
+			--calm: #1f9a62;
+			--alert: #b8720f;
+			--danger: #cc3b3b;
+			--idle: #7a8494;
+			--info: #2f7fd8;
+			--violet: #7a4fd6;
+			--teal: #1d948d;
+			--hp: #d44a42;
+			--hp-bg: #f6dcda;
+			color-scheme: light;
+		}
+	}
+
+	* { box-sizing: border-box; }
+
+	body {
+		margin: 0;
+		background: var(--bg);
+		color: var(--text);
+		font: 14px/1.5 "Pretendard", "Malgun Gothic", "Apple SD Gothic Neo", system-ui, sans-serif;
+		font-variant-numeric: tabular-nums;
+	}
+
+	header.top {
+		position: sticky;
+		top: 0;
+		z-index: 5;
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 12px 20px;
+		padding: 12px 20px;
+		background: var(--panel);
+		border-bottom: 1px solid var(--line);
+	}
+
+	.brand { display: flex; align-items: baseline; gap: 10px; }
+	.brand h1 { margin: 0; font-size: 18px; letter-spacing: -0.01em; }
+	.brand .world { color: var(--accent); font-weight: 600; }
+
+	.conn { display: flex; align-items: center; gap: 8px; color: var(--muted); }
+	.dot { width: 9px; height: 9px; border-radius: 50%; background: var(--idle); }
+	.dot.ok { background: var(--calm); box-shadow: 0 0 0 3px color-mix(in srgb, var(--calm) 25%, transparent); }
+	.dot.bad { background: var(--danger); }
+
+	.controls { margin-left: auto; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+
+	input, select, button {
+		font: inherit;
+		color: var(--text);
+		background: var(--panel-2);
+		border: 1px solid var(--line);
+		border-radius: 6px;
+		padding: 5px 9px;
+	}
+	input#endpoint { width: 220px; }
+	button { cursor: pointer; }
+	button:hover, select:hover { border-color: var(--muted); }
+
+	main { padding: 16px 20px 32px; display: grid; gap: 16px; max-width: 1500px; margin: 0 auto; }
+
+	.notice {
+		padding: 10px 14px;
+		border: 1px solid color-mix(in srgb, var(--danger) 45%, var(--line));
+		background: color-mix(in srgb, var(--danger) 10%, var(--panel));
+		border-radius: 8px;
+	}
+	.notice[hidden] { display: none; }
+
+	.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; }
+	.card, .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; }
+	.card { padding: 12px 14px; }
+	.card .label { color: var(--muted); font-size: 12px; }
+	.card .value { font-size: 26px; font-weight: 700; line-height: 1.2; margin-top: 2px; }
+	.card .sub { color: var(--muted); font-size: 12px; margin-top: 2px; }
+
+	.panel { padding: 14px 16px; min-width: 0; }
+	.panel h2 { margin: 0 0 10px; font-size: 15px; }
+	.panel-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-bottom: 10px; }
+	.panel-head h2 { margin: 0; }
+	.panel-head .count { color: var(--muted); }
+
+	.story { display: grid; grid-template-columns: auto 1fr; gap: 4px 14px; }
+	.story dt { color: var(--muted); }
+	.story dd { margin: 0; }
+
+	.villages { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
+	.village {
+		text-align: left;
+		background: var(--panel);
+		border: 1px solid var(--line);
+		border-left: 4px solid var(--idle);
+		border-radius: 10px;
+		padding: 12px 14px;
+		cursor: pointer;
+		display: grid;
+		align-content: start;
+		gap: 8px;
+	}
+	.village:hover { border-color: var(--muted); }
+	.village.selected { outline: 2px solid var(--accent); outline-offset: 1px; }
+	.village.calm { border-left-color: var(--calm); }
+	.village.alert { border-left-color: var(--alert); }
+	.village.danger { border-left-color: var(--danger); }
+	.village.unvisited { opacity: 0.7; }
+	.village .title { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+	.village .title strong { font-size: 16px; }
+	.village .full { color: var(--muted); font-size: 12px; }
+	.stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+	.stats div { background: var(--panel-2); border-radius: 6px; padding: 4px 8px; }
+	.stats b { display: block; font-size: 16px; }
+	.stats span { color: var(--muted); font-size: 11px; }
+
+	.badges { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+	.badge {
+		display: inline-block;
+		padding: 0 7px;
+		border-radius: 999px;
+		font-size: 12px;
+		line-height: 20px;
+		border: 1px solid var(--line);
+		color: var(--muted);
+		white-space: nowrap;
+	}
+	.badge.live { color: var(--calm); border-color: color-mix(in srgb, var(--calm) 50%, var(--line)); }
+	.badge.goal { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 55%, var(--line)); }
+	.badge.talk { color: var(--info); border-color: color-mix(in srgb, var(--info) 50%, var(--line)); }
+	.badge.locked { color: var(--muted); }
+
+	.pill { display: inline-block; padding: 0 8px; border-radius: 999px; font-size: 12px; line-height: 20px; font-weight: 600; white-space: nowrap; }
+	.pill.calm, .pill.idle, .pill.roaming { background: color-mix(in srgb, var(--calm) 16%, transparent); color: var(--calm); }
+	.pill.alert, .pill.returning { background: color-mix(in srgb, var(--alert) 18%, transparent); color: var(--alert); }
+	.pill.danger, .pill.chasing { background: color-mix(in srgb, var(--danger) 18%, transparent); color: var(--danger); }
+	.pill.following { background: color-mix(in srgb, var(--info) 18%, transparent); color: var(--info); }
+	.pill.faded, .pill.flaring { background: color-mix(in srgb, var(--violet) 18%, transparent); color: var(--violet); }
+	.pill.hidden, .pill.unvisited { background: color-mix(in srgb, var(--idle) 18%, transparent); color: var(--idle); }
+
+	.filters { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; }
+	.filters label { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); }
+
+	.grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(480px, 1fr)); gap: 16px; }
+
+	.table-wrap { overflow: auto; max-height: 460px; border: 1px solid var(--line); border-radius: 8px; }
+	table { width: 100%; border-collapse: collapse; }
+	th, td { padding: 6px 10px; text-align: left; border-bottom: 1px solid var(--line); vertical-align: middle; }
+	th { position: sticky; top: 0; background: var(--panel-2); color: var(--muted); font-weight: 600; font-size: 12px; z-index: 1; }
+	tr:last-child td { border-bottom: none; }
+	tr.dim td { opacity: 0.55; }
+	td.num { text-align: right; white-space: nowrap; }
+	.small { color: var(--muted); font-size: 12px; }
+	.empty { color: var(--muted); padding: 14px; text-align: center; }
+
+	.hp { display: flex; align-items: center; gap: 8px; min-width: 120px; }
+	.hp .bar { flex: 1; height: 8px; border-radius: 4px; background: var(--hp-bg); overflow: hidden; }
+	.hp .bar i { display: block; height: 100%; background: var(--hp); }
+
+	ol.events { list-style: none; margin: 0; padding: 0; max-height: 460px; overflow: auto; border: 1px solid var(--line); border-radius: 8px; }
+	ol.events li { display: grid; grid-template-columns: 52px 56px 76px 1fr; gap: 8px; padding: 5px 10px; border-bottom: 1px solid var(--line); align-items: baseline; }
+	ol.events li:last-child { border-bottom: none; }
+	.etype { font-size: 12px; font-weight: 600; }
+	.etype.dialogue { color: var(--accent); }
+	.etype.info { color: var(--info); }
+	.etype.combat { color: var(--text); }
+	.etype.damage { color: var(--danger); }
+	.etype.reward { color: var(--accent); }
+	.etype.story { color: var(--violet); }
+	.etype.travel { color: var(--teal); }
+	.etype.system { color: var(--muted); }
+
+	details summary { cursor: pointer; color: var(--muted); margin-top: 12px; }
+	pre { margin: 8px 0 0; max-height: 360px; overflow: auto; padding: 10px; background: var(--panel-2); border-radius: 8px; font-size: 12px; }
+
+	.pill.stroll, .pill.neutral, .pill.unknown { background: color-mix(in srgb, var(--idle) 18%, transparent); color: var(--idle); }
+	.pill.chat, .pill.same, .pill.ally, .pill.friendly { background: color-mix(in srgb, var(--calm) 16%, transparent); color: var(--calm); }
+	.pill.argue, .pill.wary, .pill.frightened { background: color-mix(in srgb, var(--alert) 18%, transparent); color: var(--alert); }
+	.pill.scuffle, .pill.brawl, .pill.hostile { background: color-mix(in srgb, var(--danger) 18%, transparent); color: var(--danger); }
+	.pill.follow, .pill.stunned { background: color-mix(in srgb, var(--info) 18%, transparent); color: var(--info); }
+	.pill.charmed { background: color-mix(in srgb, var(--violet) 18%, transparent); color: var(--violet); }
+
+	/* ---- 수호신의 힘 ---- */
+	.power-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 10px; margin-bottom: 6px; }
+	.power-head strong { font-size: 16px; }
+	.chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
+	.chip { background: var(--panel-2); border-radius: 6px; padding: 3px 9px; font-size: 12px; color: var(--muted); }
+	.chip b { color: var(--text); font-weight: 600; margin-left: 4px; }
+	.skills { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; }
+	.skill { border: 1px solid var(--line); border-left: 4px solid var(--god, var(--accent)); border-radius: 8px; padding: 8px 10px; background: var(--panel-2); display: grid; gap: 4px; }
+	.skill.locked { opacity: 0.6; border-left-color: var(--idle); }
+	.skill .top { display: flex; align-items: baseline; gap: 8px; }
+	.skill kbd { font: 600 12px/18px inherit; padding: 0 6px; border: 1px solid var(--line); border-radius: 4px; background: var(--panel); }
+	.skill .cd { margin-left: auto; font-size: 12px; color: var(--muted); white-space: nowrap; }
+	.skill .cd.ready { color: var(--calm); font-weight: 600; }
+	.cdbar { height: 5px; border-radius: 3px; background: var(--line); overflow: hidden; }
+	.cdbar i { display: block; height: 100%; background: var(--god, var(--accent)); }
+
+	/* ---- 세계관 ---- */
+	.tabs { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+	.tabs button { border-radius: 999px; padding: 4px 12px; }
+	.tabs button[aria-selected="true"] { border-color: var(--accent); color: var(--accent); font-weight: 600; }
+	.lore p { margin: 0 0 10px; max-width: 72ch; }
+	.lore h3 { margin: 14px 0 6px; font-size: 14px; }
+	.lore h3:first-child { margin-top: 0; }
+	.lore .lead { font-size: 15px; }
+	.lore-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px; }
+	.lore-card { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; background: var(--panel-2); display: grid; gap: 4px; align-content: start; }
+	.lore-card .name { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+	.lore-card .name strong { font-size: 15px; }
+	.lore-card .domain { color: var(--muted); font-size: 12px; }
+	.lore-card.locked { opacity: 0.6; }
+	.lore-card.here { outline: 2px solid var(--calm); outline-offset: -1px; }
+	.swatch { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: var(--god, var(--accent)); }
+	.rules { margin: 0 0 10px; padding-left: 18px; max-width: 76ch; }
+	.rules li { margin-bottom: 4px; }
+
+	.relation-layout { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(240px, 1fr); gap: 16px; align-items: start; }
+	svg.relations { width: 100%; height: auto; display: block; }
+	svg.relations .edge { stroke-linecap: round; transition: opacity 0.15s; }
+	svg.relations .edge.ally { stroke: var(--calm); stroke-width: 4; }
+	svg.relations .edge.friendly { stroke: var(--calm); stroke-width: 1.8; opacity: 0.75; }
+	svg.relations .edge.wary { stroke: var(--alert); stroke-width: 1.8; stroke-dasharray: 5 4; }
+	svg.relations .edge.hostile { stroke: var(--danger); stroke-width: 4; }
+	svg.relations.focused .edge { opacity: 0.08; }
+	svg.relations.focused .edge.on { opacity: 1; }
+	svg.relations .node { cursor: pointer; }
+	svg.relations .node circle { fill: var(--panel-2); stroke: var(--line); stroke-width: 2; }
+	svg.relations .node.patron circle { stroke: var(--accent); }
+	svg.relations .node.player circle { fill: color-mix(in srgb, var(--accent) 35%, var(--panel-2)); stroke: var(--accent); stroke-width: 3; }
+	svg.relations .node.selected circle { stroke: var(--text); stroke-width: 3; }
+	svg.relations .node:focus { outline: none; }
+	svg.relations .node:focus-visible circle { stroke: var(--info); stroke-width: 3; }
+	svg.relations.focused .node.dim { opacity: 0.35; }
+	svg.relations text { fill: var(--text); font-size: 13px; }
+	svg.relations text.count { fill: var(--muted); font-size: 11px; }
+	.legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12px; color: var(--muted); margin-top: 6px; }
+	.legend i { display: inline-block; width: 22px; height: 0; border-top: 3px solid; vertical-align: middle; margin-right: 4px; }
+	.legend .ally { border-color: var(--calm); }
+	.legend .friendly { border-color: var(--calm); border-top-width: 1.5px; }
+	.legend .wary { border-color: var(--alert); border-top-style: dashed; border-top-width: 2px; }
+	.legend .hostile { border-color: var(--danger); }
+	.rel-list { display: grid; gap: 6px; }
+	.rel-list .row { display: grid; grid-template-columns: 52px 1fr; gap: 8px; align-items: baseline; }
+
+	.truth { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; background: var(--panel-2); }
+	.truth + .truth { margin-top: 8px; }
+	.truth strong { display: block; margin-bottom: 2px; }
+	.truth.locked { color: var(--muted); border-style: dashed; background: transparent; }
+
+	@media (max-width: 560px) {
+		header.top { padding: 10px 16px; }
+		main { padding: 12px 16px 24px; }
+		.grid2 { grid-template-columns: 1fr; }
+		.relation-layout { grid-template-columns: 1fr; }
+		input#endpoint { width: 100%; }
+		ol.events li { grid-template-columns: 48px 52px 1fr; }
+		ol.events li .emap { display: none; }
+	}
+</style>
+</head>
+<body>
+<header class="top">
+	<div class="brand">
+		<h1>월드 모니터</h1>
+		<span class="world" id="worldName">—</span>
+	</div>
+	<div class="conn">
+		<span class="dot" id="connDot"></span>
+		<span id="connText">연결하는 중…</span>
+	</div>
+	<div class="controls">
+		<input id="endpoint" spellcheck="false" aria-label="게임 서버 주소" title="게임 서버 주소">
+		<select id="interval" aria-label="갱신 간격">
+			<option value="250">0.25초마다</option>
+			<option value="500">0.5초마다</option>
+			<option value="1000">1초마다</option>
+			<option value="2000">2초마다</option>
+		</select>
+		<button type="button" id="pause">일시정지</button>
+	</div>
+</header>
+
+<main>
+	<div class="notice" id="notice" hidden></div>
+
+	<section class="cards" id="summary"></section>
+
+	<section class="grid2">
+		<div class="panel">
+			<h2>이야기 진행</h2>
+			<dl class="story" id="story"></dl>
+		</div>
+		<div class="panel">
+			<h2>수호신의 힘</h2>
+			<div id="power"></div>
+		</div>
+	</section>
+
+	<section class="panel">
+		<div class="panel-head">
+			<h2>세계관</h2>
+			<span class="small">「황혼의 신탁」의 세계. 게임에 연결하지 않아도 읽을 수 있고, 「밝혀진 진실」은 이야기를 진행한 만큼만 열린다.</span>
+		</div>
+		<div class="tabs" id="loreTabs" role="tablist"></div>
+		<div class="lore" id="lore"></div>
+	</section>
+
+	<section>
+		<div class="panel-head">
+			<h2>마을별 상태</h2>
+			<span class="small">카드를 누르면 아래 목록을 그 마을로 거른다. 지금 있는 마을만 실시간이고, 다른 마을은 떠나기 직전의 기록이다.</span>
+		</div>
+		<div class="villages" id="villages"></div>
+	</section>
+
+	<section class="panel">
+		<div class="filters">
+			<label>마을 <select id="villageFilter"></select></label>
+			<label><input type="checkbox" id="showHidden"> 숨은 대상도 보기(이야기 조건으로 아직·이미 없는 것)</label>
+			<label>찾기 <input id="search" placeholder="이름 또는 ID" spellcheck="false"></label>
+		</div>
+	</section>
+
+	<section class="grid2">
+		<div class="panel">
+			<div class="panel-head"><h2>NPC</h2><span class="count" id="npcCount"></span></div>
+			<div class="table-wrap">
+				<table>
+					<thead><tr><th>이름</th><th>마을</th><th>상태</th><th>신앙 · 나를 대하는 태도</th><th>행동</th><th>표시</th><th class="num">위치</th><th class="num">거리</th></tr></thead>
+					<tbody id="npcRows"></tbody>
+				</table>
+			</div>
+		</div>
+		<div class="panel">
+			<div class="panel-head"><h2>몹</h2><span class="count" id="mobCount"></span></div>
+			<div class="table-wrap">
+				<table>
+					<thead><tr><th>종류</th><th>마을</th><th>체력</th><th>상태</th><th class="num">위치</th><th class="num">거리</th></tr></thead>
+					<tbody id="mobRows"></tbody>
+				</table>
+			</div>
+		</div>
+	</section>
+
+	<section class="grid2">
+		<div class="panel">
+			<div class="panel-head"><h2>이벤트</h2><span class="small">게임이 보낸 JSON 메시지(채팅창 로그·진행 단계·지역 이동), 최근 것이 위</span></div>
+			<ol class="events" id="events"></ol>
+		</div>
+		<div class="panel">
+			<h2>이야기 변수</h2>
+			<div class="table-wrap">
+				<table>
+					<thead><tr><th>변수</th><th>값</th></tr></thead>
+					<tbody id="vars"></tbody>
+				</table>
+			</div>
+			<details id="rawBox">
+				<summary>마지막으로 받은 JSON 원문</summary>
+				<pre id="raw"></pre>
+			</details>
+		</div>
+	</section>
+</main>
+
+<script>
+(() => {
+	'use strict';
+
+	const DEFAULT_ENDPOINT = 'http://127.0.0.1:8765';
+	const MAX_EVENTS = 300;
+
+	const $ = (id) => document.getElementById(id);
+
+	// 화면에 넣는 글자는 전부 이 함수로 이스케이프한다(게임이 보낸 문자열을 HTML로 해석하지 않게).
+	const esc = (value) => String(value ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+	// 내용이 바뀐 곳만 다시 그린다(매번 갈아 끼우면 글자를 드래그해 복사하거나 누르는 도중에 화면이 바뀌어 버린다).
+	function setHtml(element, html) {
+		if (element.dataset.html !== html) {
+			element.innerHTML = html;
+			element.dataset.html = html;
+		}
+	}
+
+	// 브라우저 저장소(설정 기억용). 막혀 있어도 화면은 그대로 동작한다.
+	const store = {
+		get(key, fallback) {
+			try {
+				const value = localStorage.getItem('worldMonitor.' + key);
+				return value === null ? fallback : value;
+			} catch (e) {
+				return fallback;
+			}
+		},
+		set(key, value) {
+			try { localStorage.setItem('worldMonitor.' + key, value); } catch (e) { /* 저장 못 해도 괜찮다 */ }
+		},
+	};
+
+	// 게임이 이 화면을 보내 줬으면 같은 주소에서, 파일로 직접 열었으면 저장해 둔 주소(없으면 기본 주소)에서 받는다.
+	const servedByGame = location.protocol === 'http:' || location.protocol === 'https:';
+
+	const ui = {
+		endpoint: servedByGame ? location.origin : store.get('endpoint', DEFAULT_ENDPOINT),
+		interval: Number(store.get('interval', '1000')) || 1000,
+		paused: false,
+		timer: 0,
+		lastSeq: 0,
+		instance: null,
+		events: [],
+		data: null,
+		village: store.get('village', 'all'),
+		showHidden: store.get('showHidden', '0') === '1',
+		query: '',
+		lastOkAt: 0,
+		loreTab: store.get('loreTab', 'world'),
+		faithFocus: null, // 관계도에서 강조할 신: null = 내 수호신, '' = 강조 없음
+		lastFocus: '',
+	};
+
+	const EVENT_TYPES = {
+		'log.dialogue': ['대사', 'dialogue'],
+		'log.info': ['안내', 'info'],
+		'log.combat': ['공격', 'combat'],
+		'log.damage': ['피해', 'damage'],
+		'log.reward': ['보상', 'reward'],
+		'story.step': ['진행', 'story'],
+		'world.travel': ['이동', 'travel'],
+		'monitor.start': ['시작', 'system'],
+	};
+
+	const PATRONS = { ZEUS: '제우스', POSEIDON: '포세이돈', HADES: '하데스', APHRODITE: '아프로디테', HERMES: '헤르메스' };
+
+	// ---- 세계관 자료(정적 — 게임에 연결하지 않아도 보인다) ----
+	// 신앙과 관계는 SimpleGame/Faith.cpp(FaithInfo), 축복·스킬은 SimpleGame/PatronPowers.cpp를 옮겨 둔 것이다. 게임에 연결되면
+	// 신앙 관계도는 JSON의 faiths(같은 표에서 만든 것)로, 지금 수호신의 스킬은 player.skills로 그리지만, 표를 고치면 여기도 같이 고친다.
+	// 아래 문구 중 HTML 태그(<b>)가 든 것은 이 파일이 직접 쓴 글이라 이스케이프하지 않는다(게임이 보낸 문자열은 늘 esc).
+	const FAITHS = [
+		{ key: 'ZEUS', name: '제우스', domain: '하늘 · 번개 · 왕권', patron: true },
+		{ key: 'POSEIDON', name: '포세이돈', domain: '바다 · 지진', patron: true },
+		{ key: 'HADES', name: '하데스', domain: '저승 · 망자', patron: true },
+		{ key: 'APHRODITE', name: '아프로디테', domain: '사랑 · 아름다움', patron: true },
+		{ key: 'HERMES', name: '헤르메스', domain: '전령 · 길 · 도둑', patron: true },
+		{ key: 'HERA', name: '헤라', domain: '결혼 · 가정', patron: false },
+		{ key: 'ATHENA', name: '아테나', domain: '지혜 · 전략', patron: false },
+		{ key: 'ARES', name: '아레스', domain: '전쟁', patron: false },
+		{ key: 'APOLLO', name: '아폴론', domain: '예언 · 음악', patron: false },
+		{ key: 'DIONYSUS', name: '디오니소스', domain: '술 · 축제', patron: false },
+		{ key: 'HEPHAESTUS', name: '헤파이스토스', domain: '대장간 · 장인', patron: false },
+		{ key: 'PAN', name: '판', domain: '들판 · 목동', patron: false },
+		{ key: 'JUPITER', name: '유피테르', domain: '서쪽의 로마식 새 숭배', patron: false },
+	];
+
+	// [신앙, 신앙, 관계] — 2 동맹, 1 호의, -1 경계, -2 적대(표에 없으면 0 중립, 같은 신끼리는 3).
+	const RELATIONS = [
+		['ZEUS', 'ATHENA', 2], ['ZEUS', 'APOLLO', 1], ['ZEUS', 'HERMES', 1], ['ZEUS', 'DIONYSUS', 1],
+		['ZEUS', 'HERA', -1], ['ZEUS', 'POSEIDON', -1], ['ZEUS', 'ARES', -1], ['ZEUS', 'JUPITER', -2],
+		['POSEIDON', 'ATHENA', -2], ['POSEIDON', 'HERA', 1], ['POSEIDON', 'HADES', 1], ['POSEIDON', 'HERMES', 1],
+		['HADES', 'HERMES', 1], ['HADES', 'APOLLO', -1],
+		['APHRODITE', 'ARES', 2], ['APHRODITE', 'HERA', -2], ['APHRODITE', 'ATHENA', -2], ['APHRODITE', 'HEPHAESTUS', -1],
+		['APHRODITE', 'HERMES', 1], ['APHRODITE', 'DIONYSUS', 1],
+		['HERMES', 'APOLLO', 1], ['HERMES', 'ATHENA', 1], ['HERMES', 'DIONYSUS', 1], ['HERMES', 'PAN', 2],
+		['HERA', 'ARES', 2], ['HERA', 'JUPITER', 2], ['HERA', 'ATHENA', -1], ['HERA', 'HEPHAESTUS', -1],
+		['ATHENA', 'ARES', -2], ['ATHENA', 'JUPITER', -2],
+		['ARES', 'HEPHAESTUS', -1], ['ARES', 'JUPITER', 1],
+		['APOLLO', 'DIONYSUS', -1], ['APOLLO', 'PAN', -1],
+		['DIONYSUS', 'PAN', 2], ['DIONYSUS', 'JUPITER', 1],
+	];
+
+	// 관계도 원 둘레에 놓는 순서(위에서 시계 방향) — 사이가 얽힌 신끼리 가까이.
+	const RING_ORDER = ['ZEUS', 'ATHENA', 'HERMES', 'PAN', 'DIONYSUS', 'APOLLO', 'HADES', 'POSEIDON', 'HEPHAESTUS', 'APHRODITE', 'ARES', 'HERA', 'JUPITER'];
+
+	const RELATION_LABELS = { same: '같은 신', ally: '동맹', friendly: '호의', neutral: '중립', wary: '경계', hostile: '적대' };
+
+	// 신마다 그 신을 믿는 마을 사람(Faith.cpp의 kTraits)과, 그중 다혈질(적대하는 신의 신도에게 시비를 거는)이 있는지.
+	const VILLAGERS = {
+		APOLLO: { who: '델포이의 순례객·주민', hot: false },
+		HERMES: { who: '델포이의 상인, 키프로스 연회의 가면 쓴 상인', hot: false },
+		PAN: { who: '올림포스 산기슭의 양치기', hot: true },
+		ATHENA: { who: '아테네 시민', hot: true },
+		JUPITER: { who: '아테네의 유피테르 신전 사제와 갈아탄 시민, 서쪽 해안의 사제장·시민', hot: true },
+		POSEIDON: { who: '에게해 군도의 어부', hot: true },
+		ARES: { who: '키프로스 연회의 가면 쓴 영웅', hot: true },
+		APHRODITE: { who: '키프로스 연회의 가면 쓴 님프·시종', hot: false },
+		HERA: { who: '키프로스의 기록 관리인', hot: false },
+	};
+
+	const PATRON_POWERS = {
+		ZEUS: {
+			blessing: '번개의 축복', color: '#ffe673',
+			passive: '공격력 +4, 레벨업마다 공격력 +1 더. 공격할 때 15% 확률로 벼락이 함께 떨어져 피해 2배.',
+			q: ['벼락 일격', 6, '가장 가까운 적(6칸 안)에게 벼락을 내리꽂는다 — 공격력의 2.5배, 0.6초 기절.'],
+			r: ['천공의 심판', '하늘을 열어 주위(7칸)의 모든 적에게 벼락을 쏟는다 — 공격력의 4배, 1.5초 기절.'],
+		},
+		POSEIDON: {
+			blessing: '바다의 축복', color: '#4db8ff',
+			passive: '최대 체력 +12, 방어 +2(받는 피해 -2). 레벨업마다 최대 체력 +4 더.',
+			q: ['해일', 7, '주위(2.8칸)를 파도로 휩쓴다 — 공격력의 1.8배, 1.2초 기절.'],
+			r: ['대지진', '땅을 뒤흔들어 주위(6칸)의 모든 적을 쓰러뜨린다 — 공격력의 3배, 3초 기절.'],
+		},
+		HADES: {
+			blessing: '망자의 축복', color: '#9e6bf2',
+			passive: '최대 체력 +6, 방어 +1, 적을 쓰러뜨리면 체력 +8. 레벨업마다 회복량 +1 더.',
+			q: ['망자의 손', 7, '가장 가까운 적(5칸 안)을 그림자 손으로 움켜쥔다 — 공격력의 2배, 준 피해의 절반만큼 체력 회복.'],
+			r: ['저승의 문', '저승의 문을 열어 주위(6칸)의 모든 적에게 공격력의 3.5배 — 4초 동안 겁에 질려 달아나고, 체력을 최대치의 40% 회복.'],
+		},
+		APHRODITE: {
+			blessing: '매혹의 축복', color: '#ff8cbf',
+			passive: '공격력 +2, 치명타 20%(피해 1.5배), 짐승·괴물이 알아채는 거리 ×0.55. 레벨업마다 최대 체력 +2 더.',
+			q: ['매혹의 눈짓', 8, '주위(4칸)의 적을 5초 동안 홀린다 — 공격하지 않고 헤매며, 그동안 받는 피해 1.5배.'],
+			r: ['황금사과의 유혹', '황금사과를 굴려 주위(8칸)의 모든 적을 10초 동안 홀리고 공격력의 2.5배 피해를 준다.'],
+		},
+		HERMES: {
+			blessing: '질풍의 축복', color: '#9edbff',
+			passive: '이동 속도 +30%, 공격·상호작용·기본 스킬 쿨타임 -25%, 공격력 +1. 레벨업마다 최대 체력 +2 더.',
+			q: ['질풍 보법', 6, '바라보는 쪽으로 순식간에 내달린다(3.5칸) — 스쳐 간 적에게 공격력의 1.5배, 다음 공격을 바로 할 수 있다.'],
+			r: ['신속의 날개', '8초 동안 이동 속도 2배, 공격 쿨타임 1/4, 짐승·괴물이 알아채지 못한다.'],
+		},
+	};
+
+	const GOD_TEXT = {
+		ZEUS: '신들의 왕. 왕좌와 체면을 지키는 게 전부다. 강림할 때마다 연출 각도에 집착하고, 번개가 불발하면 "경고 사격"이라고 우긴다. 바람기 해명 회의가 국정 회의보다 길다.',
+		HERA: '"제우스의 아내"가 아닌 <b>헤라 자신</b>으로 기억되고 싶은 여신. 남편의 사생아 목록을 연도·지역별로 정리해 두었다. 아레스에게만 말이 무르다.',
+		POSEIDON: '바다와 지진의 왕. 형보다 위에, 아니 최소한 동등하게 서고 싶다. 수천 년 동안 쓴 「형님 잘못 목록」이 두루마리 열두 권. 화나면 근처 섬이 흔들린다.',
+		HADES: '저승의 왕. 바라는 건 일이 늘지 않는 것. 형제들 싸움에도 "신청서 써 와." 믿음이 줄어도 일이 줄지 않는 유일한 신이라, 황혼을 가장 담담하게 본다.',
+		APHRODITE: '사랑과 미의 여신이자 올림포스 최고의 정보 브로커. 신들의 비밀 장부를 "사랑의 일기"라고 부르고, 협박도 칭찬처럼 한다.',
+		HERMES: '전령의 신이자 이 세계의 비공식 내레이터. 원하는 건 재미, 그리고 어느 쪽이 이기든 살아남기. 자기가 한 말은 비밀로 해 달라고 한다.',
+		ATHENA: '지혜의 여신. 제우스 편이지만, 회의록은 늘 혼자 정리한다. 자기 도시 아테네에서 신앙이 식어 가는 걸 누구보다 먼저 보고 있다.',
+		ARES: '전쟁의 신. 아버지에게 한 번도 인정받지 못한 덩치 큰 마마보이. 그가 지나간 전장은 진짜로 끔찍하다.',
+		APOLLO: '예언과 음악의 신, 델포이 신탁의 주인. 요즘은 신전보다 술집 앞에서 더 자주 보인다는 소문이 있다.',
+		DIONYSUS: '술과 축제의 신. 축제 덕분에 신앙이 <b>늘고 있는</b> 유일한 신이고, 서쪽에선 "바쿠스"로 이름을 바꿔 대성공했다. 가장 즐거운 신이 가장 무서운 신이다.',
+		HEPHAESTUS: '대장장이 신. 견적서가 정확하고, 아무도 믿지 않는다. 아내의 불륜 현장을 잡은 "망신의 그물"을 만든 장본인.',
+		PAN: '들판과 목동의 신. 잊혀 갈수록 농담이 짧아진다.',
+		JUPITER: '신이 아니라 <b>새 이름</b>. 서쪽에서 퍼지는 로마식 숭배는 제우스를 유피테르로, 헤라를 유노로 부른다. 빵을 나눠 주는 대신전과 금화로 신도를 모은다.',
+	};
+
+	const PEOPLE = [
+		['피티아', '델포이의 무녀', '당신을 키운 누나이자 어머니 같은 사람. 신탁은 엉터리지만 당신 걱정만은 늘 정확하다. 시장 상인들과 자주 말다툼을 한다.'],
+		['떠돌이 노파', '모닥불 곁의 점술가', '친절하고, 의미심장하고, 묘하게 웃기다. 그녀의 "인생 조언"은 어째서인지 전부 싸움 붙이는 법이다.'],
+	];
+
+	// [지역 ID, 이름, 연관 신, 설명] — STORY.md 4장(스포일러 없이).
+	const REGIONS = [
+		['LOC_DELPHI', '델포이 · 파르나소스 산기슭', '아폴론', '시작 지역이자 고향. 세상의 배꼽이라 불리는 신탁의 도시 — 그리고 그 신탁에 금이 간 곳.'],
+		['LOC_OLYMPUS_FOOT', '올림포스 산기슭 · 테살리아', '제우스', '신들의 대회의가 열리는 언덕, 구불구불한 강과 목동 마을, 헤파이스토스의 대장간.'],
+		['LOC_ATHENS', '아테네 · 폴리스 연합', '아테나', '말 많은 도시. 아고라의 쓰러진 신상과 식어 가는 신앙 — 인간 정치의 무대.'],
+		['LOC_AEGEAN', '에게해 군도', '포세이돈', '모래톱으로 이어진 섬들과 난파선. 바다의 왕이 형을 원망하는 곳.'],
+		['LOC_CYPRUS', '키프로스 · 파포스', '아프로디테', '아프로디테가 태어난 바다. 연회와 가면, 스캔들과 음모 — 여기선 거품도 다 소문이다.'],
+		['LOC_TAENARON', '타이나론 곶 · 저승 입구', '하데스', '저승의 접수 창구와 줄 선 영혼들. 망자의 땅으로 내려가는 문.'],
+		['LOC_WEST', '서쪽 해안 · 라티움 방면', '로마식 숭배', '신들을 새 이름으로 부르는 대신전. 이름을 빼앗긴다는 건, 신에게는 살아서 겪는 망각이다.'],
+		['LOC_OLYMPUS', '올림포스 정상', '모든 신', '구름 위 신들의 집. 왕좌의 홀과 — 그 아래 무언가.'],
+		['LOC_TARTARUS_RIM', '타르타로스 경계', '티탄의 잔재', '심연의 가장자리. 이야기의 끝에 닿는 곳.'],
+	];
+
+	const isTrue = (value) => value === 'true';
+	const LATE_STEPS = ['MQ_05.BELLY', 'MQ_05.ERIS_FIGHT', 'MQ_05.ERIS', 'MQ_05.LOOM', 'ENDING.DONE'];
+
+	// 이야기를 진행한 만큼 열리는 진실(이야기 변수로 판단 — Data/Story.txt 머리말의 변수 목록).
+	const TRUTHS = [
+		{
+			title: '실 없는 자', hint: '프롤로그', when: (v) => isTrue(v.FLAG_THREADLESS_REVEALED),
+			text: '운명의 베틀에 <b>당신의 실이 없다</b>. 신탁도 저주도 운명 예지도 통하지 않는다. 신의 축복은 받을 수 있지만, 어떤 신도 당신의 미래를 볼 수 없다 — 그래서 모든 신이 당신을 불안해한다.',
+		},
+		{
+			title: '황금사과 사건', hint: '1장', when: (v) => isTrue(v.HERMES_GOSSIP_SEEN),
+			text: '약 삼백 년 전, 올림포스 가족 모임에 "가장 아름다운 이에게"라고 쓴 황금사과가 굴러들어왔다. 헤라·아테나·아프로디테의 싸움은 인간 세상에서 십 년 전쟁이 되었다. 사과를 굴린 건 초대받지 못한 불화의 여신 <b>에리스</b>. 그 뒤로 가족 모임에 그녀의 자리는 없다.',
+		},
+		{
+			title: '식어 가는 믿음', hint: '2장', when: (v) => isTrue(v.MQ02_DONE),
+			text: '오십 년쯤 전부터 신앙이 식기 시작했다. 대회의에서 제우스의 번개는 불발했고, 아테네의 신상은 쓰러졌고, 뒷골목의 화로 신은 자기 이름마저 잊었다. 그리고 엉터리 예언의 뒤에는 올림포스의 금화가 있었다.',
+		},
+		{
+			title: '이십 년 전의 예언', hint: '3장', when: (v) => isTrue(v.PROPHECY_KNOWN),
+			text: '이십 년 전 아폴론이 받은 마지막 신탁: <b>"제우스는 운명이 쓰이지 않은 자에 의해 왕좌에서 내려온다."</b> 제우스는 신탁을 봉인하고 모이라이를 데려가 베틀을 멈췄다. 봉인 석판의 날짜는 피티아가 신전 계단에서 당신을 주운 바로 그 밤이다. 예언을 피하려던 왕이, 예언의 대상을 직접 만들었다.',
+		},
+		{
+			title: '각성', hint: '3장', when: (v) => isTrue(v.AWAKENED),
+			text: '진실을 받아들인 순간, 반쯤 잠들어 있던 수호신의 축복이 온전히 깨어났다. 끝이 보이지 않는 그릇에 신은 힘을 다 붓지 못했지만, 이제 그 그릇엔 바닥이 없다. <b>궁극기(R)</b>가 열렸다.',
+		},
+		{
+			title: '피티아의 헛소리', hint: '4장', when: (v) => isTrue(v.PYTHIA_LOST),
+			text: '깨진 신탁 뒤로 피티아가 늘어놓던 헛소리 — 젖은 양말, 누가 먹어 버린 실타래, 계단에서 넘어지는 왕관 — 는 봉인된 모이라이의 목소리 조각이었다. 장보기 목록처럼 들리던 말들이, 전부 진짜 예언이었다.',
+		},
+		{
+			title: '운명의 베틀', hint: '4장', when: (v) => isTrue(v.MOIRAI_FOUND),
+			text: '올림포스 정상 지하, 눈 덮인 바위 너머의 베틀실. 이십 년 동안 멈춰 있던 운명의 베틀과, 그 곁에 잠든 세 자매 모이라이.',
+		},
+		{
+			title: '모닥불 곁의 노파', hint: '5장', when: (v) => isTrue(v.UNLOCK_LOC_TARTARUS_RIM),
+			text: '떠돌이 노파는 <b>불화의 여신 에리스</b>였다. 불화만은 믿음이 필요 없다 — 인간이 서로 다투는 한 그녀는 사라지지 않는다. 신들이 공멸하면, 그녀는 세상에 혼자 남는 마지막 신이 된다.',
+		},
+		{
+			title: '크로노스의 잔향', hint: '5장', when: (v) => LATE_STEPS.includes(v.STORY_STEP),
+			text: '신들이 약해질수록 타르타로스에서 깨어나는 옛 왕의 메아리. 크로노스는 자식을 삼켰고, 제우스는 <b>미래</b>를 삼켰다.',
+		},
+		{
+			title: '마지막 실', hint: '엔딩', when: (v) => Boolean(v.ENDING),
+			text: (v) => `이번 이야기의 결말: <b>${esc(v.ENDING_NAME || v.ENDING)}</b>. 운명이 없는 자가 짠, 세계의 다음 운명.`,
+		},
+	];
+
+	const LORE_TABS = [
+		['world', '세계'],
+		['gods', '신들'],
+		['patrons', '수호신과 스킬'],
+		['relations', '신앙 관계도'],
+		['regions', '지역'],
+		['truths', '밝혀진 진실'],
+	];
+
+	function formatTime(seconds) {
+		const total = Math.max(0, Math.floor(Number(seconds) || 0));
+		const m = Math.floor(total / 60);
+		const s = total % 60;
+		return `${m}:${String(s).padStart(2, '0')}`;
+	}
+
+	function formatPos(x, y) {
+		return `${Number(x).toFixed(1)}, ${Number(y).toFixed(1)}`;
+	}
+
+	function villageName(id) {
+		const village = (ui.data?.villages || []).find((v) => v.id === id);
+		return village ? village.shortName || village.name : (id || '—');
+	}
+
+	// ---- 받기 ----
+
+	async function poll() {
+		clearTimeout(ui.timer);
+		let delay = ui.interval;
+
+		if (!ui.paused) {
+			try {
+				const base = ui.endpoint.replace(/\/+$/, '');
+				const response = await fetch(`${base}/api/state?since=${ui.lastSeq}`, { cache: 'no-store' });
+				if (!response.ok) {
+					throw new Error(`HTTP ${response.status}`);
+				}
+
+				const data = await response.json();
+				if (receive(data)) {
+					delay = 0; // 게임이 다시 켜졌다: 이벤트를 처음부터 바로 다시 받는다.
+				}
+				setConnection(true);
+			} catch (error) {
+				setConnection(false, error.message);
+			}
+		}
+
+		ui.timer = setTimeout(poll, delay);
+	}
+
+	// 받은 JSON을 반영한다. 게임이 새로 켜져서(instance가 바뀌어) 이벤트를 처음부터 다시 받아야 하면 true.
+	function receive(data) {
+		const instance = data.world ? data.world.instance : null;
+		if (ui.instance !== null && instance !== ui.instance) {
+			ui.instance = instance;
+			ui.lastSeq = 0;
+			ui.events = [];
+			return true;
+		}
+		ui.instance = instance;
+
+		for (const event of data.events || []) {
+			if (event.seq > ui.lastSeq) {
+				ui.events.push(event);
+			}
+		}
+		if (ui.events.length > MAX_EVENTS) {
+			ui.events.splice(0, ui.events.length - MAX_EVENTS);
+		}
+		ui.lastSeq = Math.max(ui.lastSeq, Number(data.lastSeq) || 0);
+
+		ui.data = data;
+		render();
+		return false;
+	}
+
+	function setConnection(ok, message) {
+		const dot = $('connDot');
+		const text = $('connText');
+		const notice = $('notice');
+
+		if (ok) {
+			ui.lastOkAt = Date.now();
+			dot.className = 'dot ok';
+			text.textContent = `연결됨 · ${new Date().toLocaleTimeString('ko-KR')}`;
+			notice.hidden = true;
+			return;
+		}
+
+		dot.className = 'dot bad';
+		text.textContent = ui.lastOkAt ? `연결 끊김 · 마지막 수신 ${new Date(ui.lastOkAt).toLocaleTimeString('ko-KR')}` : '연결 안 됨';
+		notice.hidden = false;
+		notice.innerHTML = `<strong>게임에 연결하지 못했다</strong> (${esc(message)}). 게임이 켜져 있는지, 주소(<code>${esc(ui.endpoint)}</code>)가 콘솔에 찍힌 모니터 주소와 같은지 확인하자. 화면에 남은 값은 마지막으로 받은 것이다.`;
+	}
+
+	// ---- 그리기 ----
+
+	function render() {
+		const data = ui.data;
+		if (!data) {
+			return;
+		}
+
+		$('worldName').textContent = data.world?.name || data.world?.id || '';
+		renderSummary(data);
+		renderStory(data);
+		renderPower(data);
+		renderVillages(data);
+		renderFilters(data);
+		renderNpcs(data);
+		renderMobs(data);
+		renderEvents();
+		renderVariables(data);
+		renderLore();
+
+		if ($('rawBox').open) {
+			$('raw').textContent = JSON.stringify(data, null, 2);
+		}
+	}
+
+	function card(label, value, sub) {
+		return `<div class="card"><div class="label">${esc(label)}</div><div class="value">${value}</div><div class="sub">${sub}</div></div>`;
+	}
+
+	function hpBar(hp, maxHp) {
+		const percent = maxHp > 0 ? Math.max(0, Math.min(100, (hp / maxHp) * 100)) : 0;
+		return `<div class="hp"><div class="bar"><i style="width:${percent.toFixed(0)}%"></i></div><span class="small">${esc(hp)}/${esc(maxHp)}</span></div>`;
+	}
+
+	function renderSummary(data) {
+		const t = data.totals || {};
+		const p = data.player || {};
+		const w = data.world || {};
+		const patron = p.patron ? `${PATRONS[p.patron] || p.patron}${p.blessing ? '의 축복' : ''}` : '수호신 없음';
+
+		setHtml($('summary'), [
+			card('등장 중인 NPC', esc(t.npcsPresent ?? 0), `가 본 마을 기준 · 숨은 것 포함 ${esc(t.npcs ?? 0)}명`),
+			card('몹', esc(t.mobsPresent ?? 0), `적대 ${esc(t.mobsHostile ?? 0)} · 추적 중 ${esc(t.mobsChasing ?? 0)} · 처치 ${esc(t.kills ?? 0)}`),
+			card('마을', `${esc(t.visited ?? 0)}<span class="small"> / ${esc(t.villages ?? 0)}</span>`, '가 본 마을 / 전체'),
+			card('플레이어', `Lv ${esc(p.level ?? '—')}`, `${hpBar(p.hp ?? 0, p.maxHp ?? 0)}${esc(p.mapName || villageName(p.map))} · ${esc(patron)}`),
+			card('게임', `${esc(Number(w.fps || 0).toFixed(0))}<span class="small"> FPS</span>`, `게임 시각 ${formatTime(w.time)}`),
+		].join(''));
+	}
+
+	function renderStory(data) {
+		const s = data.story || {};
+		const travel = s.travelRegion ? `<span class="badge goal">▶ 목적지 ${esc(villageName(s.travelRegion))} (이정표로 이동)</span>` : '';
+		const dialogue = s.dialogueActive ? ' <span class="badge talk">대화 중</span>' : '';
+
+		setHtml($('story'), `
+			<dt>진행 단계</dt><dd><code>${esc(s.step || '—')}</code>${dialogue}</dd>
+			<dt>지금 목표</dt><dd>${esc(s.objective || '—')} ${travel}</dd>
+			<dt>목표 지역</dt><dd>${esc(s.objectiveRegion ? villageName(s.objectiveRegion) : '정해지지 않음')}</dd>`);
+	}
+
+	function renderVillages(data) {
+		const kindNames = { deer: '사슴', wolf: '늑대', shadowWolf: '그림자 늑대', shadowPython: '그림자 퓌톤', bronzeWarrior: '청동 전사', kronosEcho: '크로노스의 잔향', whiteCow: '하얀 암소' };
+
+		setHtml($('villages'), (data.villages || []).map((v) => {
+			const badges = [];
+			if (v.live) {
+				badges.push('<span class="badge live">● 실시간 · 지금 여기</span>');
+			} else if (v.visited) {
+				badges.push(`<span class="badge">${esc(formatTime(v.age))} 전 기록</span>`);
+			}
+			if (!v.unlocked) {
+				badges.push('<span class="badge locked">잠김</span>');
+			}
+			if (v.objectiveHere) {
+				badges.push('<span class="badge goal">◆ 목표</span>');
+			}
+
+			const kinds = Object.entries(v.mobsByKind || {}).map(([kind, count]) => `<span class="badge">${esc(kindNames[kind] || kind)} ${esc(count)}</span>`).join('');
+			const selected = ui.village === v.id ? ' selected' : '';
+
+			const stats = v.visited ? `
+				<div class="stats">
+					<div><b>${esc(v.npcPresent)}<span class="small">/${esc(v.npcCount)}</span></b><span>NPC 등장/전체</span></div>
+					<div><b>${esc(v.mobPresent)}</b><span>몹 (적대 ${esc(v.mobHostile)})</span></div>
+					<div><b>${esc(v.mobChasing)}</b><span>추적 중</span></div>
+					<div><b>${esc(v.kills)}</b><span>처치</span></div>
+					<div><b>${esc(v.herbs)}</b><span>남은 약초</span></div>
+					<div><b>${esc(v.storyItems)}</b><span>이야기 물건</span></div>
+				</div>
+				<div class="badges">${kinds || '<span class="small">몹 없음</span>'}</div>` : '<div class="small">아직 가 보지 않아 기록이 없다.</div>';
+
+			return `
+				<button type="button" class="village ${esc(v.status)}${selected}" data-village="${esc(v.id)}">
+					<div class="title"><strong>${esc(v.shortName || v.name)}</strong><span class="full">${esc(v.name)}</span></div>
+					<div class="badges"><span class="pill ${esc(v.status)}">${esc(v.statusLabel)}</span>${badges.join('')}</div>
+					${stats}
+				</button>`;
+		}).join(''));
+	}
+
+	function renderFilters(data) {
+		const select = $('villageFilter');
+		const options = [['all', '전체 마을'], ...(data.villages || []).map((v) => [v.id, v.shortName || v.name])];
+		const html = options.map(([id, name]) => `<option value="${esc(id)}">${esc(name)}</option>`).join('');
+
+		setHtml(select, html);
+		if (!options.some(([id]) => id === ui.village)) {
+			ui.village = 'all';
+		}
+		select.value = ui.village;
+		$('showHidden').checked = ui.showHidden;
+	}
+
+	// 거르기(마을·숨은 것·검색어)를 통과한 대상들을 마을 순서 → 거리 순으로.
+	function collect(data, listName) {
+		const rows = [];
+		const query = ui.query.trim().toLowerCase();
+
+		(data.villages || []).forEach((village, order) => {
+			if (ui.village !== 'all' && village.id !== ui.village) {
+				return;
+			}
+
+			for (const item of village[listName] || []) {
+				if (!ui.showHidden && !item.present) {
+					continue;
+				}
+
+				const haystack = `${item.name || ''} ${item.tag || ''} ${item.id || ''} ${item.kind || ''} ${item.faithName || ''}`.toLowerCase();
+				if (query && !haystack.includes(query)) {
+					continue;
+				}
+
+				rows.push({ item, village, order });
+			}
+		});
+
+		rows.sort((a, b) => (a.order - b.order)
+			|| ((a.item.distance ?? Infinity) - (b.item.distance ?? Infinity))
+			|| String(a.item.name).localeCompare(String(b.item.name), 'ko'));
+		return rows;
+	}
+
+	function renderNpcs(data) {
+		const rows = collect(data, 'npcs');
+		$('npcCount').textContent = `${rows.length}명`;
+
+		setHtml($('npcRows'), rows.length === 0
+			? '<tr><td colspan="8" class="empty">조건에 맞는 NPC가 없다.</td></tr>'
+			: rows.map(({ item, village }) => {
+				const marks = [];
+				if (item.objective) marks.push('<span class="badge goal">◆ 목표</span>');
+				if (item.talkable) marks.push('<span class="badge talk">대화 가능</span>');
+
+				return `
+					<tr class="${item.present ? '' : 'dim'}">
+						<td><div>${esc(item.name || item.tag || '이름 없음')}</div><div class="small">${esc(item.tag)}${item.id ? ' · ' + esc(item.id) : ''}</div></td>
+						<td>${esc(village.shortName || village.name)}${village.live ? '' : ' <span class="small">(기록)</span>'}</td>
+						<td><span class="pill ${esc(item.state)}">${esc(item.stateLabel)}</span></td>
+						<td><div>${esc(item.faithName || '—')}${item.hotheaded ? ' <span class="small">다혈질</span>' : ''}</div><div class="badges"><span class="pill ${esc(item.attitude || 'unknown')}">${esc(item.attitudeLabel || '—')}</span>${item.humbled ? '<span class="badge">한 번 졌음</span>' : ''}</div></td>
+						<td><span class="pill ${esc(item.activity || 'idle')}">${esc(item.activityLabel || '—')}</span></td>
+						<td><div class="badges">${marks.join('')}</div></td>
+						<td class="num">${formatPos(item.x, item.y)}</td>
+						<td class="num">${item.distance == null ? '—' : Number(item.distance).toFixed(1)}</td>
+					</tr>`;
+			}).join(''));
+	}
+
+	function renderMobs(data) {
+		const rows = collect(data, 'mobs');
+		$('mobCount').textContent = `${rows.length}마리`;
+
+		setHtml($('mobRows'), rows.length === 0
+			? '<tr><td colspan="6" class="empty">조건에 맞는 몹이 없다.</td></tr>'
+			: rows.map(({ item, village }) => {
+				const goal = item.objective ? ' <span class="badge goal">◆ 목표</span>' : '';
+				const label = `${esc(item.name)}${item.hostile ? '' : ' <span class="small">(온순)</span>'}${goal}`;
+
+				return `
+					<tr class="${item.present ? '' : 'dim'}">
+						<td><div>${label}</div><div class="small">${esc(item.kind)}${item.id ? ' · ' + esc(item.id) : ''}</div></td>
+						<td>${esc(village.shortName || village.name)}${village.live ? '' : ' <span class="small">(기록)</span>'}</td>
+						<td>${hpBar(item.hp, item.maxHp)}</td>
+						<td><span class="pill ${esc(item.state)}">${esc(item.stateLabel)}</span></td>
+						<td class="num">${formatPos(item.x, item.y)}</td>
+						<td class="num">${item.distance == null ? '—' : Number(item.distance).toFixed(1)}</td>
+					</tr>`;
+			}).join(''));
+	}
+
+	function renderEvents() {
+		const list = $('events');
+		if (ui.events.length === 0) {
+			setHtml(list, '<li class="empty" style="display:block">아직 받은 이벤트가 없다.</li>');
+			return;
+		}
+
+		setHtml(list, ui.events.slice(-150).reverse().map((event) => {
+			const [label, cls] = EVENT_TYPES[event.type] || [event.type, 'system'];
+			return `
+				<li>
+					<span class="small">${formatTime(event.time)}</span>
+					<span class="etype ${cls}">${esc(label)}</span>
+					<span class="small emap">${esc(villageName(event.map))}</span>
+					<span>${esc(event.text)}</span>
+				</li>`;
+		}).join(''));
+	}
+
+	function renderVariables(data) {
+		const entries = Object.entries(data.story?.variables || {});
+		setHtml($('vars'), entries.length === 0
+			? '<tr><td colspan="2" class="empty">변수가 없다.</td></tr>'
+			: entries.map(([name, value]) => `<tr><td><code>${esc(name)}</code></td><td>${esc(value)}</td></tr>`).join(''));
+	}
+
+
+	// ---- 수호신의 힘 ----
+
+	function renderPower(data) {
+		const p = data.player || {};
+		if (!p.blessing) {
+			setHtml($('power'), '<p class="small">아직 수호신을 고르지 않았다. 1장에서 다섯 신과 면담한 뒤 한 신을 고르면, 그 신의 축복(상시 능력치)과 기본 스킬(Q)을 받는다. 궁극기(R)는 이야기 중반의 각성 뒤에 열린다. 「세계관 → 수호신과 스킬」에서 미리 볼 수 있다.</p>');
+			return;
+		}
+
+		const color = PATRON_POWERS[p.patron]?.color || 'var(--accent)';
+		const chips = [
+			['공격력', p.attack ?? 0],
+			['방어', p.defense ?? 0],
+			['치명타', `${Math.round((Number(p.critChance) || 0) * 100)}%`],
+			['처치 회복', p.lifeOnKill ?? 0],
+			['쿨타임', `×${Number(p.cooldownScale ?? 1).toFixed(2)}`],
+			['이동 속도', `×${Number(p.speedScale ?? 1).toFixed(2)}`],
+		];
+		if (Number(p.buffRemaining) > 0) {
+			chips.push(['신속의 날개', `${Number(p.buffRemaining).toFixed(1)}초`]);
+		}
+
+		const skills = (p.skills || []).map((s) => {
+			const remaining = Number(s.remaining) || 0;
+			const cooldown = Number(s.cooldown) || 0;
+			const ready = s.unlocked && remaining <= 0;
+			const fill = !s.unlocked ? 0 : (remaining > 0 && cooldown > 0 ? (1 - remaining / cooldown) * 100 : 100);
+			const status = !s.unlocked ? '각성 후' : (ready ? '사용 가능' : `${Math.ceil(remaining)}초`);
+			const seconds = Number.isInteger(cooldown) ? String(cooldown) : cooldown.toFixed(1);
+
+			return `
+				<div class="skill${s.unlocked ? '' : ' locked'}">
+					<div class="top"><kbd>${esc(s.key)}</kbd><strong>${esc(s.name)}</strong><span class="cd${ready ? ' ready' : ''}">${esc(status)}</span></div>
+					<div class="cdbar"><i style="width:${Math.max(0, Math.min(100, fill)).toFixed(0)}%"></i></div>
+					<div class="small">${esc(s.summary)} · 쿨타임 ${esc(seconds)}초</div>
+				</div>`;
+		}).join('');
+
+		setHtml($('power'), `
+			<div style="--god:${color}">
+				<div class="power-head"><span class="swatch"></span><strong>${esc(p.patronName || PATRONS[p.patron] || p.patron)}</strong><span class="small">${esc(p.blessingName || '')}${p.awakened ? ' · 각성함' : ''}</span></div>
+				<div class="small">${esc(p.passive || '')}</div>
+				<div class="chips">${chips.map(([label, value]) => `<span class="chip">${esc(label)}<b>${esc(value)}</b></span>`).join('')}</div>
+				<div class="skills">${skills}</div>
+			</div>`);
+	}
+
+	// ---- 세계관 ----
+
+	const storyVars = () => ui.data?.story?.variables || {};
+	const playerPatron = () => (ui.data?.player?.blessing ? ui.data.player.patron : '');
+
+	function relationKey(value) {
+		if (value >= 3) return 'same';
+		if (value >= 2) return 'ally';
+		if (value === 1) return 'friendly';
+		if (value === 0) return 'neutral';
+		if (value === -1) return 'wary';
+		return 'hostile';
+	}
+
+	// 신앙 목록·관계: 게임이 보낸 표가 있으면 그것, 아니면 이 파일의 사본.
+	function relationData() {
+		const json = ui.data?.faiths;
+		const list = (json?.list?.length ? json.list : FAITHS).map((f) => ({
+			key: f.key,
+			name: f.name,
+			patron: Boolean(f.patron),
+			npcs: Number(f.npcs) || 0,
+			domain: FAITHS.find((x) => x.key === f.key)?.domain || '',
+		}));
+		const relations = json?.relations?.length ? json.relations.map((r) => [r.a, r.b, Number(r.value)]) : RELATIONS;
+		return { list, relations, live: Boolean(json?.relations?.length) };
+	}
+
+	function relationOf(relations, a, b) {
+		if (a === b) {
+			return 3;
+		}
+		const found = relations.find(([x, y]) => (x === a && y === b) || (x === b && y === a));
+		return found ? found[2] : 0;
+	}
+
+	function renderLore() {
+		const truthsOpen = TRUTHS.filter((t) => t.when(storyVars())).length;
+		setHtml($('loreTabs'), LORE_TABS.map(([id, label]) => {
+			const extra = id === 'truths' ? ` <span class="small">${truthsOpen}/${TRUTHS.length}</span>` : '';
+			return `<button type="button" role="tab" data-tab="${id}" aria-selected="${ui.loreTab === id}">${esc(label)}${extra}</button>`;
+		}).join(''));
+
+		const renderers = { world: loreWorld, gods: loreGods, patrons: lorePatrons, relations: loreRelations, regions: loreRegions, truths: loreTruths };
+		setHtml($('lore'), (renderers[ui.loreTab] || loreWorld)());
+	}
+
+	function loreWorld() {
+		return `
+			<p class="lead">인간의 믿음이 식어 가는 시대, <b>신들의 황혼기</b>. 신들은 늙고, 번개는 가끔 불발하고, 델포이의 신탁은 오늘 아침 금이 갔다.</p>
+			<h3>세계의 규칙</h3>
+			<ul class="rules">
+				<li><b>신의 힘 = 인간의 믿음.</b> 믿음이 줄면 신은 늙고, 기적이 불발하고, 끝내 <b>잊혀진다</b>. 신에게 죽음은 곧 망각이다.</li>
+				<li>운명의 세 여신 <b>모이라이</b>가 모든 존재의 실을 잣고(클로토), 길이를 재고(라케시스), 끊는다(아트로포스).</li>
+				<li><b>델포이 신탁</b>은 모이라이의 베틀 소리를 인간의 말로 옮기는 창구다. 원래도 애매하기로 유명하다.</li>
+				<li>왕좌는 늘 자식에게 넘어갔다. 우라노스는 크로노스에게, 크로노스는 제우스에게. 제우스는 그 고리를 누구보다 잘 기억한다.</li>
+				<li>서쪽에서는 신들을 <b>로마식 이름</b>(유피테르, 유노, 넵투누스…)으로 부르는 새 숭배가 퍼지는 중이다. 신들에게 그것은 살아서 겪는 망각이다.</li>
+			</ul>
+			<h3>분위기</h3>
+			<p>겉은 장엄한 비극, 속은 정치질·질투·권력다툼으로 얼룩진 <b>막장 가족극</b>. 모두가 친척이고, 모두가 서로를 배신한 전과가 있다. 그런데도 결국 같은 식탁에 앉는다.</p>
+			<h3>당신</h3>
+			<p>스무 해 전 델포이 신전 계단에서 주워져, 무녀 피티아의 손에 자란 신전 잡일꾼. 일 년에 한 번 열리는 신탁 축제 날 아침에 이야기가 시작된다.</p>
+			<h3>신의 영역 → 축복 → 능력</h3>
+			<p>1장에서 다섯 신과 면담한 뒤 한 신을 <b>수호신</b>으로 고르면, 그 신의 권능을 딴 <b>축복</b>(상시 능력치)과 <b>기본 스킬(Q)</b>을 받는다. 이야기 중반 주인공이 <b>각성</b>하면 그 신의 <b>궁극기(R, 쿨타임 30초)</b>가 열린다. 자세한 건 「수호신과 스킬」.</p>
+			<p>사람들도 저마다 믿는 신이 있다. 신들의 사이가 좋고 나쁜 만큼 신도들도 서로 수다를 떨거나 말다툼을 벌이고, 당신의 수호신을 보고 반기거나 텃세를 부리거나 — 다혈질이면 — 시비를 걸어 온다. 자세한 건 「신앙 관계도」.</p>`;
+	}
+
+	function loreGods() {
+		const { list } = relationData();
+		const counts = Object.fromEntries(list.map((f) => [f.key, f.npcs]));
+
+		const gods = FAITHS.map((f) => {
+			const color = PATRON_POWERS[f.key]?.color;
+			const tags = [];
+			if (f.patron) tags.push('<span class="badge goal">수호신 후보</span>');
+			if (counts[f.key]) tags.push(`<span class="badge">기록된 신도 ${esc(counts[f.key])}명</span>`);
+
+			return `
+				<div class="lore-card">
+					<div class="name">${color ? `<span class="swatch" style="--god:${color}"></span>` : ''}<strong>${esc(f.name)}</strong><span class="domain">${esc(f.domain)}</span></div>
+					<div>${GOD_TEXT[f.key] || ''}</div>
+					${tags.length ? `<div class="badges">${tags.join('')}</div>` : ''}
+				</div>`;
+		}).join('');
+
+		const people = PEOPLE.map(([name, role, text]) => `
+			<div class="lore-card">
+				<div class="name"><strong>${esc(name)}</strong><span class="domain">${esc(role)}</span></div>
+				<div>${esc(text)}</div>
+			</div>`).join('');
+
+		return `<h3>올림포스와 신들</h3><div class="lore-grid">${gods}</div><h3>델포이의 사람들</h3><div class="lore-grid">${people}</div>`;
+	}
+
+	// 그 수호신을 모시면 마을 사람들이 어떻게 대하는지(신앙 관계로 계산).
+	function villagerAttitudes(patron, relations) {
+		const groups = { same: [], ally: [], friendly: [], wary: [], hostile: [] };
+		for (const [faith, info] of Object.entries(VILLAGERS)) {
+			const key = relationKey(relationOf(relations, faith, patron));
+			if (groups[key]) {
+				groups[key].push(`${info.who}${key === 'hostile' && info.hot ? '(시비)' : ''}`);
+			}
+		}
+
+		const parts = [];
+		if (groups.same.length) parts.push(`<b>반기며 선물</b> ${esc(groups.same.join(', '))}`);
+		if (groups.ally.length || groups.friendly.length) parts.push(`<b>반가워함</b> ${esc([...groups.ally, ...groups.friendly].join(', '))}`);
+		if (groups.wary.length) parts.push(`<b>텃세</b> ${esc(groups.wary.join(', '))}`);
+		if (groups.hostile.length) parts.push(`<b>적의</b> ${esc(groups.hostile.join(', '))}`);
+		return parts.length ? parts.join(' · ') : '마을 사람들은 대체로 무심하다.';
+	}
+
+	function lorePatrons() {
+		const mine = playerPatron();
+		const { relations } = relationData();
+
+		const cards = Object.entries(PATRON_POWERS).map(([key, p]) => {
+			const faith = FAITHS.find((f) => f.key === key);
+			const here = key === mine;
+
+			return `
+				<div class="lore-card${here ? ' here' : ''}" style="--god:${p.color}">
+					<div class="name"><span class="swatch"></span><strong>${esc(faith.name)}</strong><span class="domain">${esc(p.blessing)}</span>${here ? '<span class="badge live">지금 모시는 신</span>' : ''}</div>
+					<div><span class="small">상시 효과</span><br>${esc(p.passive)}</div>
+					<div><span class="small">기본 스킬 · Q · 쿨타임 ${esc(p.q[1])}초</span><br><b>${esc(p.q[0])}</b> — ${esc(p.q[2])}</div>
+					<div><span class="small">궁극기 · R · 쿨타임 30초 · 각성 뒤</span><br><b>${esc(p.r[0])}</b> — ${esc(p.r[1])}</div>
+					<div class="small">마을에서: ${villagerAttitudes(key, relations)}</div>
+				</div>`;
+		}).join('');
+
+		return `
+			<p>수호신은 1장 끝에서 한 번 고르고, 바꿀 수 없다. 축복을 받는 순간 상시 능력치가 붙고(레벨업할 때마다 그 신의 몫이 더 오른다), 기본 스킬을 바로 쓸 수 있다. 궁극기는 이야기 중반, 주인공이 각성한 뒤에 열린다. 수호신 스킬은 짐승·괴물만 노리고, 시비를 건 마을 사람과는 Space 주먹으로만 맞선다. 보스(그림자 퓌톤·크로노스의 잔향)에게는 기절·홀림·겁이 절반만 걸린다.</p>
+			<div class="lore-grid">${cards}</div>`;
+	}
+
+	function loreRelations() {
+		const { list, relations, live } = relationData();
+		const byKey = Object.fromEntries(list.map((f) => [f.key, f]));
+		const order = RING_ORDER.filter((key) => byKey[key]).concat(list.map((f) => f.key).filter((key) => !RING_ORDER.includes(key)));
+		const mine = playerPatron();
+
+		// 강조할 신: 직접 고른 것, 고른 적 없으면 내 수호신(ui.faithFocus가 ''면 강조 없음).
+		const focus = ui.faithFocus === null ? (byKey[mine] ? mine : '') : (byKey[ui.faithFocus] ? ui.faithFocus : '');
+		ui.lastFocus = focus;
+
+		const cx = 300;
+		const cy = 225;
+		const radius = 158;
+		const nodeRadius = 23;
+		const pos = {};
+		order.forEach((key, i) => {
+			const angle = -Math.PI / 2 + (i / order.length) * Math.PI * 2;
+			pos[key] = { x: cx + Math.cos(angle) * radius, y: cy + Math.sin(angle) * radius, angle };
+		});
+
+		const edges = relations.filter(([a, b]) => pos[a] && pos[b]).map(([a, b, value]) => {
+			const key = relationKey(value);
+			const on = focus && (a === focus || b === focus) ? ' on' : '';
+			return `<line class="edge ${key}${on}" x1="${pos[a].x.toFixed(1)}" y1="${pos[a].y.toFixed(1)}" x2="${pos[b].x.toFixed(1)}" y2="${pos[b].y.toFixed(1)}"><title>${esc(byKey[a].name)} — ${esc(byKey[b].name)}: ${RELATION_LABELS[key]}</title></line>`;
+		}).join('');
+
+		const nodes = order.map((key) => {
+			const f = byKey[key];
+			const p = pos[key];
+			const cls = ['node'];
+			if (f.patron) cls.push('patron');
+			if (key === mine) cls.push('player');
+			if (key === focus) cls.push('selected');
+			if (focus && key !== focus && relationOf(relations, key, focus) === 0) cls.push('dim');
+
+			const cos = Math.cos(p.angle);
+			const sin = Math.sin(p.angle);
+			const labelX = cx + cos * (radius + nodeRadius + 10);
+			const labelY = cy + sin * (radius + nodeRadius + 10) + 4 + (sin > 0.9 ? 8 : 0) - (sin < -0.9 ? 6 : 0);
+			const anchor = Math.abs(cos) < 0.25 ? 'middle' : (cos > 0 ? 'start' : 'end');
+			const count = f.npcs ? `<text class="count" x="${p.x.toFixed(1)}" y="${(p.y + 4).toFixed(1)}" text-anchor="middle">${esc(f.npcs)}명</text>` : '';
+
+			return `<g class="${cls.join(' ')}" data-faith="${esc(key)}" tabindex="0" role="button" aria-label="${esc(f.name)}"><circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="${nodeRadius}"></circle>${count}<text x="${labelX.toFixed(1)}" y="${labelY.toFixed(1)}" text-anchor="${anchor}">${esc(f.name)}</text></g>`;
+		}).join('');
+
+		let side;
+		if (!focus) {
+			side = `<p class="small">신을 누르면 그 신과의 관계만 강조한다.${mine ? '' : ' 수호신을 고르면 그 신이 처음부터 강조된다.'}</p>`;
+		} else {
+			const groups = { ally: [], friendly: [], wary: [], hostile: [] };
+			for (const key of order) {
+				const relation = relationKey(relationOf(relations, key, focus));
+				if (key !== focus && groups[relation]) {
+					groups[relation].push(byKey[key].name);
+				}
+			}
+
+			const rows = Object.entries(groups).map(([key, names]) => `
+				<div class="row"><span class="pill ${key}">${RELATION_LABELS[key]}</span><span>${names.length ? esc(names.join(', ')) : '<span class="small">없음</span>'}</span></div>`).join('');
+			const f = byKey[focus];
+			const villagers = VILLAGERS[focus]
+				? `<p class="small">이 신을 믿는 마을 사람: ${esc(VILLAGERS[focus].who)}${VILLAGERS[focus].hot ? ' — 다혈질이 섞여 있다' : ''}.</p>`
+				: '<p class="small">이 신을 믿는 마을 사람은 아직 만날 수 없다.</p>';
+			const badges = `${f.patron ? ' <span class="badge goal">수호신 후보</span>' : ''}${focus === mine ? ' <span class="badge live">내 수호신</span>' : ''}`;
+
+			side = `<h3>${esc(f.name)}${badges}</h3><div class="small" style="margin-bottom:6px">${esc(f.domain)}</div><div class="rel-list">${rows}</div>${villagers}`;
+		}
+
+		return `
+			<div class="relation-layout">
+				<div>
+					<svg class="relations${focus ? ' focused' : ''}" viewBox="0 0 600 450" role="img" aria-label="신앙 관계도">${edges}${nodes}</svg>
+					<div class="legend">
+						<span><i class="ally"></i>동맹</span><span><i class="friendly"></i>호의</span><span><i class="wary"></i>경계</span><span><i class="hostile"></i>적대</span>
+						<span>금빛 테두리 = 수호신 후보 · 칠한 원 = 내 수호신 · 원 안 숫자 = 기록된 신도</span>
+					</div>
+					<div class="small">${live ? '게임에서 받은 관계표.' : '게임에 연결하기 전이라 이 화면에 넣어 둔 관계표 사본을 보여 준다.'}</div>
+				</div>
+				<div>
+					${side}
+					<h3>마을에서 벌어지는 일</h3>
+					<ul class="rules">
+						<li><b>신도끼리</b>: 같은 신·호의면 수다, 중립이면 인사, 경계·적대면 말다툼. 적대하는 사이에 다혈질이 끼어 있으면 주먹다짐이 붙는다(이웃끼리라 금방 끝난다).</li>
+						<li><b>당신에게</b>(수호신을 고른 뒤 가까이 가면): 같은 신이면 반기며 처음 한 번 작은 선물(체력 +6), 호의면 반가운 인사, 중립이면 무심히, 경계면 텃세, 적대면 노골적인 적의.</li>
+						<li><b>시비</b>: 적대하는 신의 다혈질 신도는 시비를 걸어 주먹다짐을 시작한다. Space 주먹 세 방이면 항복하고(경험치 +10, 다시는 덤비지 않는다), 멀리 달아나도 된다. 목숨을 건 싸움은 아니다 — 체력이 1 밑으로 내려가지 않는다.</li>
+						<li>마을 사람들은 제자리를 지키지 않고 자기 자리 둘레를 거닐며, 오가다 마주친 이웃과 어울린다. 대사는 곁(8칸 안)에서 일어난 것만 채팅창에 뜬다.</li>
+					</ul>
+				</div>
+			</div>`;
+	}
+
+	function loreRegions() {
+		const villages = ui.data?.villages || [];
+		const here = ui.data?.player?.map;
+
+		return `<div class="lore-grid">${REGIONS.map(([id, name, god, text]) => {
+			const village = villages.find((v) => v.id === id);
+			const locked = village ? !village.unlocked : false;
+			const badges = [];
+			if (id === here) {
+				badges.push('<span class="badge live">● 지금 여기</span>');
+			} else if (village && village.visited) {
+				badges.push('<span class="badge">가 봄</span>');
+			}
+			if (locked) badges.push('<span class="badge locked">잠김</span>');
+			if (village && village.objectiveHere) badges.push('<span class="badge goal">◆ 목표</span>');
+
+			return `
+				<div class="lore-card${id === here ? ' here' : ''}${locked ? ' locked' : ''}">
+					<div class="name"><strong>${esc(name)}</strong><span class="domain">${esc(god)}</span></div>
+					<div>${esc(text)}</div>
+					${badges.length ? `<div class="badges">${badges.join('')}</div>` : ''}
+				</div>`;
+		}).join('')}</div>`;
+	}
+
+	function loreTruths() {
+		const v = storyVars();
+		const intro = ui.data ? '' : '<p class="small">게임에 연결하면 이야기를 진행한 만큼 진실이 열린다.</p>';
+
+		return intro + TRUTHS.map((t) => {
+			if (!t.when(v)) {
+				return `<div class="truth locked"><strong>??? <span class="small">· ${esc(t.hint)}</span></strong>아직 밝혀지지 않은 진실. 이야기를 진행하면 열린다.</div>`;
+			}
+			const text = typeof t.text === 'function' ? t.text(v) : t.text;
+			return `<div class="truth"><strong>${esc(t.title)} <span class="small">· ${esc(t.hint)}</span></strong>${text}</div>`;
+		}).join('');
+	}
+
+	// ---- 조작 ----
+
+	function setup() {
+		const endpoint = $('endpoint');
+		endpoint.value = ui.endpoint;
+		endpoint.addEventListener('change', () => {
+			ui.endpoint = endpoint.value.trim() || DEFAULT_ENDPOINT;
+			endpoint.value = ui.endpoint;
+			ui.instance = null;
+			ui.lastSeq = 0;
+			ui.events = [];
+			if (!servedByGame) {
+				store.set('endpoint', ui.endpoint);
+			}
+			poll();
+		});
+
+		const interval = $('interval');
+		interval.value = String(ui.interval);
+		if (interval.value !== String(ui.interval)) {
+			ui.interval = 1000;
+			interval.value = '1000';
+		}
+		interval.addEventListener('change', () => {
+			ui.interval = Number(interval.value) || 1000;
+			store.set('interval', String(ui.interval));
+			poll();
+		});
+
+		$('pause').addEventListener('click', () => {
+			ui.paused = !ui.paused;
+			$('pause').textContent = ui.paused ? '다시 받기' : '일시정지';
+			poll();
+		});
+
+		// 마을 카드 고르기: 마우스는 누르는 순간(pointerdown)에 고른다 — 누르고 떼는 사이에 카드가 다시 그려져도
+		// 놓치지 않게. 키보드(Enter·Space)로 누른 건 click으로 온다(e.detail이 0).
+		const pickVillage = (e) => {
+			const button = e.target.closest('[data-village]');
+			if (!button) {
+				return;
+			}
+			ui.village = ui.village === button.dataset.village ? 'all' : button.dataset.village;
+			store.set('village', ui.village);
+			render();
+		};
+		$('villages').addEventListener('pointerdown', (e) => {
+			if (e.button === 0) {
+				pickVillage(e);
+			}
+		});
+		$('villages').addEventListener('click', (e) => {
+			if (e.detail === 0) {
+				pickVillage(e);
+			}
+		});
+
+		$('villageFilter').addEventListener('change', (e) => {
+			ui.village = e.target.value;
+			store.set('village', ui.village);
+			render();
+		});
+
+		$('showHidden').addEventListener('change', (e) => {
+			ui.showHidden = e.target.checked;
+			store.set('showHidden', ui.showHidden ? '1' : '0');
+			render();
+		});
+
+		$('search').addEventListener('input', (e) => {
+			ui.query = e.target.value;
+			render();
+		});
+
+		$('rawBox').addEventListener('toggle', () => render());
+
+		// 세계관 탭. 관계도의 신은 누르는 순간(pointerdown) 고른다 — 그 사이 화면이 다시 그려져도 놓치지 않게. 키보드는 Enter·Space.
+		$('loreTabs').addEventListener('click', (e) => {
+			const button = e.target.closest('[data-tab]');
+			if (!button) {
+				return;
+			}
+			ui.loreTab = button.dataset.tab;
+			store.set('loreTab', ui.loreTab);
+			renderLore();
+		});
+
+		const pickFaith = (e) => {
+			const node = e.target.closest('[data-faith]');
+			if (!node) {
+				return false;
+			}
+			ui.faithFocus = ui.lastFocus === node.dataset.faith ? '' : node.dataset.faith;
+			renderLore();
+			return true;
+		};
+		$('lore').addEventListener('pointerdown', (e) => {
+			if (e.button === 0) {
+				pickFaith(e);
+			}
+		});
+		$('lore').addEventListener('keydown', (e) => {
+			if ((e.key === 'Enter' || e.key === ' ') && pickFaith(e)) {
+				e.preventDefault();
+				const again = $('lore').querySelector(`[data-faith="${CSS.escape(e.target.dataset.faith || '')}"]`);
+				if (again) {
+					again.focus();
+				}
+			}
+		});
+
+		renderLore();
+	}
+
+	setup();
+	poll();
+})();
+</script>
+</body>
+</html>

@@ -10,6 +10,7 @@
 #include "CharacterActors.h"
 #include "GameLog.h"
 #include "LandmarkActors.h"
+#include "PatronPowers.h"
 #include "Renderer.h"
 #include "SceneGraph.h"
 #include "UiDraw.h"
@@ -313,11 +314,21 @@ void StoryDirector::ApplyEffect(const std::string& effect)
 		{
 			GrantBlessing();
 		}
+		else if (name == "AWAKEN")
+		{
+			Awaken();
+		}
 		else if (name == "SHAKE")
 		{
-			float seconds = rest.empty() ? 1.f : (float)std::atof(rest.c_str());
-			m_ShakeTimer = seconds;
-			m_ShakeDuration = seconds;
+			Shake(rest.empty() ? 1.f : (float)std::atof(rest.c_str()));
+		}
+		else if (name == "BANNER")
+		{
+			// 화면 위쪽에 큰 제목(장 제목·엔딩 제목): "EVENT BANNER 제목 | 한마디".
+			size_t bar = rest.find('|');
+			std::string title = Trim((bar == std::string::npos) ? rest : rest.substr(0, bar));
+			std::string tip = (bar == std::string::npos) ? std::string() : Trim(rest.substr(bar + 1));
+			ShowBanner(m_Story.Interpolate(title), m_Story.Interpolate(tip));
 		}
 		else if (name == "FLARE")
 		{
@@ -344,8 +355,8 @@ void StoryDirector::ApplyEffect(const std::string& effect)
 	}
 }
 
-// 수호신의 첫 축복(PATRON에 따라). STORY.md 6장 MQ_01 표의 축복 테마를 따르며, 지금은 상시(패시브)
-// 효과만 있다. 액티브 스킬·스킬 트리는 아직 정해지지 않았다(TODO).
+// 수호신의 첫 축복(PATRON에 따라 — PatronPowers.h의 표). STORY.md 6장 MQ_01 표의 축복 테마를 딴 상시 능력치와
+// 레벨업 성장 몫을 더하고, 기본 스킬(Q)을 연다. 궁극기(R)는 이야기 속 주인공의 각성(EVENT AWAKEN) 뒤에 열린다.
 void StoryDirector::GrantBlessing()
 {
 	if (m_Player == nullptr || m_Story.IsTrue("BLESSING_GRANTED"))
@@ -353,39 +364,62 @@ void StoryDirector::GrantBlessing()
 		return;
 	}
 
+	const PatronDef* def = PatronPowers::Find(m_Story.Get("PATRON"));
+	if (def == nullptr)
+	{
+		std::cout << "[이야기] 알 수 없는 수호신이라 축복을 줄 수 없습니다: " << m_Story.Get("PATRON") << "\n";
+		return;
+	}
+
 	m_Story.Set("BLESSING_GRANTED", "true");
-	const std::string& patron = m_Story.Get("PATRON");
+	m_Player->ApplyPatronPassive(*def);
 
-	if (patron == "ZEUS")
-	{
-		m_Player->AddAttackPower(4);
-		GameLog::Add(GameLog::Kind::Reward, "[번개의 축복] 공격력 +4. 공격할 때 가끔 벼락이 함께 떨어진다.");
-	}
-	else if (patron == "POSEIDON")
-	{
-		m_Player->AddMaxHp(12);
-		GameLog::Add(GameLog::Kind::Reward, "[바다의 축복] 최대 체력 +12. 파도처럼 쉽게 무너지지 않는다.");
-	}
-	else if (patron == "HADES")
-	{
-		GameLog::Add(GameLog::Kind::Reward, "[망자의 축복] 적을 쓰러뜨리면 그 생명의 온기가 스며들어 체력이 회복된다.");
-	}
-	else if (patron == "APHRODITE")
-	{
-		GameLog::Add(GameLog::Kind::Reward, "[매혹의 축복] 짐승과 괴물이 너를 훨씬 가까이 와서야 알아챈다.");
-	}
-	else if (patron == "HERMES")
-	{
-		GameLog::Add(GameLog::Kind::Reward, "[질풍의 축복] 이동 속도 +30%.");
-	}
+	GameLog::Add(GameLog::Kind::Reward, "[" + std::string(def->blessingName) + "] " + def->passiveText);
+	GameLog::Add(GameLog::Kind::Reward, "[기본 스킬] 「" + std::string(def->basic.name) + "」 — Q 키, 쿨타임 "
+		+ std::to_string((int)def->basic.cooldown) + "초. " + def->basic.summary);
 
-	ApplyPatronModifiers(*m_Player, patron);
+	ApplyPatronModifiers(*m_Player, m_Story);
 }
 
-void StoryDirector::ApplyPatronModifiers(PlayerActor& player, const std::string& patron)
+// 이야기 속 주인공의 각성(MQ_03 진실 공개 직후): 실 없는 몸이 축복을 신이 정해 둔 크기보다 크게 받아들인다 —
+// 궁극기(R)가 열리고, 발밑에 수호신 색의 기운이 번진다.
+void StoryDirector::Awaken()
 {
-	player.SetSpeedScale((patron == "HERMES") ? 1.3f : 1.f);
-	player.SetDetectScale((patron == "APHRODITE") ? 0.55f : 1.f);
+	if (m_Story.IsTrue("AWAKENED"))
+	{
+		return;
+	}
+
+	m_Story.Set("AWAKENED", "true");
+
+	const PatronDef* def = PatronPowers::Find(m_Story.Get("PATRON"));
+	if (def != nullptr)
+	{
+		GameLog::Add(GameLog::Kind::Reward, "[각성] 궁극기 「" + std::string(def->ultimate.name) + "」 — R 키, 쿨타임 "
+			+ std::to_string((int)PatronPowers::kUltimateCooldown) + "초. " + def->ultimate.summary);
+	}
+
+	if (m_Player != nullptr)
+	{
+		ApplyPatronModifiers(*m_Player, m_Story);
+	}
+}
+
+void StoryDirector::Shake(float seconds)
+{
+	m_ShakeTimer = seconds;
+	m_ShakeDuration = seconds;
+}
+
+void StoryDirector::ApplyPatronModifiers(PlayerActor& player, const StoryState& story)
+{
+	const PatronDef* def = story.IsTrue("BLESSING_GRANTED") ? PatronPowers::Find(story.Get("PATRON")) : nullptr;
+
+	player.SetSpeedScale((def != nullptr) ? def->speedScale : 1.f);
+	player.SetDetectScale((def != nullptr) ? def->detectScale : 1.f);
+
+	bool aura = (def != nullptr) && story.IsTrue("AWAKENED");
+	player.SetAura(aura, aura ? def->colorR : 1.f, aura ? def->colorG : 1.f, aura ? def->colorB : 1.f);
 }
 
 void StoryDirector::Update(float deltaSeconds)
@@ -701,6 +735,42 @@ std::string StoryDirector::GetRegionShortName(const std::string& locId) const
 	return ShortRegionName(GetRegionName(locId));
 }
 
+bool StoryDirector::IsObjectiveTarget(const std::string& storyId, const std::string& locId) const
+{
+	if (storyId.empty())
+	{
+		return false;
+	}
+
+	// 목표가 다른 지역에 있으면 지금 지역에선 이정표가 목표다(UpdateObjective와 같은 판정).
+	if (locId == m_Story.Get("MAP") && !GetTravelRegion().empty())
+	{
+		return storyId == "OBJ_SIGNPOST";
+	}
+
+	// 지역이 정해진 단계라면 그 지역에 있는 대상만 목표다.
+	const StoryStep* step = m_Database.FindStep(m_Story.Get("STORY_STEP"));
+	if (step == nullptr || (!step->region.empty() && step->region != locId))
+	{
+		return false;
+	}
+
+	for (size_t i = 0; i < step->targets.size(); ++i)
+	{
+		if (step->targets[i] == storyId)
+		{
+			const std::string& condition = step->targetConditions[i];
+			return condition.empty() || m_Story.Evaluate(condition);
+		}
+	}
+	return false;
+}
+
+bool StoryDirector::CanTalkTo(const std::string& storyId) const
+{
+	return !storyId.empty() && m_Database.FindTriggered(DialogueTrigger::Talk, storyId, m_Story, m_SeenOnce) != nullptr;
+}
+
 // 동료가 곁에 있고 대화 중이 아니면, 가끔 조건에 맞는 혼잣말 하나를 채팅창에 띄운다.
 void StoryDirector::UpdateBarks(float deltaSeconds)
 {
@@ -753,22 +823,34 @@ void StoryDirector::UpdateBarks(float deltaSeconds)
 
 void StoryDirector::ShowRegionBanner(const std::string& locId)
 {
-	TextRasterizer::Destroy(m_BannerTitleTexture);
-	TextRasterizer::Destroy(m_BannerTipTexture);
-
 	const StoryRegion* region = m_Database.FindRegion(locId);
 	if (region == nullptr)
 	{
+		TextRasterizer::Destroy(m_BannerTitleTexture);
+		TextRasterizer::Destroy(m_BannerTipTexture);
 		m_BannerTimer = 0.f;
 		return;
 	}
 
-	m_BannerTitleTexture = m_BannerTitleText.Create(region->name, 700);
-	if (!region->tip.empty())
+	ShowBanner(region->name, region->tip);
+}
+
+void StoryDirector::ShowBanner(const std::string& title, const std::string& tip)
+{
+	TextRasterizer::Destroy(m_BannerTitleTexture);
+	TextRasterizer::Destroy(m_BannerTipTexture);
+
+	m_BannerTitleTexture = m_BannerTitleText.Create(title, 700);
+	if (!tip.empty())
 	{
-		m_BannerTipTexture = m_BannerTipText.Create(region->tip, 560);
+		m_BannerTipTexture = m_BannerTipText.Create(tip, 560);
 	}
 	m_BannerTimer = kBannerSeconds;
+}
+
+void StoryDirector::OnPlayerDeath()
+{
+	StartTriggered(DialogueTrigger::Death, "PLAYER");
 }
 
 void StoryDirector::Draw(Renderer& renderer)

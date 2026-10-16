@@ -29,7 +29,7 @@ class SceneGraph;
 // 화면엔 오른쪽 위 미니맵 아래의 "목표", 지역에 들어설 때의 지역 이름 배너, 아래쪽 대화창을 그린다.
 //
 // 효과 문법(대화 데이터의 do/choice 줄): SET 변수 값 / ADD 변수 수 / STEP 단계 / UNLOCK 지역 / GOTO 대화 /
-// TRAVEL 지역 / XP 수 / HEAL / NOTICE 문구 / EVENT 이름 [인자] (BLESSING, SHAKE 초, FLARE 스토리ID).
+// TRAVEL 지역 / XP 수 / HEAL / NOTICE 문구 / EVENT 이름 [인자] (BLESSING, AWAKEN, SHAKE 초, FLARE 스토리ID, BANNER 제목|한마디).
 class StoryDirector
 {
 public:
@@ -53,6 +53,9 @@ public:
 	bool OnTalk(const Actor& actor);
 	bool OnPickup(const Actor& actor);
 	void OnKill(const Actor& actor);
+
+	// 플레이어가 쓰러졌을 때(제자리로 돌아와 다시 일어선 직후): "on death PLAYER" 대화(최종 보스전의 패배 등).
+	void OnPlayerDeath();
 
 	// 매 프레임 게임 갱신 전에 부른다.
 	void Update(float deltaSeconds);
@@ -84,8 +87,22 @@ public:
 	std::string GetRegionName(const std::string& locId) const;
 	std::string GetRegionShortName(const std::string& locId) const;
 
-	// 수호신 축복 중 맵을 새로 지을 때마다 다시 걸어야 하는 것(이동 속도·괴물이 알아채는 거리 배율)을 적용한다.
-	static void ApplyPatronModifiers(PlayerActor& player, const std::string& patron);
+	// 모니터(WorldMonitor)용: 스토리 ID의 한글 표시 이름(데이터 파일 name 줄, 없으면 ID 그대로),
+	// locId 지역에 있는 그 인물·물건이 지금 목표 대상인지(지금 지역이면 목표 마름모가 뜨는 것과 같은 판정),
+	// 지금 말을 걸면 열릴 대화가 있는지.
+	std::string GetSpeakerName(const std::string& storyId) const { return m_Database.GetSpeakerName(storyId); }
+	bool IsObjectiveTarget(const std::string& storyId, const std::string& locId) const;
+	bool CanTalkTo(const std::string& storyId) const;
+
+	// 화면을 seconds 동안 흔든다(EVENT SHAKE와 같음 — 포세이돈의 대지진 같은 스킬도 쓴다).
+	void Shake(float seconds);
+
+	// 마을 사람의 사회적 대사(Data/Story.txt의 social 줄 — NpcSociety가 고른다).
+	const std::vector<SocialLine>& GetSocialLines() const { return m_Database.GetSocialLines(); }
+
+	// 수호신 축복 중 맵을 새로 지을 때마다 다시 걸어야 하는 것(이동 속도·괴물이 알아채는 거리 배율, 각성의 기운)을
+	// 적용한다. 축복을 받기 전이면 모두 기본값으로 되돌린다.
+	static void ApplyPatronModifiers(PlayerActor& player, const StoryState& story);
 
 	void Draw(Renderer& renderer);
 
@@ -102,6 +119,7 @@ private:
 	void ApplyEffects(const std::vector<std::string>& effects);
 	void ApplyEffect(const std::string& effect);
 	void GrantBlessing();
+	void Awaken();
 
 	void UpdatePresence();
 	void UpdateTriggers();
@@ -109,6 +127,9 @@ private:
 	void UpdateBarks(float deltaSeconds);
 
 	void ShowRegionBanner(const std::string& locId);
+
+	// 화면 위쪽에 5초간 떠오르는 큰 제목 + 한마디(지역 이름 배너와 같은 모양 — 장 제목·엔딩 제목에도 쓴다).
+	void ShowBanner(const std::string& title, const std::string& tip);
 
 	DialogueDatabase m_Database;
 	StoryState m_Story;

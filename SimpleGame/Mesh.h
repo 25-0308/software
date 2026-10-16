@@ -20,9 +20,6 @@ struct MeshHandle
 
 namespace MeshGen
 {
-	// -0.5~0.5 크기의 사각형 (Renderer 내장 사각형과 동일한 형태).
-	MeshData GenerateQuad();
-
 	// 반지름(radiusX, radiusY)의 타원판을 삼각형 팬으로 근사.
 	MeshData GenerateEllipse(float radiusX, float radiusY, int segments);
 

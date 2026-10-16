@@ -34,4 +34,8 @@ namespace UiDraw
 	// 글자 텍스처를 왼쪽 위 모서리 (left, top)에 맞춰 텍스처 크기 그대로 그린다(정수 픽셀 위치면 또렷하다).
 	void TextTopLeft(Renderer& renderer, const Mat4& ui, const TextTexture& texture, float left, float top,
 		float r, float g, float b, float a);
+
+	// 그림 텍스처(초상화 등)를 왼쪽 아래 (left, bottom)부터 width x height로 그린다. 텍스처 색에 (r, g, b, a)를 곱한다.
+	void Image(Renderer& renderer, const Mat4& ui, const TextTexture& texture, float left, float bottom, float width, float height,
+		float r, float g, float b, float a);
 }

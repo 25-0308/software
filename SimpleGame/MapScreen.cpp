@@ -25,26 +25,35 @@ namespace
 	const float kSidebarWidth = 228.f;
 	const int kSidebarWrapWidth = 228;
 	const float kSectionGap = 14.f;
-	const float kAtlasHeight = 150.f;
+	const float kAtlasHeight = 200.f;
 	const float kLegendColumnWidth = 114.f;
 	const float kLegendRowHeight = 19.f;
 
 	// 지역 약도에서 각 지역의 자리(0~1, 왼쪽 아래가 (0,0), 위가 북쪽). 실제 그리스 지리를 대충 따른다.
 	// 데이터 파일에 선언된(region 줄) 지역 중 여기에 자리가 있는 것만 그린다 — 지역을 새로 지으면 여기에 자리를 더한다.
+	// labelRight면 이름을 점의 오른쪽에(위쪽 끝이라 아래에 두면 다른 점과 겹치는 곳), 아니면 점 아래 가운데에 쓴다.
+	// 크로노스의 배 속(LOC_KRONOS_BELLY)은 지역이 아니라 이야기 속 무대라 약도에 두지 않는다.
 	struct AtlasPlace
 	{
 		const char* locId;
 		float x, y;
+		bool labelRight;
 	};
 
 	const AtlasPlace kAtlasPlaces[] =
 	{
-		{ "LOC_OLYMPUS_FOOT", 0.45f, 0.88f }, // 테살리아(북쪽)
-		{ "LOC_DELPHI", 0.2f, 0.5f },         // 그리스 중부 서쪽, 파르나소스 산기슭
-		{ "LOC_ATHENS", 0.7f, 0.24f },        // 남동쪽 아티카
+		{ "LOC_OLYMPUS", 0.3f, 0.93f, true },        // 올림포스 정상
+		{ "LOC_OLYMPUS_FOOT", 0.5f, 0.78f, false },  // 테살리아(북쪽)
+		{ "LOC_WEST", 0.08f, 0.66f, false },         // 바다 건너 서쪽(라티움 방면)
+		{ "LOC_DELPHI", 0.34f, 0.56f, false },       // 그리스 중부 서쪽, 파르나소스 산기슭
+		{ "LOC_AEGEAN", 0.84f, 0.6f, false },        // 동쪽 바다의 섬들
+		{ "LOC_ATHENS", 0.6f, 0.42f, false },        // 남동쪽 아티카
+		{ "LOC_TARTARUS_RIM", 0.14f, 0.24f, false }, // 땅 밑 경계(약도에선 남서쪽 구석)
+		{ "LOC_TAENARON", 0.4f, 0.14f, false },      // 펠로폰네소스 남쪽 끝의 곶
+		{ "LOC_CYPRUS", 0.92f, 0.14f, false },       // 남동쪽 먼바다
 	};
 
-	bool FindAtlasPlace(const std::string& locId, float& outX, float& outY)
+	bool FindAtlasPlace(const std::string& locId, float& outX, float& outY, bool& outLabelRight)
 	{
 		for (const AtlasPlace& place : kAtlasPlaces)
 		{
@@ -52,6 +61,7 @@ namespace
 			{
 				outX = place.x;
 				outY = place.y;
+				outLabelRight = place.labelRight;
 				return true;
 			}
 		}
@@ -231,7 +241,7 @@ void MapScreen::Open(const StoryDirector& director)
 	for (const StoryRegion& region : director.GetRegions())
 	{
 		AtlasNode node;
-		if (!FindAtlasPlace(region.id, node.x, node.y))
+		if (!FindAtlasPlace(region.id, node.x, node.y, node.labelRight))
 		{
 			continue;
 		}
@@ -333,18 +343,30 @@ void MapScreen::DrawAtlas(Renderer& renderer, const Mat4& ui, float left, float 
 	UiDraw::Rect(renderer, ui, left - 1.f, bottom - 1.f, width + 2.f, height + 2.f, 0.62f, 0.5f, 0.28f, 0.85f);
 	UiDraw::Rect(renderer, ui, left, bottom, width, height, 0.05f, 0.13f, 0.23f, 0.96f);
 
-	// 지역을 잇는 길(점선): 이정표로 어느 지역에서나 갈 수 있는 지역끼리 오가므로 모든 쌍을 잇고,
-	// 둘 다 갈 수 있으면 밝게, 아니면 흐리게 그린다.
-	for (size_t i = 0; i < m_AtlasNodes.size(); ++i)
+	// 지금 있는 지역에서 이정표로 갈 수 있는 지역마다 길(점선)을 잇는다(목표가 있는 지역으로 가는 길은 금빛).
+	const AtlasNode* here = nullptr;
+	for (const AtlasNode& node : m_AtlasNodes)
 	{
-		for (size_t j = i + 1; j < m_AtlasNodes.size(); ++j)
+		if (node.current)
 		{
-			const AtlasNode& from = m_AtlasNodes[i];
-			const AtlasNode& to = m_AtlasNodes[j];
-			bool open = from.unlocked && to.unlocked;
+			here = &node;
+		}
+	}
 
-			DrawDashedLine(renderer, ui, left + from.x * width, bottom + from.y * height, left + to.x * width,
-				bottom + to.y * height, 0.8f, 0.75f, 0.6f, open ? 0.75f : 0.22f);
+	if (here != nullptr)
+	{
+		for (const AtlasNode& to : m_AtlasNodes)
+		{
+			if (&to == here || !to.unlocked)
+			{
+				continue;
+			}
+
+			float r = to.objective ? 1.f : 0.8f;
+			float g = to.objective ? 0.8f : 0.75f;
+			float b = to.objective ? 0.35f : 0.6f;
+			DrawDashedLine(renderer, ui, left + here->x * width, bottom + here->y * height, left + to.x * width,
+				bottom + to.y * height, r, g, b, to.objective ? 0.95f : 0.6f);
 		}
 	}
 
@@ -382,9 +404,10 @@ void MapScreen::DrawAtlas(Renderer& renderer, const Mat4& ui, float left, float 
 			DrawArrow(renderer, ui, x, y + 14.f, -1.f, 3.6f, white.r, white.g, white.b, 1.f);
 		}
 
-		// 이름: 점 아래 가운데(약도 밖으로 나가지 않게 좌우를 맞춘다).
+		// 이름: 점 아래 가운데, 또는 점 오른쪽(약도 밖으로 나가지 않게 좌우를 맞춘다).
 		float labelWidth = (float)node.label.width;
-		float labelLeft = x - labelWidth * 0.5f;
+		float labelLeft = node.labelRight ? x + 9.f : x - labelWidth * 0.5f;
+		float labelTop = node.labelRight ? floorf(y + (float)node.label.height * 0.5f) : y - 8.f;
 		if (labelLeft + labelWidth > left + width - 2.f)
 		{
 			labelLeft = left + width - 2.f - labelWidth;
@@ -407,7 +430,7 @@ void MapScreen::DrawAtlas(Renderer& renderer, const Mat4& ui, float left, float 
 		{
 			r = 0.55f; g = 0.55f; b = 0.58f;
 		}
-		UiDraw::TextTopLeft(renderer, ui, node.label, floorf(labelLeft), y - 8.f, r, g, b, 1.f);
+		UiDraw::TextTopLeft(renderer, ui, node.label, floorf(labelLeft), labelTop, r, g, b, 1.f);
 	}
 }
 

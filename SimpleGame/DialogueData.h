@@ -16,6 +16,7 @@ enum class DialogueTrigger
 	Trigger, // 트리거 영역(제단 앞, 동굴 입구 등)에 들어섰을 때
 	Kill,    // 그 ID의 괴물을 쓰러뜨렸을 때
 	Enter,   // 그 지역(맵)에 들어섰을 때
+	Death,   // 플레이어가 쓰러졌을 때(대상은 PLAYER) — 그 지역의 시작 지점(이동해 왔으면 이정표 앞)에서 되살아난 직후에 열린다
 };
 
 struct DialogueLine
@@ -77,6 +78,14 @@ struct StoryBark
 	std::string text;
 };
 
+// 마을 사람의 사회적 대사(social 줄): NpcSociety가 상황과 말하는 사람의 신앙에 맞춰 골라 채팅창에 띄운다.
+struct SocialLine
+{
+	std::string situation; // NPC끼리: chat/greet/argue/fight, 플레이어에게: devoted/friendly/wary/hostile/challenge/yield/giveup/humbled
+	std::string faith;     // 말하는 사람의 신앙 키(ZEUS·JUPITER 등 — Faith.h), "*"면 누구나
+	std::string text;      // {god} = 말하는 사람의 신, {other} = 상대(상대 NPC의 신이나 플레이어의 수호신)
+};
+
 // Data/Story.txt를 읽어 대화·진행 단계·지역·혼잣말을 들고 있는 데이터베이스. 파일 형식은 Data/Story.txt의
 // 머리말에 정리해 두었다. 읽다가 틀린 줄을 만나면 콘솔에 "[이야기 데이터] 줄 N: ..." 형식으로 알리고 그 줄만
 // 건너뛴다(게임은 계속 돈다).
@@ -91,9 +100,6 @@ public:
 	const DialogueBlock* FindTriggered(DialogueTrigger trigger, const std::string& target, const StoryState& story,
 		const std::set<std::string>& seenOnce) const;
 
-	// 이 trigger + target으로 열리는 블록이 하나라도 있는지(조건과 무관).
-	bool HasTrigger(DialogueTrigger trigger, const std::string& target) const;
-
 	bool PassesConditions(const DialogueBlock& block, const StoryState& story) const;
 
 	// 화자 ID의 표시 이름(name 줄). 등록 안 됐으면 ID 그대로, "narr"처럼 이름 없이 등록했으면 빈 문자열.
@@ -104,6 +110,7 @@ public:
 	const std::vector<StoryRegion>& GetRegions() const { return m_Regions; }
 	const StoryRegion* FindRegion(const std::string& id) const;
 	const std::vector<StoryBark>& GetBarks() const { return m_Barks; }
+	const std::vector<SocialLine>& GetSocialLines() const { return m_SocialLines; }
 
 private:
 	void ParseLine(const std::string& line, int lineNumber);
@@ -119,5 +126,6 @@ private:
 	std::vector<StoryStep> m_Steps;
 	std::vector<StoryRegion> m_Regions;
 	std::vector<StoryBark> m_Barks;
+	std::vector<SocialLine> m_SocialLines;
 	int m_ErrorCount = 0;
 };

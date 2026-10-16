@@ -36,16 +36,19 @@ public:
 	// (예: STORY_STEP >= MQ_00.CAVE) 이 순서로 비교한다.
 	void ClearSteps();
 	void RegisterStep(const std::string& step);
-	bool IsKnownStep(const std::string& step) const;
 
 	// 조건식을 평가한다. 형식: 항을 &&(그리고)·||(또는)로 잇는다(괄호 없음, &&가 먼저 묶임).
 	// 항: NAME(참이면) / !NAME(거짓이면) / NAME 연산자 값(==, !=, >=, <=, >, <).
-	// 값이 정수면 수로, 진행 단계 이름이면 단계 순서로, 그 밖엔 글자로(==, != 만) 비교한다.
+	// true/false와 비교하면 참거짓으로("1"도 참), 진행 단계 이름이면 단계 순서로, 둘 다 정수면 수로(빈 값은 0),
+	// 그 밖엔 글자로(==, != 만) 비교한다.
 	// 빈 조건식은 참.
 	bool Evaluate(const std::string& condition) const;
 
 	// 문장 속 {변수이름}을 그 값으로 바꾼다(예: "월계수 가지 ({LAUREL}/3)").
 	std::string Interpolate(const std::string& text) const;
+
+	// 지금 설정된 모든 변수(이름 순). 모니터(WorldMonitor)가 그대로 보여준다.
+	const std::map<std::string, std::string>& GetValues() const { return m_Values; }
 
 private:
 	bool EvaluateTerm(const std::string& term) const;

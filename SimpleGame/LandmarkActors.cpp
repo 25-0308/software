@@ -712,6 +712,93 @@ void SignpostActor::OnRender(const RenderContext& ctx)
 	DrawPartsSorted(ctx, parts);
 }
 
+// --------------------------------------------------------------- SteleActor
+
+SteleActor::SteleActor(float x, float y, float height, float r, float g, float b, bool gold)
+	: Actor(ActorType::Building)
+	, m_Height(height)
+	, m_Gold(gold)
+{
+	SetPosition(x, y, 0.f);
+	SetSize(0.8f);
+	SetColor(r, g, b);
+	SetBoundingSphere(height * 0.5f + 0.6f, height * 0.5f);
+}
+
+void SteleActor::OnRender(const RenderContext& ctx)
+{
+	float x = GetWorldX();
+	float y = GetWorldY();
+	float z = GetWorldZ();
+	Shapes::Rgb stone = { GetR(), GetG(), GetB() };
+	Shapes::Rgb letters = m_Gold ? Shapes::Rgb{ 1.15f, 0.88f, 0.34f } : Shapes::Shade(stone, 0.45f);
+	const float kWidth = 0.72f;
+	const float kDepth = 0.22f;
+
+	// 받침돌 → 돌판 → 카메라 쪽 앞면(+y)에 새긴 글자 줄들.
+	Shapes::DrawSolidBox(ctx, x, y, z, kWidth + 0.16f, kDepth + 0.16f, 0.12f, Shapes::Shade(stone, 0.85f));
+	Shapes::DrawSolidBox(ctx, x, y, z + 0.12f, kWidth, kDepth, m_Height, stone);
+
+	float faceY = y + kDepth * 0.5f + 0.004f;
+	int lines = (int)(m_Height / 0.14f) - 1;
+	for (int i = 0; i < lines; ++i)
+	{
+		float lineZ = z + 0.12f + m_Height - 0.16f - (float)i * 0.14f;
+		float width = kWidth * ((i % 3 == 2) ? 0.5f : 0.74f);
+		Shapes::DrawPanelOnFaceY(ctx, x, faceY, lineZ, width, 0.04f, letters);
+	}
+}
+
+// ---------------------------------------------------------------- LoomActor
+
+namespace
+{
+	const float kLoomWidth = 2.6f;
+	const float kLoomDepth = 0.5f;
+	const float kLoomHeight = 2.2f;
+}
+
+LoomActor::LoomActor(float x, float y)
+	: Actor(ActorType::Building)
+{
+	SetPosition(x, y, 0.f);
+	SetSize(kLoomWidth);
+	SetBoundingSphere(kLoomWidth * 0.5f + 0.9f, kLoomHeight * 0.5f);
+}
+
+void LoomActor::OnRender(const RenderContext& ctx)
+{
+	float x = GetWorldX();
+	float y = GetWorldY();
+	float z = GetWorldZ();
+	Shapes::Rgb gold = { 1.25f, 0.95f, 0.38f };
+	Shapes::Rgb cloth = { 0.92f, 0.74f, 0.36f };
+	float half = kLoomWidth * 0.5f;
+
+	// 기둥 둘·들보 둘·날실들을 카메라에서 먼 것부터(기둥 사이로 날실이 보이게).
+	std::vector<Part> parts;
+	parts.push_back(MakeBox(x - half, y, z, 0.18f, 0.3f, kLoomHeight, kWood));
+	parts.push_back(MakeBox(x + half, y, z, 0.18f, 0.3f, kLoomHeight, kWood));
+	parts.push_back(MakeBox(x, y, z + kLoomHeight - 0.16f, kLoomWidth + 0.2f, 0.18f, 0.16f, Shapes::Shade(kWood, 1.1f)));
+	parts.push_back(MakeBox(x, y, z + 0.32f, kLoomWidth, 0.22f, 0.22f, Shapes::Shade(kWood, 0.95f)));
+	parts.push_back(MakeBox(x, y + 0.02f, z + 0.54f, kLoomWidth - 0.3f, 0.06f, 0.34f, cloth));
+
+	const int kThreads = 11;
+	for (int i = 0; i < kThreads; ++i)
+	{
+		float threadX = x - half + 0.25f + (kLoomWidth - 0.5f) * (float)i / (float)(kThreads - 1);
+		parts.push_back(MakeBox(threadX, y, z + 0.88f, 0.025f, 0.025f, kLoomHeight - 1.04f, gold));
+	}
+
+	DrawPartsSorted(ctx, parts);
+}
+
+bool LoomActor::BlocksCircle(float x, float y, float moverRadius) const
+{
+	return CircleHitsRect(x, y, moverRadius, GetWorldX() - kLoomWidth * 0.5f - 0.1f, GetWorldX() + kLoomWidth * 0.5f + 0.1f,
+		GetWorldY() - kLoomDepth * 0.5f, GetWorldY() + kLoomDepth * 0.5f);
+}
+
 // -------------------------------------------------------------- CrackActor
 
 CrackActor::CrackActor(float x, float y, float length)

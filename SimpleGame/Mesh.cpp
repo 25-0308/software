@@ -3,18 +3,6 @@
 
 #include <cmath>
 
-MeshData MeshGen::GenerateQuad()
-{
-	MeshData mesh;
-	mesh.primitiveType = GL_TRIANGLES;
-	mesh.vertices =
-	{
-		-0.5f, -0.5f, 0.f,  -0.5f, 0.5f, 0.f,  0.5f, 0.5f, 0.f,
-		-0.5f, -0.5f, 0.f,   0.5f, 0.5f, 0.f,  0.5f, -0.5f, 0.f,
-	};
-	return mesh;
-}
-
 MeshData MeshGen::GenerateEllipse(float radiusX, float radiusY, int segments)
 {
 	MeshData mesh;

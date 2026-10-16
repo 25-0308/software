@@ -53,6 +53,7 @@ private:
 		bool current = false;   // 지금 있는 지역
 		bool unlocked = false;  // 이정표로 갈 수 있는 지역
 		bool objective = false; // 지금 목표가 있는 지역
+		bool labelRight = false; // 이름을 점 오른쪽에(아니면 점 아래)
 		TextTexture label;
 	};
 

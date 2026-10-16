@@ -81,3 +81,14 @@ void UiDraw::TextTopLeft(Renderer& renderer, const Mat4& ui, const TextTexture& 
 	float height = (float)texture.height;
 	renderer.DrawTexture(texture.id, ui * RectModel(left, top - height, width, height), r, g, b, a);
 }
+
+void UiDraw::Image(Renderer& renderer, const Mat4& ui, const TextTexture& texture, float left, float bottom, float width, float height,
+	float r, float g, float b, float a)
+{
+	if (texture.id == 0)
+	{
+		return;
+	}
+
+	renderer.DrawTexture(texture.id, ui * RectModel(left, bottom, width, height), r, g, b, a);
+}

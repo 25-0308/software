@@ -158,9 +158,6 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <Text Include="ReadMe.txt" />
-  </ItemGroup>
-  <ItemGroup>
     <ClInclude Include="Camera.h" />
     <ClInclude Include="Actor.h" />
     <ClInclude Include="Bounds.h" />
@@ -176,6 +173,13 @@
     <ClInclude Include="LevelGenerator.h" />
     <ClInclude Include="MapScreen.h" />
     <ClInclude Include="MiniMap.h" />
+    <ClInclude Include="Monitor.h" />
+    <ClInclude Include="EffectActors.h" />
+    <ClInclude Include="Faith.h" />
+    <ClInclude Include="NpcSociety.h" />
+    <ClInclude Include="PatronPowers.h" />
+    <ClInclude Include="Portrait.h" />
+    <ClInclude Include="SkillBar.h" />
     <ClInclude Include="SceneGraph.h" />
     <ClInclude Include="Shapes.h" />
     <ClInclude Include="StoryDirector.h" />
@@ -210,6 +214,13 @@
     <ClCompile Include="LevelGenerator.cpp" />
     <ClCompile Include="MapScreen.cpp" />
     <ClCompile Include="MiniMap.cpp" />
+    <ClCompile Include="Monitor.cpp" />
+    <ClCompile Include="EffectActors.cpp" />
+    <ClCompile Include="Faith.cpp" />
+    <ClCompile Include="NpcSociety.cpp" />
+    <ClCompile Include="PatronPowers.cpp" />
+    <ClCompile Include="Portrait.cpp" />
+    <ClCompile Include="SkillBar.cpp" />
     <ClCompile Include="SceneGraph.cpp" />
     <ClCompile Include="Shapes.cpp" />
     <ClCompile Include="StoryDirector.cpp" />
@@ -249,6 +260,7 @@
     <None Include="Shaders\Text.vs" />
     <None Include="Shaders\Text.fs" />
     <None Include="Data\Story.txt" />
+    <None Include="Monitor\index.html" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

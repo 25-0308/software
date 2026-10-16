@@ -5,6 +5,7 @@
 #include <fstream>
 #include <iostream>
 
+#include "Faith.h"
 #include "StoryState.h"
 
 namespace
@@ -125,6 +126,7 @@ namespace
 		if (word == "trigger") { outTrigger = DialogueTrigger::Trigger; return true; }
 		if (word == "kill") { outTrigger = DialogueTrigger::Kill; return true; }
 		if (word == "enter") { outTrigger = DialogueTrigger::Enter; return true; }
+		if (word == "death") { outTrigger = DialogueTrigger::Death; return true; }
 		return false;
 	}
 }
@@ -137,6 +139,7 @@ bool DialogueDatabase::Load(const std::string& path)
 	m_Steps.clear();
 	m_Regions.clear();
 	m_Barks.clear();
+	m_SocialLines.clear();
 	m_ErrorCount = 0;
 
 	std::ifstream file(path, std::ios::binary);
@@ -340,6 +343,54 @@ void DialogueDatabase::ParseLine(const std::string& rawLine, int lineNumber)
 		return;
 	}
 
+	if (keyword == "social")
+	{
+		SocialLine social;
+		std::string remainder;
+		std::string text;
+		SplitFirstToken(rest, social.situation, remainder);
+		SplitFirstToken(remainder, social.faith, text);
+		social.text = Trim(text);
+
+		const char* kSituations[] =
+		{
+			"chat", "greet", "argue", "fight", "devoted", "friendly", "wary", "hostile", "challenge", "yield", "giveup", "humbled",
+		};
+		bool knownSituation = false;
+		for (const char* situation : kSituations)
+		{
+			if (social.situation == situation)
+			{
+				knownSituation = true;
+			}
+		}
+
+		bool knownFaith = (social.faith == "*");
+		if (!knownFaith)
+		{
+			FaithInfo::FromKey(social.faith, knownFaith);
+		}
+
+		if (!knownSituation)
+		{
+			Warn(lineNumber, "social의 상황 '" + social.situation + "'을(를) 알 수 없습니다");
+			return;
+		}
+		if (!knownFaith)
+		{
+			Warn(lineNumber, "social의 신앙 '" + social.faith + "'을(를) 알 수 없습니다(ZEUS 등 Faith.h의 키 또는 *)");
+			return;
+		}
+		if (social.text.empty())
+		{
+			Warn(lineNumber, "social은 '상황 신앙 대사' 형식이어야 합니다");
+			return;
+		}
+
+		m_SocialLines.push_back(social);
+		return;
+	}
+
 	if (m_Blocks.empty())
 	{
 		Warn(lineNumber, "대화 블록(== ID) 밖에 있는 줄이라 무시합니다");
@@ -357,7 +408,7 @@ void DialogueDatabase::ParseLine(const std::string& rawLine, int lineNumber)
 
 		if (!ParseTrigger(triggerWord, block.trigger) || target.empty())
 		{
-			Warn(lineNumber, "on 줄은 'on talk|pickup|trigger|kill|enter 대상ID' 형식이어야 합니다");
+			Warn(lineNumber, "on 줄은 'on talk|pickup|trigger|kill|enter|death 대상ID' 형식이어야 합니다");
 			return;
 		}
 		block.target = target;
@@ -507,18 +558,6 @@ const DialogueBlock* DialogueDatabase::FindTriggered(DialogueTrigger trigger, co
 	}
 
 	return nullptr;
-}
-
-bool DialogueDatabase::HasTrigger(DialogueTrigger trigger, const std::string& target) const
-{
-	for (const DialogueBlock& block : m_Blocks)
-	{
-		if (block.trigger == trigger && block.target == target)
-		{
-			return true;
-		}
-	}
-	return false;
 }
 
 bool DialogueDatabase::PassesConditions(const DialogueBlock& block, const StoryState& story) const

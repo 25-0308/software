@@ -19,9 +19,9 @@
     <Filter Include="소스 파일\Data">
       <UniqueIdentifier>{5d2f8c3a-7b41-4e9a-9c6d-2f1e8a4b7c90}</UniqueIdentifier>
     </Filter>
-  </ItemGroup>
-  <ItemGroup>
-    <Text Include="ReadMe.txt" />
+    <Filter Include="소스 파일\Monitor">
+      <UniqueIdentifier>{8c1e4b27-3f6a-4d92-b5e8-0a7d9c2f6e13}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="stdafx.h">
@@ -73,6 +73,27 @@
       <Filter>헤더 파일</Filter>
     </ClInclude>
     <ClInclude Include="MapScreen.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="Monitor.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="EffectActors.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="Faith.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="NpcSociety.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="PatronPowers.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="Portrait.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="SkillBar.h">
       <Filter>헤더 파일</Filter>
     </ClInclude>
     <ClInclude Include="SceneGraph.h">
@@ -153,6 +174,27 @@
       <Filter>소스 파일</Filter>
     </ClCompile>
     <ClCompile Include="MapScreen.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="Monitor.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="EffectActors.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="Faith.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="NpcSociety.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="PatronPowers.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="Portrait.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="SkillBar.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
     <ClCompile Include="SceneGraph.cpp">
@@ -264,6 +306,9 @@
     </None>
     <None Include="Data\Story.txt">
       <Filter>소스 파일\Data</Filter>
+    </None>
+    <None Include="Monitor\index.html">
+      <Filter>소스 파일\Monitor</Filter>
     </None>
   </ItemGroup>
 </Project>
