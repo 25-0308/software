@@ -32,6 +32,7 @@ struct NpcTraits
 	float wanderRadius = 0.f;
 	bool hotheaded = false;
 	bool social = false;
+	float sociability = 1.f; // 이웃과 어울리는 정도(마을 분위기 — NpcSociety의 만남 확률 배율, 1이 보통)
 };
 
 namespace FaithInfo

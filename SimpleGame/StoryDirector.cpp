@@ -14,6 +14,7 @@
 #include "Renderer.h"
 #include "SceneGraph.h"
 #include "UiDraw.h"
+#include "WorldLayout.h"
 
 namespace
 {
@@ -123,10 +124,7 @@ void StoryDirector::OnMapLoaded(const std::string& locId, SceneGraph& scene, Pla
 {
 	m_Scene = &scene;
 	m_Player = &player;
-
-	// 한 번 와 본 지역은 이정표로 언제든 다시 올 수 있다.
-	m_Story.Set("MAP", locId);
-	m_Story.Set("UNLOCK_" + locId, "true");
+	m_StageId = WorldLayout::IsStage(locId) ? locId : std::string();
 
 	m_Marker = scene.Spawn<ObjectiveMarkerActor>();
 	m_ObjectiveSpots.clear();
@@ -137,8 +135,78 @@ void StoryDirector::OnMapLoaded(const std::string& locId, SceneGraph& scene, Pla
 	// 첫 프레임부터 지금 이야기에 맞는 인물·물건만 보이도록 존재 조건을 바로 한 번 평가한다.
 	UpdatePresence();
 
+	m_CurrentRegion = locId;
+	EnterRegion(locId);
+}
+
+void StoryDirector::DetachScene()
+{
+	if (m_Marker != nullptr)
+	{
+		m_Marker->Destroy();
+	}
+	if (m_Guide != nullptr)
+	{
+		m_Guide->Destroy();
+	}
+
+	m_Scene = nullptr;
+	m_Player = nullptr;
+	m_Marker = nullptr;
+	m_Guide = nullptr;
+	m_ObjectiveSpots.clear();
+}
+
+void StoryDirector::EnterRegion(const std::string& locId)
+{
+	// 한 번 와 본 지역은 열린 것으로 친다(성역의 안개 장벽도 다시 막지 않는다).
+	m_Story.Set("MAP", locId);
+	m_Story.Set("UNLOCK_" + locId, "true");
+
+	// 이 지역에서 쓰러지면 마을 어귀에서 다시 일어선다.
+	const WorldPlace* place = WorldLayout::Find(locId);
+	if (place != nullptr && m_Player != nullptr && m_StageId.empty())
+	{
+		WorldPoint arrival = WorldLayout::ArrivalPoint(*place);
+		m_Player->SetSpawnPoint(arrival.x, arrival.y);
+	}
+
 	ShowRegionBanner(locId);
 	StartTriggered(DialogueTrigger::Enter, locId);
+}
+
+// 월드에서 플레이어가 걸어서 다른 지역의 정사각형 안으로 들어서면 그 지역에 들어선 것으로 친다(황야로 나가면 현재 지역만
+// 비우고 MAP은 그대로). 대화 중엔 미뤄 둔다 — 그동안 열리는 "on enter" 대화를 놓치지 않게(대화 중엔 걷지도 않는다).
+void StoryDirector::UpdateRegion()
+{
+	if (!m_StageId.empty() || m_Player == nullptr)
+	{
+		return;
+	}
+
+	const WorldPlace* place = WorldLayout::Containing(m_Player->GetWorldX(), m_Player->GetWorldY());
+	std::string region = (place != nullptr) ? std::string(place->locId) : std::string();
+	if (region == m_CurrentRegion)
+	{
+		return;
+	}
+
+	m_CurrentRegion = region;
+	if (!region.empty())
+	{
+		EnterRegion(region);
+	}
+}
+
+std::string StoryDirector::RegionOf(const Actor& actor) const
+{
+	if (!m_StageId.empty())
+	{
+		return m_StageId;
+	}
+
+	const WorldPlace* place = WorldLayout::Containing(actor.GetWorldX(), actor.GetWorldY());
+	return (place != nullptr) ? std::string(place->locId) : std::string();
 }
 
 bool StoryDirector::OnTalk(const Actor& actor)
@@ -268,9 +336,13 @@ void StoryDirector::ApplyEffect(const std::string& effect)
 	{
 		m_Story.Set("UNLOCK_" + argument, "true");
 
+		// 마을은 늘 걸어서 갈 수 있고, 성역(올림포스 정상·타르타로스 경계)은 이때 길을 막던 안개가 걷힌다.
 		const StoryRegion* region = m_Database.FindRegion(argument);
+		const WorldPlace* place = WorldLayout::Find(argument);
 		std::string name = (region != nullptr) ? region->name : argument;
-		GameLog::Add(GameLog::Kind::Reward, "[새 지역] " + name + " — 이정표에서 갈 수 있다.");
+		bool sanctuary = (place != nullptr && place->kind == PlaceKind::Sanctuary);
+		GameLog::Add(GameLog::Kind::Reward, sanctuary ? "[길이 열렸다] " + name + " — 길을 막던 안개가 걷혔다."
+			: "[새 목적지] " + name + " — 길을 따라 걸어가자(발밑의 금빛 화살표).");
 	}
 	else if (command == "GOTO")
 	{
@@ -456,6 +528,11 @@ void StoryDirector::Update(float deltaSeconds)
 
 	if (!m_DialogueBox.IsActive())
 	{
+		UpdateRegion();
+	}
+
+	if (!m_DialogueBox.IsActive())
+	{
 		UpdateTriggers();
 	}
 
@@ -574,8 +651,9 @@ void StoryDirector::UpdateTriggers()
 }
 
 // 지금 진행 단계의 목표 문구와 목표 대상(머리 위 금빛 마름모, 바닥의 금빛 트리거 영역, 발밑 길잡이 화살표,
-// 미니맵 점)을 갱신한다. 목표가 다른 지역에 있으면(step의 지역) 이 지역의 이정표를 가리키고 목표 문구 아래에
-// 목적지를 띄운다. 지역을 정하지 않은 단계는 대상이 이 지역에 하나도 없을 때 이정표를 가리킨다.
+// 미니맵 점)을 갱신한다. 목표가 다른 지역에 있으면(step의 지역) 그 지역으로 가는 길의 다음 꺾임점 — 지금 지역의 출구,
+// 황야를 지나는 길의 굽이, 목표 지역의 어귀 — 을 차례로 가리키고, 목표 문구 아래에 목적지를 띄운다. 지역이 정해진
+// 단계는 그 지역 안에 있는 대상만 목표로 표시한다(같은 인물이 월드의 여러 지역에 서 있을 수 있어서).
 void StoryDirector::UpdateObjective()
 {
 	const StoryStep* step = m_Database.FindStep(m_Story.Get("STORY_STEP"));
@@ -595,7 +673,7 @@ void StoryDirector::UpdateObjective()
 	std::string hint;
 	if (!objective.empty() && !travelRegion.empty())
 	{
-		hint = "▶ 목적지: " + GetRegionShortName(travelRegion) + " (이정표로 이동)";
+		hint = "▶ 목적지: " + GetRegionShortName(travelRegion) + " — 길을 따라 걸어가자";
 	}
 	if (hint != m_ObjectiveHintString)
 	{
@@ -610,7 +688,6 @@ void StoryDirector::UpdateObjective()
 	std::vector<ObjectiveMarkerActor::Target> targets;
 	m_ObjectiveSpots.clear();
 	bool hasTargets = (step != nullptr) && !step->targets.empty() && travelRegion.empty();
-	bool targetExistsHere = false;
 
 	m_Scene->ForEach([&](Actor& actor)
 	{
@@ -625,10 +702,14 @@ void StoryDirector::UpdateObjective()
 				{
 					// 조건이 붙은 대상("ID?조건")은 조건이 참일 때만 표시한다(예: 아직 면담하지 않은 신만).
 					const std::string& condition = step->targetConditions[i];
-					targetExistsHere = true;
 					isTarget = actor.IsVisible() && (condition.empty() || m_Story.Evaluate(condition));
 					break;
 				}
+			}
+
+			if (isTarget && !step->region.empty() && RegionOf(actor) != step->region)
+			{
+				isTarget = false;
 			}
 		}
 
@@ -646,24 +727,17 @@ void StoryDirector::UpdateObjective()
 		}
 	});
 
-	bool pointToSignpost = !travelRegion.empty();
-	if (hasTargets && !targetExistsHere && step->region.empty())
+	// 다른 지역으로 가야 하면: 그 지역으로 이어지는 길의 다음 꺾임점(무대 안에선 이야기가 옮겨 주므로 가리키지 않는다).
+	if (!travelRegion.empty() && m_StageId.empty())
 	{
-		pointToSignpost = true;
-	}
-
-	if (pointToSignpost)
-	{
-		m_Scene->ForEach([&](Actor& actor)
+		float waypointX = 0.f;
+		float waypointY = 0.f;
+		if (WorldLayout::NextWaypoint(m_Player->GetWorldX(), m_Player->GetWorldY(), travelRegion, waypointX, waypointY))
 		{
-			const char* storyId = actor.GetStoryId();
-			if (storyId != nullptr && strcmp(storyId, "OBJ_SIGNPOST") == 0 && actor.IsVisible())
-			{
-				ObjectiveMarkerActor::Target marker = { actor.GetWorldX(), actor.GetWorldY(), actor.GetWorldZ() + MarkerHeight(actor) };
-				targets.push_back(marker);
-				m_ObjectiveSpots.push_back(Spot{ actor.GetWorldX(), actor.GetWorldY() });
-			}
-		});
+			ObjectiveMarkerActor::Target marker = { waypointX, waypointY, 1.6f };
+			targets.push_back(marker);
+			m_ObjectiveSpots.push_back(Spot{ waypointX, waypointY });
+		}
 	}
 
 	// 대화 중엔 화면을 어지럽히지 않도록 목표 마름모와 길잡이 화살표를 감춘다.
@@ -717,7 +791,7 @@ std::string StoryDirector::GetObjectiveRegion() const
 std::string StoryDirector::GetTravelRegion() const
 {
 	std::string region = GetObjectiveRegion();
-	if (region.empty() || region == m_Story.Get("MAP"))
+	if (region.empty() || region == m_CurrentRegion)
 	{
 		return std::string();
 	}
@@ -742,10 +816,10 @@ bool StoryDirector::IsObjectiveTarget(const std::string& storyId, const std::str
 		return false;
 	}
 
-	// 목표가 다른 지역에 있으면 지금 지역에선 이정표가 목표다(UpdateObjective와 같은 판정).
-	if (locId == m_Story.Get("MAP") && !GetTravelRegion().empty())
+	// 목표가 다른 지역에 있어 길을 따라가는 중이면 인물·물건 중엔 목표가 없다(목표는 길 위의 꺾임점 — UpdateObjective와 같은 판정).
+	if (!GetTravelRegion().empty())
 	{
-		return storyId == "OBJ_SIGNPOST";
+		return false;
 	}
 
 	// 지역이 정해진 단계라면 그 지역에 있는 대상만 목표다.

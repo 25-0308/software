@@ -29,25 +29,29 @@ namespace MapColors
 	const Rgb kShadow = { 0.7f, 0.3f, 0.95f };         // 균열의 그림자 괴물: 보라
 }
 
-// 맵 전체를 위에서 내려다본 지도. 기본은 화면 오른쪽 위에 작게 뜨는 미니맵이고, 패널 위치·크기를 주면 같은
-// 코드로 큰 지도(MapScreen, M 키)도 그린다. 맵 전체를 카메라와 같은 방향(같은 yaw, 같은 좌우/상하 반전)으로
-// 놓고, 위에서 내려다본 모양(세로로 눌리지 않은 마름모)으로 보여준다 — 지도에서 위로 가는 것이 본 화면에서도
-// 같은 방향으로 가는 것처럼 보이게 하려는 것이다(플레이어 화살촉도 화면에서 바라보는 쪽을 가리킨다).
+// 위에서 내려다본 지도. 기본은 화면 오른쪽 위에 작게 뜨는 미니맵으로 플레이어 둘레(가로세로 kDefaultWindow*2칸)만
+// 보여 주고 플레이어를 따라 움직인다 — 월드가 마을 아홉 곳이 이어진 큰 맵이라 전체를 128픽셀에 담으면 아무것도 안
+// 보여서. 패널 위치·크기를 주고 창 크기를 0으로 하면 같은 코드로 맵 전체를 보여 주는 큰 지도(MapScreen, M 키)가 된다.
+// 지도는 카메라와 같은 방향(같은 yaw, 같은 좌우/상하 반전)으로 놓고, 위에서 내려다본 모양(세로로 눌리지 않은 마름모)으로
+// 보여준다 — 지도에서 위로 가는 것이 본 화면에서도 같은 방향으로 가는 것처럼 보이게 하려는 것이다(플레이어 화살촉도
+// 화면에서 바라보는 쪽을 가리킨다).
 //
-// 드로우 콜을 아끼려고 타일 1024개를 하나씩 그리지 않는다:
-//  - 지형(물/돌바닥/길/바위)과 나무/건물처럼 안 변하는 것은 화면 좌표의 삼각형 목록으로 한 번만 만들어 두고
-//    종류별로 한 번에 그린다(카메라 방향이 바뀌거나 다른 지역으로 옮겨 Invalidate될 때만 다시 만든다).
-//  - 인물/아이템/짐승/이정표/목표/플레이어 표시는 매 프레임 색깔별로 모아서 한 번에 그린다.
-//    이야기 진행 조건으로 숨은 액터(IsVisible() == false)는 표시하지 않는다.
+// 드로우 콜·정점을 아끼려고 타일을 하나씩 그리지 않는다:
+//  - 지형(물/돌바닥/길/바위)은 줄마다 같은 종류가 이어진 칸을 사각형 하나로 묶어(런 길이) 종류별로 한 번에 그린다.
+//    맵 전체 지도는 한 번 만들어 두고(카메라 방향이 바뀌거나 Invalidate될 때만 다시), 플레이어 둘레만 보여 주는
+//    미니맵은 매 프레임 창 안의 칸만 다시 만든다(창 밖은 그리지 않음).
+//  - 나무/건물 자리는 한 번 모아 두고, 인물/아이템/짐승/이정표/목표/플레이어 표시는 매 프레임 색깔별로 모아 그린다.
+//    이야기 진행 조건으로 숨은 액터(IsVisible() == false)는 표시하지 않는다. 창 밖의 목표는 창 가장자리에 붙여 보여 준다.
 // 후처리(블룸 등)가 끝난 뒤 HUD처럼 화면 고정 좌표계(800x600)로 그린다.
 class MiniMap
 {
 public:
-	// 기본: 화면 오른쪽 위 구석의 128x128 미니맵.
+	// 기본: 화면 오른쪽 위 구석의 128x128 미니맵(플레이어 둘레만).
 	MiniMap();
 
-	// 패널 가운데(화면 픽셀, 원점은 왼쪽 아래)와 반 변(픽셀), 점·마름모 같은 표시의 크기 배율(큰 지도는 크게).
-	MiniMap(float centerX, float centerY, float halfSize, float markerScale);
+	// 패널 가운데(화면 픽셀, 원점은 왼쪽 아래)와 반 변(픽셀), 점·마름모 같은 표시의 크기 배율(큰 지도는 크게), 보여 줄
+	// 창의 반 변(월드 칸 — 0이면 맵 전체).
+	MiniMap(float centerX, float centerY, float halfSize, float markerScale, float windowHalf);
 
 	// objectives: 지금 목표 대상들의 월드 위치(StoryDirector::GetObjectiveSpots) — 금빛 마름모가 숨 쉬고
 	// 그 둘레로 금빛 고리가 퍼져 나간다.
@@ -55,17 +59,26 @@ public:
 		const std::vector<Spot>& objectives, float time);
 
 	// 다른 지역으로 옮겨 맵이 바뀌었을 때 부른다: 다음 Draw에서 지형·나무·건물을 새 맵으로 다시 만든다.
-	void Invalidate() { m_StaticBuilt = false; }
+	void Invalidate()
+	{
+		m_StaticBuilt = false;
+		m_ActorsCollected = false;
+	}
 
 	float GetPanelCenterX() const { return m_PanelCenterX; }
 	float GetPanelCenterY() const { return m_PanelCenterY; }
 	float GetPanelHalfSize() const { return m_PanelHalfSize; }
 
+	// 마지막으로 그린 지도에서 월드 좌표가 놓인 화면 자리(픽셀). 지도 위에 지역 이름을 얹을 때 쓴다(큰 지도).
+	void WorldToPanel(float worldX, float worldY, float& outX, float& outY) const { m_Transform.Apply(worldX, worldY, outX, outY); }
+
 private:
 	// 월드 좌표를 지도 화면 좌표(픽셀)로 옮기는 변환. 카메라와 같은 방향으로 놓으려고
-	// yaw 회전 → 좌우/상하 반전 → 배율 → 패널 중심 이동 순으로 적용한다.
+	// 창 중심 빼기 → yaw 회전 → 좌우/상하 반전 → 배율 → 패널 중심 이동 순으로 적용한다.
 	struct MapTransform
 	{
+		float originX = 0.f; // 지도 가운데에 올 월드 좌표(창 중심 — 맵 전체 지도는 0)
+		float originY = 0.f;
 		float cosYaw = 1.f;
 		float sinYaw = 0.f;
 		float scaleX = 1.f; // 반전이면 음수
@@ -79,12 +92,20 @@ private:
 		void ApplyDirection(float worldX, float worldY, float& screenX, float& screenY) const;
 	};
 
-	void RebuildStatic(SceneGraph& scene, const TileMap& tileMap);
+	// 나무·건물 자리를 모아 둔다(맵이 바뀌어 Invalidate될 때만).
+	void CollectStaticActors(SceneGraph& scene);
+
+	// [minX, maxX] x [minY, maxY](월드, 칸 경계) 안의 지형과 나무·건물을 화면 좌표 삼각형으로 만든다.
+	void BuildTerrain(const TileMap& tileMap, int minGridX, int minGridY, int maxGridX, int maxGridY);
+
+	// (x, y)가 지금 보여 주는 창 안인지(맵 전체 지도면 늘 참).
+	bool InWindow(float x, float y) const;
 
 	float m_PanelCenterX;
 	float m_PanelCenterY;
 	float m_PanelHalfSize;
 	float m_MarkerScale;
+	float m_WindowHalf; // 0이면 맵 전체
 
 	// 카메라 방향이 바뀌었는지 보기 위해 마지막으로 정적 지오메트리를 만들 때의 값을 기억한다.
 	bool m_StaticBuilt = false;
@@ -94,7 +115,12 @@ private:
 
 	MapTransform m_Transform;
 
-	// 한 번 만들어 두는 정적 지오메트리(화면 좌표 삼각형: x,y,z 반복).
+	// 나무 자리(x, y 반복)와 건물 자리·크기(x, y, size 반복) — 월드 좌표.
+	bool m_ActorsCollected = false;
+	std::vector<float> m_TreeSpots;
+	std::vector<float> m_BuildingSpots;
+
+	// 지형·나무·건물 지오메트리(화면 좌표 삼각형: x,y,z 반복). 맵 전체 지도는 한 번 만들어 두고, 창 지도는 매 프레임.
 	std::vector<float> m_Grass;
 	std::vector<float> m_Water;
 	std::vector<float> m_Stone;

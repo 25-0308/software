@@ -520,12 +520,6 @@ std::vector<Spot> ScatterTrees(SceneGraph& scene, const TileMap& tileMap, std::m
 
 	std::uniform_real_distribution<float> treeX(-(mapHalfX - 1.f), mapHalfX - 1.f);
 	std::uniform_real_distribution<float> treeY(-(mapHalfY - 1.f), mapHalfY - 1.f);
-	std::uniform_real_distribution<float> unit(0.f, 1.f);
-
-	// 잎 색: 활엽수는 짙은 초록 ~ 올리브(은빛 도는 녹색) 사이, 사이프러스는 짙은 초록 — 지중해 숲 느낌.
-	const Color kDeepLeaf = { 0.10f, 0.28f, 0.11f };
-	const Color kOliveLeaf = { 0.30f, 0.37f, 0.21f };
-	const Color kCypressLeaf = { 0.07f, 0.21f, 0.11f };
 
 	std::vector<Spot> trees;
 	int guard = 0;
@@ -545,23 +539,34 @@ std::vector<Spot> ScatterTrees(SceneGraph& scene, const TileMap& tileMap, std::m
 			continue;
 		}
 
-		float tint = unit(rng) * 0.1f - 0.05f; // 그루마다 색조를 살짝 흔들어 단조로움을 줄임
-		if (unit(rng) < cypressRatio)
-		{
-			scene.Spawn<TreeActor>(tx, ty, 1.3f + unit(rng) * 0.4f,
-				kCypressLeaf.r + tint * 0.5f, kCypressLeaf.g + tint, kCypressLeaf.b + tint * 0.5f, TreeKind::Cypress);
-		}
-		else
-		{
-			Color leaf = Mix(kDeepLeaf, kOliveLeaf, unit(rng) * 0.8f);
-			scene.Spawn<TreeActor>(tx, ty, 1.4f + unit(rng) * 0.4f,
-				leaf.r + tint, leaf.g + tint, leaf.b + tint * 0.5f, TreeKind::Broadleaf);
-		}
-
+		SpawnRandomTree(scene, rng, tx, ty, cypressRatio);
 		trees.push_back(Spot{ tx, ty });
 	}
 
 	return trees;
+}
+
+void SpawnRandomTree(SceneGraph& scene, std::mt19937& rng, float x, float y, float cypressRatio)
+{
+	std::uniform_real_distribution<float> unit(0.f, 1.f);
+
+	// 잎 색: 활엽수는 짙은 초록 ~ 올리브(은빛 도는 녹색) 사이, 사이프러스는 짙은 초록 — 지중해 숲 느낌.
+	const Color kDeepLeaf = { 0.10f, 0.28f, 0.11f };
+	const Color kOliveLeaf = { 0.30f, 0.37f, 0.21f };
+	const Color kCypressLeaf = { 0.07f, 0.21f, 0.11f };
+
+	float tint = unit(rng) * 0.1f - 0.05f; // 그루마다 색조를 살짝 흔들어 단조로움을 줄임
+	if (unit(rng) < cypressRatio)
+	{
+		scene.Spawn<TreeActor>(x, y, 1.3f + unit(rng) * 0.4f,
+			kCypressLeaf.r + tint * 0.5f, kCypressLeaf.g + tint, kCypressLeaf.b + tint * 0.5f, TreeKind::Cypress);
+	}
+	else
+	{
+		Color leaf = Mix(kDeepLeaf, kOliveLeaf, unit(rng) * 0.8f);
+		scene.Spawn<TreeActor>(x, y, 1.4f + unit(rng) * 0.4f,
+			leaf.r + tint, leaf.g + tint, leaf.b + tint * 0.5f, TreeKind::Broadleaf);
+	}
 }
 
 void ScatterRocks(SceneGraph& scene, const TileMap& tileMap, std::mt19937& rng, float density, bool snowy)
@@ -605,7 +610,11 @@ void SpawnHerb(SceneGraph& scene, const TileMap& tileMap, float x, float y)
 AnimalActor* SpawnAnimal(SceneGraph& scene, const TileMap& tileMap, AnimalKind kind, float x, float y, float phase)
 {
 	Spot spot = FindOpenGround(tileMap, x, y, 1.f);
-	return scene.Spawn<AnimalActor>(kind, spot.x, spot.y, phase);
+	AnimalActor* animal = scene.Spawn<AnimalActor>(kind, spot.x, spot.y, phase);
+
+	// 씬의 생성 문맥이 지역을 월드로 옮겼으면 배회 기준점도 옮겨진 자리로 맞춘다.
+	animal->ResetAnchor();
+	return animal;
 }
 
 NpcActor* SpawnStoryNpc(SceneGraph& scene, float x, float y, float size, float r, float g, float b, const HumanLook& look,
@@ -645,5 +654,5 @@ LevelActors SpawnPlayerAndMarkers(SceneGraph& scene, float x, float y)
 
 void SpawnAmbience(SceneGraph& scene, const TileMap& tileMap)
 {
-	scene.Spawn<AmbientMotesActor>(tileMap.GetWidth() * 0.5f, tileMap.GetHeight() * 0.5f, 70);
+	scene.Spawn<AmbientMotesActor>(0.f, 0.f, tileMap.GetWidth() * 0.5f, tileMap.GetHeight() * 0.5f, 70, 1.8f, 1.5f, 0.7f);
 }

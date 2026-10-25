@@ -1,0 +1,2610 @@
+{
+	"grid": {
+		"unit": 1.0,
+		"wallWidth": 2.0,
+		"wallHeight": 2.4,
+		"wallThickness": 0.25,
+		"roofSpan": 4.0,
+		"columnHeight": 3.6,
+		"forward": "-Y(블렌더) / +Z(glTF)"
+	},
+	"pieces": [
+		{
+			"name": "Wall_Plain",
+			"category": "House",
+			"desc": "회벽 한 칸(돌 기단 + 윗단 몰딩)",
+			"size": [
+				2.0,
+				0.25,
+				2.4
+			],
+			"pivot": "바닥 가운데",
+			"verts": 24,
+			"faces": 18,
+			"materials": [
+				"StoneGray",
+				"Plaster"
+			]
+		},
+		{
+			"name": "Wall_Door",
+			"category": "House",
+			"desc": "문이 난 벽(나무 문틀 + 푸른 문)",
+			"size": [
+				2.0,
+				0.25,
+				2.4
+			],
+			"pivot": "바닥 가운데",
+			"verts": 116,
+			"faces": 98,
+			"materials": [
+				"StoneGray",
+				"Plaster",
+				"WoodDark",
+				"BlueDoor",
+				"BlueShutter",
+				"Bronze"
+			]
+		},
+		{
+			"name": "Wall_Window",
+			"category": "House",
+			"desc": "덧창 달린 창문 벽",
+			"size": [
+				2.0,
+				0.25,
+				2.4
+			],
+			"pivot": "바닥 가운데",
+			"verts": 152,
+			"faces": 114,
+			"materials": [
+				"StoneGray",
+				"Plaster",
+				"Shadow",
+				"Limestone",
+				"WoodDark",
+				"BlueShutter",
+				"BlueDoor"
+			]
+		},
+		{
+			"name": "Wall_WindowLit",
+			"category": "House",
+			"desc": "불 켜진 창문 벽(창이 빛남)",
+			"size": [
+				2.0,
+				0.25,
+				2.4
+			],
+			"pivot": "바닥 가운데",
+			"verts": 152,
+			"faces": 114,
+			"materials": [
+				"StoneGray",
+				"Plaster",
+				"WindowLit",
+				"Limestone",
+				"WoodDark",
+				"BlueShutter",
+				"BlueDoor"
+			]
+		},
+		{
+			"name": "Wall_Half",
+			"category": "House",
+			"desc": "마당 낮은 담(1.2 m)",
+			"size": [
+				2.0,
+				0.3,
+				1.2
+			],
+			"pivot": "바닥 가운데",
+			"verts": 24,
+			"faces": 18,
+			"materials": [
+				"StoneGray",
+				"Plaster",
+				"Limestone"
+			]
+		},
+		{
+			"name": "Wall_Corner",
+			"category": "House",
+			"desc": "모서리 기둥(벽 두 칸이 만나는 곳)",
+			"size": [
+				0.35,
+				0.35,
+				2.45
+			],
+			"pivot": "바닥 가운데 = 벽 끝 꼭짓점",
+			"verts": 24,
+			"faces": 18,
+			"materials": [
+				"StoneGray",
+				"Plaster"
+			]
+		},
+		{
+			"name": "Floor_Stone",
+			"category": "House",
+			"desc": "돌 바닥판 2×2",
+			"size": [
+				2.0,
+				2.0,
+				0.12
+			],
+			"pivot": "바닥 가운데",
+			"verts": 32,
+			"faces": 24,
+			"materials": [
+				"Limestone",
+				"StoneGray"
+			]
+		},
+		{
+			"name": "Roof_Gable",
+			"category": "House",
+			"desc": "박공지붕 한 칸(용마루가 X 방향, 깊이 4 m 집용, 기와 골)",
+			"size": [
+				2.0,
+				4.7,
+				1.0
+			],
+			"pivot": "바닥 가운데(형상은 벽 높이 2.4 m 위에 미리 올려 둠 — 집 가운데 줄에 그대로 둠)",
+			"verts": 148,
+			"faces": 104,
+			"materials": [
+				"RoofTile",
+				"RoofTileDark"
+			]
+		},
+		{
+			"name": "Roof_GableEnd",
+			"category": "House",
+			"desc": "박공벽(지붕 양 끝 삼각 벽)",
+			"size": [
+				4.5,
+				0.25,
+				0.95
+			],
+			"pivot": "바닥 가운데(벽 높이 2.4 m 위로 미리 올려 둠 — 옆벽 줄의 가운데에 90도 돌려 둠)",
+			"verts": 18,
+			"faces": 25,
+			"materials": [
+				"Plaster",
+				"TemplePaint"
+			]
+		},
+		{
+			"name": "Roof_Flat",
+			"category": "House",
+			"desc": "평지붕 2×2(난간) — 섬마을 지붕",
+			"size": [
+				2.0,
+				2.0,
+				0.45
+			],
+			"pivot": "바닥 가운데(벽 높이 2.4 m 위로 미리 올려 둠)",
+			"verts": 40,
+			"faces": 30,
+			"materials": [
+				"Plaster"
+			]
+		},
+		{
+			"name": "Stairs_Outside",
+			"category": "House",
+			"desc": "벽에 붙인 바깥 돌계단(2.4 m 올라감)",
+			"size": [
+				1.0,
+				3.0,
+				2.4
+			],
+			"pivot": "바닥 가운데",
+			"verts": 104,
+			"faces": 78,
+			"materials": [
+				"Plaster"
+			]
+		},
+		{
+			"name": "Awning",
+			"category": "House",
+			"desc": "줄무늬 천 차양 2 m(문 위·가게 앞)",
+			"size": [
+				2.0,
+				1.2,
+				0.5
+			],
+			"pivot": "벽 앞면, 높이 2.1",
+			"verts": 78,
+			"faces": 68,
+			"materials": [
+				"Canvas",
+				"CanvasStripe",
+				"Wood"
+			]
+		},
+		{
+			"name": "Pergola",
+			"category": "House",
+			"desc": "포도 덩굴 그늘막 2×2(나무 기둥 + 덩굴)",
+			"size": [
+				2.0,
+				2.0,
+				2.5
+			],
+			"pivot": "바닥 가운데",
+			"verts": 488,
+			"faces": 714,
+			"materials": [
+				"Wood",
+				"WoodDark",
+				"LeafDark",
+				"Leaf",
+				"Grape"
+			]
+		},
+		{
+			"name": "Fence_Wood",
+			"category": "House",
+			"desc": "나무 울타리 2 m",
+			"size": [
+				2.0,
+				0.1,
+				1.0
+			],
+			"pivot": "바닥 가운데",
+			"verts": 52,
+			"faces": 36,
+			"materials": [
+				"Wood",
+				"WoodLight"
+			]
+		},
+		{
+			"name": "Wall_DryStone",
+			"category": "House",
+			"desc": "막돌 담(밭·목장 경계) 2 m",
+			"size": [
+				2.0,
+				0.6,
+				0.9
+			],
+			"pivot": "바닥 가운데",
+			"verts": 228,
+			"faces": 380,
+			"materials": [
+				"StoneGray",
+				"Rock"
+			]
+		},
+		{
+			"name": "Gate_Wood",
+			"category": "House",
+			"desc": "나무 대문(문틀 포함) 2 m",
+			"size": [
+				2.0,
+				0.3,
+				2.3
+			],
+			"pivot": "바닥 가운데",
+			"verts": 72,
+			"faces": 54,
+			"materials": [
+				"StoneGray",
+				"Wood",
+				"WoodDark",
+				"Limestone"
+			]
+		},
+		{
+			"name": "Temple_Step",
+			"category": "Temple",
+			"desc": "신전 기단 블록 2×2(대리석, 0.3 m)",
+			"size": [
+				2.0,
+				2.0,
+				0.3
+			],
+			"pivot": "바닥 가운데",
+			"verts": 16,
+			"faces": 12,
+			"materials": [
+				"Marble",
+				"MarbleShade"
+			]
+		},
+		{
+			"name": "Column_Doric",
+			"category": "Temple",
+			"desc": "도리스식 기둥(홈 파인 기둥 + 단순한 주두) 3.6 m",
+			"size": [
+				0.8,
+				0.8,
+				3.6
+			],
+			"pivot": "바닥 가운데",
+			"verts": 118,
+			"faces": 112,
+			"materials": [
+				"Marble"
+			]
+		},
+		{
+			"name": "Column_Ionic",
+			"category": "Temple",
+			"desc": "이오니아식 기둥(소용돌이 주두 + 받침) 3.6 m",
+			"size": [
+				0.9,
+				0.7,
+				3.6
+			],
+			"pivot": "바닥 가운데",
+			"verts": 226,
+			"faces": 186,
+			"materials": [
+				"Marble",
+				"TempleBlue"
+			]
+		},
+		{
+			"name": "Column_Corinthian",
+			"category": "Temple",
+			"desc": "코린트식 기둥(로마 신전, 잎 장식 주두) 3.6 m",
+			"size": [
+				0.8,
+				0.8,
+				3.6
+			],
+			"pivot": "바닥 가운데",
+			"verts": 280,
+			"faces": 304,
+			"materials": [
+				"Marble",
+				"MarbleShade"
+			]
+		},
+		{
+			"name": "Column_Broken",
+			"category": "Temple",
+			"desc": "부러진 기둥 + 굴러떨어진 기둥 토막",
+			"size": [
+				2.0,
+				1.4,
+				1.7
+			],
+			"pivot": "바닥 가운데",
+			"verts": 236,
+			"faces": 168,
+			"materials": [
+				"Marble"
+			]
+		},
+		{
+			"name": "Entablature",
+			"category": "Temple",
+			"desc": "엔타블러처 2 m(아키트레이브 + 트리글리프 프리즈 + 코니스)",
+			"size": [
+				2.0,
+				0.9,
+				1.15
+			],
+			"pivot": "기둥 윗면 높이 0",
+			"verts": 136,
+			"faces": 102,
+			"materials": [
+				"Marble",
+				"TemplePaint",
+				"TempleBlue",
+				"Shadow"
+			]
+		},
+		{
+			"name": "Pediment",
+			"category": "Temple",
+			"desc": "박공(삼각 페디먼트) 6 m — 신전 정면 위",
+			"size": [
+				6.4,
+				0.9,
+				1.3
+			],
+			"pivot": "엔타블러처 윗면",
+			"verts": 100,
+			"faces": 114,
+			"materials": [
+				"Marble",
+				"TempleBlue",
+				"Gold"
+			]
+		},
+		{
+			"name": "Temple_Roof",
+			"category": "Temple",
+			"desc": "신전 지붕 한 칸 2 m(폭 6.4 m, 대리석 기와)",
+			"size": [
+				2.0,
+				6.6,
+				1.3
+			],
+			"pivot": "엔타블러처 윗면",
+			"verts": 148,
+			"faces": 104,
+			"materials": [
+				"MarbleShade",
+				"Marble"
+			]
+		},
+		{
+			"name": "Temple_Wall",
+			"category": "Temple",
+			"desc": "신전 내실(켈라) 벽 2 m — 대리석 마름돌",
+			"size": [
+				2.0,
+				0.5,
+				3.6
+			],
+			"pivot": "바닥 가운데",
+			"verts": 120,
+			"faces": 90,
+			"materials": [
+				"MarbleShade",
+				"Marble"
+			]
+		},
+		{
+			"name": "Temple_Door",
+			"category": "Temple",
+			"desc": "청동 신전 문(문틀 포함) 2 m",
+			"size": [
+				2.0,
+				0.5,
+				3.6
+			],
+			"pivot": "바닥 가운데",
+			"verts": 120,
+			"faces": 156,
+			"materials": [
+				"Marble",
+				"TemplePaint",
+				"Bronze",
+				"Gold"
+			]
+		},
+		{
+			"name": "Roman_Stairs",
+			"category": "Temple",
+			"desc": "로마식 정면 계단 2 m 폭(1.5 m 올라감)",
+			"size": [
+				2.0,
+				2.4,
+				1.5
+			],
+			"pivot": "바닥 가운데",
+			"verts": 64,
+			"faces": 48,
+			"materials": [
+				"MarbleShade",
+				"Marble"
+			]
+		},
+		{
+			"name": "Inscription_Gold",
+			"category": "Temple",
+			"desc": "금빛 비문 띠(로마 신전 정면 'IVNO')",
+			"size": [
+				4.0,
+				0.1,
+				0.5
+			],
+			"pivot": "엔타블러처 앞면",
+			"verts": 88,
+			"faces": 66,
+			"materials": [
+				"TemplePaint",
+				"Gold"
+			]
+		},
+		{
+			"name": "Altar",
+			"category": "Temple",
+			"desc": "돌 제단 + 청동 불씨 그릇",
+			"size": [
+				1.4,
+				1.0,
+				1.3
+			],
+			"pivot": "바닥 가운데",
+			"verts": 122,
+			"faces": 115,
+			"materials": [
+				"StoneGray",
+				"Limestone",
+				"TemplePaint",
+				"Bronze",
+				"Fire"
+			]
+		},
+		{
+			"name": "Tripod",
+			"category": "Temple",
+			"desc": "청동 삼발이 솥(델포이의 신탁 삼발이)",
+			"size": [
+				0.8,
+				0.8,
+				1.4
+			],
+			"pivot": "바닥 가운데",
+			"verts": 128,
+			"faces": 111,
+			"materials": [
+				"Bronze"
+			]
+		},
+		{
+			"name": "Statue",
+			"category": "Temple",
+			"desc": "받침대 위 대리석 신상(일반 서 있는 신)",
+			"size": [
+				1.0,
+				1.0,
+				3.2
+			],
+			"pivot": "바닥 가운데",
+			"verts": 166,
+			"faces": 166,
+			"materials": [
+				"Limestone",
+				"Marble"
+			]
+		},
+		{
+			"name": "Statue_Fallen",
+			"category": "Temple",
+			"desc": "목이 부러져 쓰러진 신상 + 깨진 받침대(아고라의 유피테르)",
+			"size": [
+				3.4,
+				1.6,
+				1.0
+			],
+			"pivot": "바닥 가운데",
+			"verts": 132,
+			"faces": 152,
+			"materials": [
+				"Limestone",
+				"Marble",
+				"HairWhite"
+			]
+		},
+		{
+			"name": "Stele",
+			"category": "Temple",
+			"desc": "글씨 새긴 비석(봉인 석판·경계석)",
+			"size": [
+				0.6,
+				0.25,
+				1.5
+			],
+			"pivot": "바닥 가운데",
+			"verts": 78,
+			"faces": 59,
+			"materials": [
+				"StoneGray",
+				"Limestone",
+				"StoneDark"
+			]
+		},
+		{
+			"name": "Herm",
+			"category": "Temple",
+			"desc": "헤르마 기둥(머리 달린 경계 기둥 — 길가·경계석의 신)",
+			"size": [
+				0.4,
+				0.4,
+				1.7
+			],
+			"pivot": "바닥 가운데",
+			"verts": 86,
+			"faces": 88,
+			"materials": [
+				"StoneGray",
+				"Limestone"
+			]
+		},
+		{
+			"name": "Brazier",
+			"category": "Temple",
+			"desc": "청동 화로대(불이 타는 그릇)",
+			"size": [
+				0.6,
+				0.6,
+				1.2
+			],
+			"pivot": "바닥 가운데",
+			"verts": 90,
+			"faces": 90,
+			"materials": [
+				"Bronze",
+				"Fire"
+			]
+		},
+		{
+			"name": "Amphora",
+			"category": "Goods",
+			"desc": "암포라(포도주·기름 항아리, 흑화 띠)",
+			"size": [
+				0.4,
+				0.4,
+				0.75
+			],
+			"pivot": "바닥 가운데",
+			"verts": 154,
+			"faces": 168,
+			"materials": [
+				"Clay",
+				"BlackFigure"
+			]
+		},
+		{
+			"name": "Pithos",
+			"category": "Goods",
+			"desc": "큰 저장 항아리 피토스(곡식·기름)",
+			"size": [
+				0.9,
+				0.9,
+				1.3
+			],
+			"pivot": "바닥 가운데",
+			"verts": 176,
+			"faces": 224,
+			"materials": [
+				"Clay",
+				"ClayDark"
+			]
+		},
+		{
+			"name": "Hydria",
+			"category": "Goods",
+			"desc": "물동이 히드리아(손잡이 셋)",
+			"size": [
+				0.4,
+				0.4,
+				0.5
+			],
+			"pivot": "바닥 가운데",
+			"verts": 145,
+			"faces": 156,
+			"materials": [
+				"Clay",
+				"BlackFigure"
+			]
+		},
+		{
+			"name": "Krater",
+			"category": "Goods",
+			"desc": "포도주 섞는 큰 그릇 크라테르",
+			"size": [
+				0.6,
+				0.6,
+				0.55
+			],
+			"pivot": "바닥 가운데",
+			"verts": 162,
+			"faces": 192,
+			"materials": [
+				"Clay",
+				"BlackFigure",
+				"Wine"
+			]
+		},
+		{
+			"name": "Kylix",
+			"category": "Goods",
+			"desc": "넓은 술잔 킬릭스",
+			"size": [
+				0.3,
+				0.3,
+				0.1
+			],
+			"pivot": "바닥 가운데",
+			"verts": 88,
+			"faces": 108,
+			"materials": [
+				"Clay",
+				"BlackFigure"
+			]
+		},
+		{
+			"name": "Oil_Lamp",
+			"category": "Goods",
+			"desc": "토기 기름 등잔(심지 불)",
+			"size": [
+				0.15,
+				0.1,
+				0.08
+			],
+			"pivot": "바닥 가운데",
+			"verts": 46,
+			"faces": 52,
+			"materials": [
+				"Clay",
+				"Fire"
+			]
+		},
+		{
+			"name": "Lamp_Stand",
+			"category": "Goods",
+			"desc": "청동 등잔대(키 큰 촛대)",
+			"size": [
+				0.4,
+				0.4,
+				1.4
+			],
+			"pivot": "바닥 가운데",
+			"verts": 68,
+			"faces": 65,
+			"materials": [
+				"Bronze",
+				"Fire"
+			]
+		},
+		{
+			"name": "Loom",
+			"category": "Goods",
+			"desc": "추를 단 직조기(세로 베틀)",
+			"size": [
+				1.4,
+				0.6,
+				1.9
+			],
+			"pivot": "바닥 가운데",
+			"verts": 332,
+			"faces": 334,
+			"materials": [
+				"Wood",
+				"WoodDark",
+				"Canvas",
+				"CanvasStripe",
+				"Rope",
+				"Clay"
+			]
+		},
+		{
+			"name": "Table",
+			"category": "Goods",
+			"desc": "나무 식탁",
+			"size": [
+				1.4,
+				0.8,
+				0.75
+			],
+			"pivot": "바닥 가운데",
+			"verts": 40,
+			"faces": 30,
+			"materials": [
+				"Wood",
+				"WoodDark"
+			]
+		},
+		{
+			"name": "Table_Marble",
+			"category": "Goods",
+			"desc": "대리석 회의 식탁(올림포스)",
+			"size": [
+				2.4,
+				1.2,
+				0.8
+			],
+			"pivot": "바닥 가운데",
+			"verts": 24,
+			"faces": 18,
+			"materials": [
+				"Marble",
+				"MarbleShade"
+			]
+		},
+		{
+			"name": "Chair_Klismos",
+			"category": "Goods",
+			"desc": "등받이가 휜 의자 클리스모스",
+			"size": [
+				0.5,
+				0.55,
+				0.9
+			],
+			"pivot": "바닥 가운데",
+			"verts": 106,
+			"faces": 84,
+			"materials": [
+				"Wood",
+				"WoodDark"
+			]
+		},
+		{
+			"name": "Stool",
+			"category": "Goods",
+			"desc": "등 없는 의자(접이식 디프로스)",
+			"size": [
+				0.45,
+				0.4,
+				0.45
+			],
+			"pivot": "바닥 가운데",
+			"verts": 48,
+			"faces": 34,
+			"materials": [
+				"Leather",
+				"WoodDark"
+			]
+		},
+		{
+			"name": "Kline",
+			"category": "Goods",
+			"desc": "기대 눕는 연회용 침상 클리네",
+			"size": [
+				2.0,
+				0.85,
+				0.85
+			],
+			"pivot": "바닥 가운데",
+			"verts": 118,
+			"faces": 132,
+			"materials": [
+				"Wood",
+				"WoodDark",
+				"Purple",
+				"Ochre"
+			]
+		},
+		{
+			"name": "Chest",
+			"category": "Goods",
+			"desc": "나무 궤짝(청동 장식)",
+			"size": [
+				0.8,
+				0.5,
+				0.55
+			],
+			"pivot": "바닥 가운데",
+			"verts": 40,
+			"faces": 30,
+			"materials": [
+				"Wood",
+				"WoodDark",
+				"Bronze",
+				"Gold"
+			]
+		},
+		{
+			"name": "Crate",
+			"category": "Goods",
+			"desc": "짐 상자",
+			"size": [
+				0.6,
+				0.6,
+				0.6
+			],
+			"pivot": "바닥 가운데",
+			"verts": 48,
+			"faces": 36,
+			"materials": [
+				"WoodLight",
+				"Wood"
+			]
+		},
+		{
+			"name": "Basket",
+			"category": "Goods",
+			"desc": "엮은 바구니(과일)",
+			"size": [
+				0.5,
+				0.5,
+				0.4
+			],
+			"pivot": "바닥 가운데",
+			"verts": 110,
+			"faces": 168,
+			"materials": [
+				"Rope",
+				"Pomegranate",
+				"Grape",
+				"LeafLight"
+			]
+		},
+		{
+			"name": "Sack",
+			"category": "Goods",
+			"desc": "곡식 자루",
+			"size": [
+				0.45,
+				0.4,
+				0.6
+			],
+			"pivot": "바닥 가운데",
+			"verts": 74,
+			"faces": 100,
+			"materials": [
+				"Canvas",
+				"Rope"
+			]
+		},
+		{
+			"name": "Well",
+			"category": "Goods",
+			"desc": "돌 우물(도르래 + 두레박)",
+			"size": [
+				1.4,
+				1.4,
+				2.2
+			],
+			"pivot": "바닥 가운데",
+			"verts": 130,
+			"faces": 124,
+			"materials": [
+				"StoneGray",
+				"WaterDeep",
+				"Wood",
+				"WoodDark",
+				"Rope"
+			]
+		},
+		{
+			"name": "Quern",
+			"category": "Goods",
+			"desc": "맷돌(곡식 가는 돌)",
+			"size": [
+				0.7,
+				0.7,
+				0.5
+			],
+			"pivot": "바닥 가운데",
+			"verts": 76,
+			"faces": 92,
+			"materials": [
+				"StoneGray",
+				"StoneDark",
+				"Wood"
+			]
+		},
+		{
+			"name": "Anvil",
+			"category": "Goods",
+			"desc": "모루(받침 나무 위)",
+			"size": [
+				0.7,
+				0.4,
+				0.75
+			],
+			"pivot": "바닥 가운데",
+			"verts": 44,
+			"faces": 30,
+			"materials": [
+				"WoodDark",
+				"Iron"
+			]
+		},
+		{
+			"name": "Forge",
+			"category": "Goods",
+			"desc": "대장간 화덕(풀무 + 불)",
+			"size": [
+				1.4,
+				1.0,
+				1.6
+			],
+			"pivot": "바닥 가운데",
+			"verts": 138,
+			"faces": 179,
+			"materials": [
+				"StoneDark",
+				"Ash_Pile",
+				"Ember",
+				"Fire",
+				"Leather",
+				"Wood"
+			]
+		},
+		{
+			"name": "Campfire",
+			"category": "Goods",
+			"desc": "모닥불(돌 두르기 + 장작 + 불꽃)",
+			"size": [
+				1.0,
+				1.0,
+				0.7
+			],
+			"pivot": "바닥 가운데",
+			"verts": 193,
+			"faces": 258,
+			"materials": [
+				"StoneGray",
+				"Rock",
+				"Trunk",
+				"Fire",
+				"GlowGold"
+			]
+		},
+		{
+			"name": "Torch_Wall",
+			"category": "Goods",
+			"desc": "벽 횃불 걸이(쇠 고리 + 불꽃)",
+			"size": [
+				0.2,
+				0.45,
+				0.8
+			],
+			"pivot": "벽 앞면, 높이 1.6",
+			"verts": 46,
+			"faces": 42,
+			"materials": [
+				"Iron",
+				"Wood",
+				"Fire"
+			]
+		},
+		{
+			"name": "Bench",
+			"category": "Goods",
+			"desc": "돌 벤치",
+			"size": [
+				1.6,
+				0.5,
+				0.48
+			],
+			"pivot": "바닥 가운데",
+			"verts": 24,
+			"faces": 18,
+			"materials": [
+				"Limestone",
+				"StoneGray"
+			]
+		},
+		{
+			"name": "Ladder",
+			"category": "Goods",
+			"desc": "나무 사다리 2.5 m",
+			"size": [
+				0.5,
+				0.15,
+				2.5
+			],
+			"pivot": "바닥 가운데",
+			"verts": 96,
+			"faces": 68,
+			"materials": [
+				"Wood",
+				"WoodLight"
+			]
+		},
+		{
+			"name": "Shelf_Pottery",
+			"category": "Goods",
+			"desc": "그릇 선반",
+			"size": [
+				1.2,
+				0.4,
+				1.6
+			],
+			"pivot": "바닥 가운데",
+			"verts": 482,
+			"faces": 574,
+			"materials": [
+				"Wood",
+				"ClayDark",
+				"Clay"
+			]
+		},
+		{
+			"name": "Cart",
+			"category": "Goods",
+			"desc": "두 바퀴 손수레",
+			"size": [
+				1.4,
+				2.0,
+				1.0
+			],
+			"pivot": "바닥 가운데",
+			"verts": 104,
+			"faces": 68,
+			"materials": [
+				"Wood",
+				"WoodLight",
+				"WoodDark",
+				"Iron"
+			]
+		},
+		{
+			"name": "Boat_Small",
+			"category": "Goods",
+			"desc": "작은 고깃배(노 둘)",
+			"size": [
+				1.4,
+				4.0,
+				0.9
+			],
+			"pivot": "바닥 가운데",
+			"verts": 128,
+			"faces": 102,
+			"materials": [
+				"Wood",
+				"WoodDark",
+				"WoodLight",
+				"TemplePaint",
+				"EyeWhite"
+			]
+		},
+		{
+			"name": "Net_Rack",
+			"category": "Goods",
+			"desc": "그물 말리는 틀",
+			"size": [
+				2.0,
+				0.4,
+				1.6
+			],
+			"pivot": "바닥 가운데",
+			"verts": 174,
+			"faces": 192,
+			"materials": [
+				"Wood",
+				"Rope",
+				"Cream"
+			]
+		},
+		{
+			"name": "Bread_Oven",
+			"category": "Goods",
+			"desc": "돔 화덕(빵 굽는 흙 화덕)",
+			"size": [
+				1.4,
+				1.4,
+				1.2
+			],
+			"pivot": "바닥 가운데",
+			"verts": 92,
+			"faces": 102,
+			"materials": [
+				"StoneGray",
+				"Clay",
+				"Shadow",
+				"Ember"
+			]
+		},
+		{
+			"name": "Scroll_Rack",
+			"category": "Goods",
+			"desc": "두루마리 칸 선반(기록 보관소)",
+			"size": [
+				1.2,
+				0.4,
+				1.6
+			],
+			"pivot": "바닥 가운데",
+			"verts": 824,
+			"faces": 554,
+			"materials": [
+				"WoodDark",
+				"Wood",
+				"Parchment"
+			]
+		},
+		{
+			"name": "Signpost",
+			"category": "Goods",
+			"desc": "이정표(방향판 셋)",
+			"size": [
+				1.0,
+				0.3,
+				2.2
+			],
+			"pivot": "바닥 가운데",
+			"verts": 42,
+			"faces": 29,
+			"materials": [
+				"Wood",
+				"WoodLight"
+			]
+		},
+		{
+			"name": "Stall",
+			"category": "Goods",
+			"desc": "시장 좌판(천 차양 + 과일·항아리)",
+			"size": [
+				2.0,
+				1.2,
+				2.3
+			],
+			"pivot": "바닥 가운데",
+			"verts": 276,
+			"faces": 344,
+			"materials": [
+				"Wood",
+				"WoodDark",
+				"Canvas",
+				"CanvasStripe",
+				"AppleGold",
+				"Pomegranate",
+				"Grape",
+				"LeafLight",
+				"Clay"
+			]
+		},
+		{
+			"name": "Tent",
+			"category": "Goods",
+			"desc": "진영 천막(올림포스 정상 두 진영)",
+			"size": [
+				3.0,
+				3.0,
+				2.6
+			],
+			"pivot": "바닥 가운데",
+			"verts": 54,
+			"faces": 57,
+			"materials": [
+				"Canvas",
+				"Shadow",
+				"Wood",
+				"Crest"
+			]
+		},
+		{
+			"name": "Banner",
+			"category": "Goods",
+			"desc": "세로 깃발(진영 표시 — 천 색은 CanvasStripe)",
+			"size": [
+				0.8,
+				0.4,
+				3.2
+			],
+			"pivot": "바닥 가운데",
+			"verts": 74,
+			"faces": 73,
+			"materials": [
+				"WoodDark",
+				"Wood",
+				"CanvasStripe",
+				"Gold"
+			]
+		}
+	],
+	"prefabs": {
+		"House_Small": {
+			"desc": "작은 집 4×4 m(문·창·박공지붕)",
+			"file": "Prefabs/House_Small.glb",
+			"items": [
+				{
+					"piece": "Wall_Window",
+					"position": [
+						-1.0,
+						-2.0,
+						0
+					],
+					"yawDegrees": 0
+				},
+				{
+					"piece": "Wall_Plain",
+					"position": [
+						-1.0,
+						2.0,
+						0
+					],
+					"yawDegrees": 180
+				},
+				{
+					"piece": "Wall_Door",
+					"position": [
+						1.0,
+						-2.0,
+						0
+					],
+					"yawDegrees": 0
+				},
+				{
+					"piece": "Wall_Window",
+					"position": [
+						1.0,
+						2.0,
+						0
+					],
+					"yawDegrees": 180
+				},
+				{
+					"piece": "Wall_Plain",
+					"position": [
+						2.0,
+						-1.0,
+						0
+					],
+					"yawDegrees": 90
+				},
+				{
+					"piece": "Wall_Plain",
+					"position": [
+						-2.0,
+						-1.0,
+						0
+					],
+					"yawDegrees": -90
+				},
+				{
+					"piece": "Wall_Window",
+					"position": [
+						2.0,
+						1.0,
+						0
+					],
+					"yawDegrees": 90
+				},
+				{
+					"piece": "Wall_Plain",
+					"position": [
+						-2.0,
+						1.0,
+						0
+					],
+					"yawDegrees": -90
+				},
+				{
+					"piece": "Wall_Corner",
+					"position": [
+						2.0,
+						2.0,
+						0
+					],
+					"yawDegrees": 0
+				},
+				{
+					"piece": "Wall_Corner",
+					"position": [
+						2.0,
+						-2.0,
+						0
+					],
+					"yawDegrees": 0
+				},
+				{
+					"piece": "Wall_Corner",
+					"position": [
+						-2.0,
+						2.0,
+						0
+					],
+					"yawDegrees": 0
+				},
+				{
+					"piece": "Wall_Corner",
+					"position": [
+						-2.0,
+						-2.0,
+						0
+					],
+					"yawDegrees": 0
+				},
+				{
+					"piece": "Roof_Gable",
+					"position": [
+						-1.0,
+						0,
+						0
+					],
+					"yawDegrees": 0
+				},
+				{
+					"piece": "Roof_Gable",
+					"position": [
+						1.0,
+						0,
+						0
+					],
+					"yawDegrees": 0
+				},
+				{
+					"piece": "Roof_GableEnd",
+					"position": [
+						2.0,
+						0,
+						0
+					],
+					"yawDegrees": 90
+				},
+				{
+					"piece": "Roof_GableEnd",
+					"position": [
+						-2.0,
+						0,
+						0
+					],
+					"yawDegrees": 90
+				},
+				{
+					"piece": "Floor_Stone",
+					"position": [
+						-1.0,
+						-1.0,
+						-0.1
+					],
+					"yawDegrees": 0
+				},
+				{
+					"piece": "Floor_Stone",
+					"position": [
+						-1.0,
+						1.0,
+						-0.1
+					],
+					"yawDegrees": 0
+				},
+				{
+					"piece": "Floor_Stone",
+					"position": [
+						1.0,
+						-1.0,
+						-0.1
+					],
+					"yawDegrees": 0
+				},
+				{
+					"piece": "Floor_Stone",
+					"position": [
+						1.0,
+						1.0,
+						-0.1
+					],
+					"yawDegrees": 0
+				}
+			]
+		},
+		"House_Long": {
+			"desc": "긴 집 6×4 m(불 켜진 창)",
+			"file": "Prefabs/House_Long.glb",
+			"items": [
+				{
+					"piece": "Wall_WindowLit",
+					"position": [
+						-2.0,
+						-2.0,
+						0
+					],
+					"yawDegrees": 0
+				},
+				{
+					"piece": "Wall_Plain",
+					"position": [
+						-2.0,
+						2.0,
+						0
+					],
+					"yawDegrees": 180
+				},
+				{
+					"piece": "Wall_Door",
+					"position": [
+						0.0,
+						-2.0,
+						0
+					],
+					"yawDegrees": 0
+				},
+				{
+					"piece": "Wall_Window",
+					"position": [
+						0.0,
+						2.0,
+						0
+					],
+					"yawDegrees": 180
+				},
+				{
+					"piece": "Wall_WindowLit",
+					"position": [
+						2.0,
+						-2.0,
+						0
+					],
+					"yawDegrees": 0
+				},
+				{
+					"piece": "Wall_Plain",
+					"position": [
+						2.0,
+						2.0,
+						0
+					],
+					"yawDegrees": 180
+				},
+				{
+					"piece": "Wall_Plain",
+					"position": [
+						3.0,
+						-1.0,
+						0
+					],
+					"yawDegrees": 90
+				},
+				{
+					"piece": "Wall_Plain",
+					"position": [
+						-3.0,
+						-1.0,
+						0
+					],
+					"yawDegrees": -90
+				},
+				{
+					"piece": "Wall_Window",
+					"position": [
+						3.0,
+						1.0,
+						0
+					],
+					"yawDegrees": 90
+				},
+				{
+					"piece": "Wall_Plain",
+					"position": [
+						-3.0,
+						1.0,
+						0
+					],
+					"yawDegrees": -90
+				},
+				{
+					"piece": "Wall_Corner",
+					"position": [
+						3.0,
+						2.0,
+						0
+					],
+					"yawDegrees": 0
+				},
+				{
+					"piece": "Wall_Corner",
+					"position": [
+						3.0,
+						-2.0,
+						0
+					],
+					"yawDegrees": 0
+				},
+				{
+					"piece": "Wall_Corner",
+					"position": [
+						-3.0,
+						2.0,
+						0
+					],
+					"yawDegrees": 0
+				},
+				{
+					"piece": "Wall_Corner",
+					"position": [
+						-3.0,
+						-2.0,
+						0
+					],
+					"yawDegrees": 0
+				},
+				{
+					"piece": "Roof_Gable",
+					"position": [
+						-2.0,
+						0,
+						0
+					],
+					"yawDegrees": 0
+				},
+				{
+					"piece": "Roof_Gable",
+					"position": [
+						0.0,
+						0,
+						0
+					],
+					"yawDegrees": 0
+				},
+				{
+					"piece": "Roof_Gable",
+					"position": [
+						2.0,
+						0,
+						0
+					],
+					"yawDegrees": 0
+				},
+				{
+					"piece": "Roof_GableEnd",
+					"position": [
+						3.0,
+						0,
+						0
+					],
+					"yawDegrees": 90
+				},
+				{
+					"piece": "Roof_GableEnd",
+					"position": [
+						-3.0,
+						0,
+						0
+					],
+					"yawDegrees": 90
+				},
+				{
+					"piece": "Floor_Stone",
+					"position": [
+						-2.0,
+						-1.0,
+						-0.1
+					],
+					"yawDegrees": 0
+				},
+				{
+					"piece": "Floor_Stone",
+					"position": [
+						-2.0,
+						1.0,
+						-0.1
+					],
+					"yawDegrees": 0
+				},
+				{
+					"piece": "Floor_Stone",
+					"position": [
+						0.0,
+						-1.0,
+						-0.1
+					],
+					"yawDegrees": 0
+				},
+				{
+					"piece": "Floor_Stone",
+					"position": [
+						0.0,
+						1.0,
+						-0.1
+					],
+					"yawDegrees": 0
+				},
+				{
+					"piece": "Floor_Stone",
+					"position": [
+						2.0,
+						-1.0,
+						-0.1
+					],
+					"yawDegrees": 0
+				},
+				{
+					"piece": "Floor_Stone",
+					"position": [
+						2.0,
+						1.0,
+						-0.1
+					],
+					"yawDegrees": 0
+				}
+			]
+		},
+		"House_Island": {
+			"desc": "섬마을 평지붕 집 4×4 m",
+			"file": "Prefabs/House_Island.glb",
+			"items": [
+				{
+					"piece": "Wall_Window",
+					"position": [
+						-1.0,
+						-2.0,
+						0
+					],
+					"yawDegrees": 0
+				},
+				{
+					"piece": "Wall_Plain",
+					"position": [
+						-1.0,
+						2.0,
+						0
+					],
+					"yawDegrees": 180
+				},
+				{
+					"piece": "Wall_Door",
+					"position": [
+						1.0,
+						-2.0,
+						0
+					],
+					"yawDegrees": 0
+				},
+				{
+					"piece": "Wall_Window",
+					"position": [
+						1.0,
+						2.0,
+						0
+					],
+					"yawDegrees": 180
+				},
+				{
+					"piece": "Wall_Plain",
+					"position": [
+						2.0,
+						-1.0,
+						0
+					],
+					"yawDegrees": 90
+				},
+				{
+					"piece": "Wall_Plain",
+					"position": [
+						-2.0,
+						-1.0,
+						0
+					],
+					"yawDegrees": -90
+				},
+				{
+					"piece": "Wall_Window",
+					"position": [
+						2.0,
+						1.0,
+						0
+					],
+					"yawDegrees": 90
+				},
+				{
+					"piece": "Wall_Plain",
+					"position": [
+						-2.0,
+						1.0,
+						0
+					],
+					"yawDegrees": -90
+				},
+				{
+					"piece": "Wall_Corner",
+					"position": [
+						2.0,
+						2.0,
+						0
+					],
+					"yawDegrees": 0
+				},
+				{
+					"piece": "Wall_Corner",
+					"position": [
+						2.0,
+						-2.0,
+						0
+					],
+					"yawDegrees": 0
+				},
+				{
+					"piece": "Wall_Corner",
+					"position": [
+						-2.0,
+						2.0,
+						0
+					],
+					"yawDegrees": 0
+				},
+				{
+					"piece": "Wall_Corner",
+					"position": [
+						-2.0,
+						-2.0,
+						0
+					],
+					"yawDegrees": 0
+				},
+				{
+					"piece": "Roof_Flat",
+					"position": [
+						-1.0,
+						-1.0,
+						0
+					],
+					"yawDegrees": 0
+				},
+				{
+					"piece": "Roof_Flat",
+					"position": [
+						-1.0,
+						1.0,
+						0
+					],
+					"yawDegrees": 0
+				},
+				{
+					"piece": "Roof_Flat",
+					"position": [
+						1.0,
+						-1.0,
+						0
+					],
+					"yawDegrees": 0
+				},
+				{
+					"piece": "Roof_Flat",
+					"position": [
+						1.0,
+						1.0,
+						0
+					],
+					"yawDegrees": 0
+				},
+				{
+					"piece": "Floor_Stone",
+					"position": [
+						-1.0,
+						-1.0,
+						-0.1
+					],
+					"yawDegrees": 0
+				},
+				{
+					"piece": "Floor_Stone",
+					"position": [
+						-1.0,
+						1.0,
+						-0.1
+					],
+					"yawDegrees": 0
+				},
+				{
+					"piece": "Floor_Stone",
+					"position": [
+						1.0,
+						-1.0,
+						-0.1
+					],
+					"yawDegrees": 0
+				},
+				{
+					"piece": "Floor_Stone",
+					"position": [
+						1.0,
+						1.0,
+						-0.1
+					],
+					"yawDegrees": 0
+				}
+			]
+		},
+		"Temple_Doric": {
+			"desc": "도리스식 신전 8×10 m(앞뒤 기둥 넷·옆 기둥·켈라·제단)",
+			"file": "Prefabs/Temple_Doric.glb",
+			"items": [
+				{
+					"piece": "Temple_Step",
+					"position": [
+						-3.0,
+						-5.0,
+						0
+					],
+					"yawDegrees": 0
+				},
+				{
+					"piece": "Temple_Step",
+					"position": [
+						-3.0,
+						-3.0,
+						0
+					],
+					"yawDegrees": 0
+				},
+				{
+					"piece": "Temple_Step",
+					"position": [
+						-3.0,
+						-1.0,
+						0
+					],
+					"yawDegrees": 0
+				},
+				{
+					"piece": "Temple_Step",
+					"position": [
+						-3.0,
+						1.0,
+						0
+					],
+					"yawDegrees": 0
+				},
+				{
+					"piece": "Temple_Step",
+					"position": [
+						-3.0,
+						3.0,
+						0
+					],
+					"yawDegrees": 0
+				},
+				{
+					"piece": "Temple_Step",
+					"position": [
+						-3.0,
+						5.0,
+						0
+					],
+					"yawDegrees": 0
+				},
+				{
+					"piece": "Temple_Step",
+					"position": [
+						-1.0,
+						-5.0,
+						0
+					],
+					"yawDegrees": 0
+				},
+				{
+					"piece": "Temple_Step",
+					"position": [
+						-1.0,
+						-3.0,
+						0
+					],
+					"yawDegrees": 0
+				},
+				{
+					"piece": "Temple_Step",
+					"position": [
+						-1.0,
+						-1.0,
+						0
+					],
+					"yawDegrees": 0
+				},
+				{
+					"piece": "Temple_Step",
+					"position": [
+						-1.0,
+						1.0,
+						0
+					],
+					"yawDegrees": 0
+				},
+				{
+					"piece": "Temple_Step",
+					"position": [
+						-1.0,
+						3.0,
+						0
+					],
+					"yawDegrees": 0
+				},
+				{
+					"piece": "Temple_Step",
+					"position": [
+						-1.0,
+						5.0,
+						0
+					],
+					"yawDegrees": 0
+				},
+				{
+					"piece": "Temple_Step",
+					"position": [
+						1.0,
+						-5.0,
+						0
+					],
+					"yawDegrees": 0
+				},
+				{
+					"piece": "Temple_Step",
+					"position": [
+						1.0,
+						-3.0,
+						0
+					],
+					"yawDegrees": 0
+				},
+				{
+					"piece": "Temple_Step",
+					"position": [
+						1.0,
+						-1.0,
+						0
+					],
+					"yawDegrees": 0
+				},
+				{
+					"piece": "Temple_Step",
+					"position": [
+						1.0,
+						1.0,
+						0
+					],
+					"yawDegrees": 0
+				},
+				{
+					"piece": "Temple_Step",
+					"position": [
+						1.0,
+						3.0,
+						0
+					],
+					"yawDegrees": 0
+				},
+				{
+					"piece": "Temple_Step",
+					"position": [
+						1.0,
+						5.0,
+						0
+					],
+					"yawDegrees": 0
+				},
+				{
+					"piece": "Temple_Step",
+					"position": [
+						3.0,
+						-5.0,
+						0
+					],
+					"yawDegrees": 0
+				},
+				{
+					"piece": "Temple_Step",
+					"position": [
+						3.0,
+						-3.0,
+						0
+					],
+					"yawDegrees": 0
+				},
+				{
+					"piece": "Temple_Step",
+					"position": [
+						3.0,
+						-1.0,
+						0
+					],
+					"yawDegrees": 0
+				},
+				{
+					"piece": "Temple_Step",
+					"position": [
+						3.0,
+						1.0,
+						0
+					],
+					"yawDegrees": 0
+				},
+				{
+					"piece": "Temple_Step",
+					"position": [
+						3.0,
+						3.0,
+						0
+					],
+					"yawDegrees": 0
+				},
+				{
+					"piece": "Temple_Step",
+					"position": [
+						3.0,
+						5.0,
+						0
+					],
+					"yawDegrees": 0
+				},
+				{
+					"piece": "Column_Doric",
+					"position": [
+						-3.0,
+						-4.4,
+						0.3
+					],
+					"yawDegrees": 0
+				},
+				{
+					"piece": "Column_Doric",
+					"position": [
+						-3.0,
+						4.4,
+						0.3
+					],
+					"yawDegrees": 0
+				},
+				{
+					"piece": "Column_Doric",
+					"position": [
+						-1.0,
+						-4.4,
+						0.3
+					],
+					"yawDegrees": 0
+				},
+				{
+					"piece": "Column_Doric",
+					"position": [
+						-1.0,
+						4.4,
+						0.3
+					],
+					"yawDegrees": 0
+				},
+				{
+					"piece": "Column_Doric",
+					"position": [
+						1.0,
+						-4.4,
+						0.3
+					],
+					"yawDegrees": 0
+				},
+				{
+					"piece": "Column_Doric",
+					"position": [
+						1.0,
+						4.4,
+						0.3
+					],
+					"yawDegrees": 0
+				},
+				{
+					"piece": "Column_Doric",
+					"position": [
+						3.0,
+						-4.4,
+						0.3
+					],
+					"yawDegrees": 0
+				},
+				{
+					"piece": "Column_Doric",
+					"position": [
+						3.0,
+						4.4,
+						0.3
+					],
+					"yawDegrees": 0
+				},
+				{
+					"piece": "Column_Doric",
+					"position": [
+						-3.0,
+						-2.4,
+						0.3
+					],
+					"yawDegrees": 0
+				},
+				{
+					"piece": "Column_Doric",
+					"position": [
+						3.0,
+						-2.4,
+						0.3
+					],
+					"yawDegrees": 0
+				},
+				{
+					"piece": "Column_Doric",
+					"position": [
+						-3.0,
+						-0.4,
+						0.3
+					],
+					"yawDegrees": 0
+				},
+				{
+					"piece": "Column_Doric",
+					"position": [
+						3.0,
+						-0.4,
+						0.3
+					],
+					"yawDegrees": 0
+				},
+				{
+					"piece": "Column_Doric",
+					"position": [
+						-3.0,
+						1.6,
+						0.3
+					],
+					"yawDegrees": 0
+				},
+				{
+					"piece": "Column_Doric",
+					"position": [
+						3.0,
+						1.6,
+						0.3
+					],
+					"yawDegrees": 0
+				},
+				{
+					"piece": "Temple_Wall",
+					"position": [
+						-1.75,
+						-2.4,
+						0.3
+					],
+					"yawDegrees": 90
+				},
+				{
+					"piece": "Temple_Wall",
+					"position": [
+						1.75,
+						-2.4,
+						0.3
+					],
+					"yawDegrees": 90
+				},
+				{
+					"piece": "Temple_Wall",
+					"position": [
+						-1.75,
+						-0.4,
+						0.3
+					],
+					"yawDegrees": 90
+				},
+				{
+					"piece": "Temple_Wall",
+					"position": [
+						1.75,
+						-0.4,
+						0.3
+					],
+					"yawDegrees": 90
+				},
+				{
+					"piece": "Temple_Wall",
+					"position": [
+						-1.75,
+						1.6,
+						0.3
+					],
+					"yawDegrees": 90
+				},
+				{
+					"piece": "Temple_Wall",
+					"position": [
+						1.75,
+						1.6,
+						0.3
+					],
+					"yawDegrees": 90
+				},
+				{
+					"piece": "Temple_Wall",
+					"position": [
+						-1.75,
+						3.6,
+						0.3
+					],
+					"yawDegrees": 90
+				},
+				{
+					"piece": "Temple_Wall",
+					"position": [
+						1.75,
+						3.6,
+						0.3
+					],
+					"yawDegrees": 90
+				},
+				{
+					"piece": "Temple_Door",
+					"position": [
+						0,
+						-1.4,
+						0.3
+					],
+					"yawDegrees": 0
+				},
+				{
+					"piece": "Temple_Wall",
+					"position": [
+						0,
+						3.4,
+						0.3
+					],
+					"yawDegrees": 0
+				},
+				{
+					"piece": "Entablature",
+					"position": [
+						-3.0,
+						-4.4,
+						3.9
+					],
+					"yawDegrees": 0
+				},
+				{
+					"piece": "Entablature",
+					"position": [
+						-1.0,
+						-4.4,
+						3.9
+					],
+					"yawDegrees": 0
+				},
+				{
+					"piece": "Entablature",
+					"position": [
+						1.0,
+						-4.4,
+						3.9
+					],
+					"yawDegrees": 0
+				},
+				{
+					"piece": "Entablature",
+					"position": [
+						3.0,
+						-4.4,
+						3.9
+					],
+					"yawDegrees": 0
+				},
+				{
+					"piece": "Entablature",
+					"position": [
+						-3.0,
+						-1.9999999999999998,
+						3.9
+					],
+					"yawDegrees": -90
+				},
+				{
+					"piece": "Entablature",
+					"position": [
+						-3.0,
+						2.220446049250313e-16,
+						3.9
+					],
+					"yawDegrees": -90
+				},
+				{
+					"piece": "Entablature",
+					"position": [
+						-3.0,
+						2.0,
+						3.9
+					],
+					"yawDegrees": -90
+				},
+				{
+					"piece": "Entablature",
+					"position": [
+						-3.0,
+						4.0,
+						3.9
+					],
+					"yawDegrees": -90
+				},
+				{
+					"piece": "Entablature",
+					"position": [
+						-3.0,
+						4.4,
+						3.9
+					],
+					"yawDegrees": 180
+				},
+				{
+					"piece": "Entablature",
+					"position": [
+						-1.0,
+						4.4,
+						3.9
+					],
+					"yawDegrees": 180
+				},
+				{
+					"piece": "Entablature",
+					"position": [
+						1.0,
+						4.4,
+						3.9
+					],
+					"yawDegrees": 180
+				},
+				{
+					"piece": "Entablature",
+					"position": [
+						3.0,
+						4.4,
+						3.9
+					],
+					"yawDegrees": 180
+				},
+				{
+					"piece": "Entablature",
+					"position": [
+						3.0,
+						-1.9999999999999998,
+						3.9
+					],
+					"yawDegrees": 90
+				},
+				{
+					"piece": "Entablature",
+					"position": [
+						3.0,
+						2.220446049250313e-16,
+						3.9
+					],
+					"yawDegrees": 90
+				},
+				{
+					"piece": "Entablature",
+					"position": [
+						3.0,
+						2.0,
+						3.9
+					],
+					"yawDegrees": 90
+				},
+				{
+					"piece": "Entablature",
+					"position": [
+						3.0,
+						4.0,
+						3.9
+					],
+					"yawDegrees": 90
+				},
+				{
+					"piece": "Pediment",
+					"position": [
+						0,
+						-4.4,
+						5.05
+					],
+					"yawDegrees": 0
+				},
+				{
+					"piece": "Pediment",
+					"position": [
+						0,
+						4.4,
+						5.05
+					],
+					"yawDegrees": 180
+				},
+				{
+					"piece": "Temple_Roof",
+					"position": [
+						0,
+						-3.0,
+						5.05
+					],
+					"yawDegrees": 90
+				},
+				{
+					"piece": "Temple_Roof",
+					"position": [
+						0,
+						-1.0,
+						5.05
+					],
+					"yawDegrees": 90
+				},
+				{
+					"piece": "Temple_Roof",
+					"position": [
+						0,
+						1.0,
+						5.05
+					],
+					"yawDegrees": 90
+				},
+				{
+					"piece": "Temple_Roof",
+					"position": [
+						0,
+						3.0,
+						5.05
+					],
+					"yawDegrees": 90
+				},
+				{
+					"piece": "Altar",
+					"position": [
+						0,
+						-7.0,
+						0
+					],
+					"yawDegrees": 0
+				},
+				{
+					"piece": "Tripod",
+					"position": [
+						1.6,
+						-6.4,
+						0
+					],
+					"yawDegrees": 0
+				}
+			]
+		},
+		"Market_Corner": {
+			"desc": "시장 한 귀퉁이(좌판 둘·항아리·바구니)",
+			"file": "Prefabs/Market_Corner.glb",
+			"items": [
+				{
+					"piece": "Stall",
+					"position": [
+						-1.2,
+						0,
+						0
+					],
+					"yawDegrees": 0
+				},
+				{
+					"piece": "Stall",
+					"position": [
+						1.2,
+						0.3,
+						0
+					],
+					"yawDegrees": -12
+				},
+				{
+					"piece": "Amphora",
+					"position": [
+						-0.2,
+						-1.0,
+						0
+					],
+					"yawDegrees": 0
+				},
+				{
+					"piece": "Amphora",
+					"position": [
+						0.1,
+						-1.2,
+						0
+					],
+					"yawDegrees": 30
+				},
+				{
+					"piece": "Pithos",
+					"position": [
+						2.6,
+						-0.8,
+						0
+					],
+					"yawDegrees": 0
+				},
+				{
+					"piece": "Basket",
+					"position": [
+						-2.4,
+						-0.9,
+						0
+					],
+					"yawDegrees": 0
+				},
+				{
+					"piece": "Crate",
+					"position": [
+						0.2,
+						1.2,
+						0
+					],
+					"yawDegrees": 15
+				},
+				{
+					"piece": "Sack",
+					"position": [
+						-0.4,
+						1.3,
+						0
+					],
+					"yawDegrees": 0
+				}
+			]
+		}
+	}
+}

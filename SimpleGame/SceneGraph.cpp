@@ -3,6 +3,8 @@
 
 #include <algorithm>
 #include <cmath>
+#include <map>
+#include <utility>
 
 #include "Profiler.h"
 #include "Renderer.h"
@@ -164,11 +166,67 @@ SceneGraph::SceneGraph()
 {
 }
 
+void SceneGraph::GroupIntoCells(float cellSize, const std::function<bool(const Actor&)>& shouldGroup)
+{
+	std::vector<std::unique_ptr<Actor>> moving;
+	m_Root->TakeChildrenIf([&shouldGroup](const Actor& actor) { return shouldGroup(actor); }, moving);
+
+	// 칸 좌표(정수) → 그 칸의 그룹 노드. std::map이라 칸 순서가 늘 같다(그리기 순서가 실행마다 흔들리지 않게).
+	std::map<std::pair<int, int>, Actor*> cells;
+	for (std::unique_ptr<Actor>& actor : moving)
+	{
+		int cellX = (int)floorf(actor->GetX() / cellSize);
+		int cellY = (int)floorf(actor->GetY() / cellSize);
+		std::pair<int, int> key(cellX, cellY);
+
+		std::map<std::pair<int, int>, Actor*>::iterator found = cells.find(key);
+		Actor* cell = nullptr;
+		if (found == cells.end())
+		{
+			cell = m_Root->AddChild(std::unique_ptr<Actor>(new Actor(ActorType::Group)));
+			cells[key] = cell;
+		}
+		else
+		{
+			cell = found->second;
+		}
+
+		cell->AddChild(std::move(actor));
+	}
+}
+
 void SceneGraph::Update(float deltaSeconds, float time, const TileMap& tileMap)
 {
 	UpdateContext ctx = { deltaSeconds, time, *this, tileMap };
 
-	m_Root->Update(ctx);
+	if (m_ActiveRadius <= 0.f)
+	{
+		m_Root->Update(ctx);
+	}
+	else
+	{
+		// 루트 아래를 직접 돌며, 갱신 범위 밖의 캐릭터만 건너뛴다(칸으로 묶인 나무·건물과 효과는 늘 갱신 — 거의 하는 일이 없다).
+		// 갱신 도중 자식이 추가될 수 있으므로 인덱스로 순회한다.
+		float limitSq = m_ActiveRadius * m_ActiveRadius;
+		const std::vector<std::unique_ptr<Actor>>& children = m_Root->GetChildren();
+		for (size_t i = 0; i < children.size(); ++i)
+		{
+			Actor& child = *children[i];
+			ActorType type = child.GetType();
+			if (type == ActorType::NPC || type == ActorType::Animal)
+			{
+				float dx = child.GetX() - m_ActiveX;
+				float dy = child.GetY() - m_ActiveY;
+				if (dx * dx + dy * dy > limitSq)
+				{
+					continue;
+				}
+			}
+
+			child.Update(ctx);
+		}
+	}
+
 	m_Root->RemoveDestroyedChildren();
 }
 

@@ -4,8 +4,11 @@
 #include <algorithm>
 #include <cmath>
 
+#include "CharacterActors.h"
+#include "GameLog.h"
 #include "LevelGenerator.h"
 #include "Renderer.h"
+#include "SceneGraph.h"
 #include "Shapes.h"
 
 namespace
@@ -958,6 +961,88 @@ void TriggerZoneActor::OnRender(const RenderContext& ctx)
 
 	Mat4 core = Mat4::Translate(x, y, 0.006f) * Mat4::Scale(diameter * 0.3f, diameter * 0.3f, 1.f);
 	ctx.renderer.DrawSoftDisc(ctx.viewProjection * core, 1.6f, 1.3f, 0.6f, 0.35f + 0.25f * pulse);
+}
+
+// ---------------------------------------------------------- RegionGateActor
+
+RegionGateActor::RegionGateActor(float centerX, float centerY, float halfSize, const char* notice)
+	: Actor(ActorType::Marker, RenderLayer::Decal)
+	, m_HalfSize(halfSize)
+	, m_Notice(notice)
+{
+	SetPosition(centerX, centerY, 0.f);
+	SetSize(halfSize);
+	SetBoundingSphere(halfSize * 1.415f + 1.5f, 0.6f);
+}
+
+float RegionGateActor::DistanceToBorder(float x, float y) const
+{
+	float dx = fabsf(x - GetWorldX());
+	float dy = fabsf(y - GetWorldY());
+
+	if (dx <= m_HalfSize && dy <= m_HalfSize)
+	{
+		return (std::min)(m_HalfSize - dx, m_HalfSize - dy);
+	}
+
+	float outX = (std::max)(dx - m_HalfSize, 0.f);
+	float outY = (std::max)(dy - m_HalfSize, 0.f);
+	return sqrtf(outX * outX + outY * outY);
+}
+
+bool RegionGateActor::BlocksCircle(float x, float y, float moverRadius) const
+{
+	// 테두리에 얇은 벽(두께 0.5)이 있는 것처럼: 안에서 밖으로도, 밖에서 안으로도 넘지 못한다.
+	return DistanceToBorder(x, y) < moverRadius + 0.25f;
+}
+
+void RegionGateActor::OnUpdate(const UpdateContext& ctx)
+{
+	if (m_NoticeCooldown > 0.f)
+	{
+		m_NoticeCooldown -= ctx.deltaSeconds;
+		return;
+	}
+
+	PlayerActor* player = ctx.scene.GetPlayer();
+	if (player == nullptr || m_Notice == nullptr)
+	{
+		return;
+	}
+
+	if (DistanceToBorder(player->GetWorldX(), player->GetWorldY()) < 1.2f)
+	{
+		GameLog::Add(GameLog::Kind::Info, m_Notice);
+		m_NoticeCooldown = 6.f;
+	}
+}
+
+void RegionGateActor::OnRender(const RenderContext& ctx)
+{
+	// 테두리를 따라 2칸마다 안개 한 덩이: 바닥에 번지는 보랏빛 + 그 위에 카메라를 향해 선 옅은 안개 기둥.
+	const float kStep = 2.f;
+	float centerX = GetWorldX();
+	float centerY = GetWorldY();
+	int steps = (int)(m_HalfSize * 2.f / kStep);
+
+	for (int side = 0; side < 4; ++side)
+	{
+		for (int i = 0; i <= steps; ++i)
+		{
+			float t = -m_HalfSize + (float)i * kStep;
+			float x = centerX + ((side == 0) ? t : ((side == 1) ? m_HalfSize : ((side == 2) ? -t : -m_HalfSize)));
+			float y = centerY + ((side == 0) ? -m_HalfSize : ((side == 1) ? t : ((side == 2) ? m_HalfSize : -t)));
+			float phase = (float)(side * 37 + i * 13);
+			float pulse = 0.5f + 0.5f * sinf(ctx.time * 1.3f + phase);
+
+			Mat4 floor = Mat4::Translate(x, y, 0.004f) * Mat4::Scale(2.6f, 2.6f, 1.f);
+			ctx.renderer.DrawSoftDisc(ctx.viewProjection * floor, 0.62f, 0.5f, 0.9f, 0.22f + 0.12f * pulse);
+
+			Mat4 column = Mat4::Translate(x, y, 0.7f + 0.15f * pulse) * Mat4::RotateZ(-kPi * 0.25f) * Mat4::RotateX(kPi * 0.5f)
+				* Mat4::Scale(1.8f, 1.5f, 1.f);
+			ctx.renderer.DrawSoftDisc(ctx.viewProjection * column, 0.85f, 0.78f, 1.1f, 0.1f + 0.08f * pulse);
+		}
+	}
 }
 
 // ---------------------------------------------------- ObjectiveMarkerActor

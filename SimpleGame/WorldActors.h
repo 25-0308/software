@@ -63,6 +63,19 @@ public:
 	void OnRenderShadow(const RenderContext& ctx) override;
 	bool BlocksCircle(float x, float y, float moverRadius) const override;
 	bool CastsShadow() const override { return true; }
+
+	// 마을의 집 번호(1부터)와 사는 사람 수(최대 3명). 번호가 0이면 사람이 살지 않는 건물(창고·대장간·정자 등).
+	void SetHouse(int number, int residents)
+	{
+		m_HouseNumber = number;
+		m_Residents = residents;
+	}
+	int GetHouseNumber() const { return m_HouseNumber; }
+	int GetResidentCount() const { return m_Residents; }
+
+private:
+	int m_HouseNumber = 0;
+	int m_Residents = 0;
 };
 
 enum class ItemKind
@@ -137,13 +150,13 @@ private:
 
 // 공중을 천천히 떠다니며 반짝이는 빛 알갱이(반딧불·꽃가루 느낌) — 신화 속 세계의 은은한 마법
 // 분위기를 더하는 순수 시각 효과. 알갱이마다 위치는 번호로 정해지는 고정 기준점 + 시간에 따른
-// 흔들림이라 따로 상태를 들고 있지 않는다. 경계가 없어 항상 그려지지만(개수가 적고 렌더 큐로 한 번에
-// 그려져 싸다), Overlay 레이어라 모든 오브젝트 위에 겹쳐 그려진다.
+// 흔들림이라 따로 상태를 들고 있지 않는다. Overlay 레이어라 모든 오브젝트 위에 겹쳐 그려진다.
+// 마을마다 하나씩 그 마을 위에 띄우고, 색은 마을이 숭배하는 신과 분위기를 따른다(WorldLayout의 VillageMood).
 class AmbientMotesActor : public Actor
 {
 public:
-	// 맵 중심 기준 ±halfWidth, ±halfHeight 범위에 count개를 흩뿌린다.
-	AmbientMotesActor(float halfWidth, float halfHeight, int count);
+	// (centerX, centerY) 기준 ±halfWidth, ±halfHeight 범위에 count개를 흩뿌린다. 색은 1을 넘으면 블룸으로 빛난다.
+	AmbientMotesActor(float centerX, float centerY, float halfWidth, float halfHeight, int count, float r, float g, float b);
 
 	void OnRender(const RenderContext& ctx) override;
 

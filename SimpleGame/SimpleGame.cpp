@@ -48,7 +48,9 @@ but WITHOUT ANY WARRANTY.
 #include "SkillBar.h"
 #include "StoryDirector.h"
 #include "TileMap.h"
+#include "Wilderness.h"
 #include "WorldActors.h"
+#include "WorldLayout.h"
 #include "WorldMaps.h"
 
 namespace
@@ -85,9 +87,12 @@ namespace
 	const float kHermesWingsSpeedScale = 2.f;     // 「신속의 날개」: 이동 속도 배율
 	const float kHermesWingsCooldownScale = 0.25f; // 「신속의 날개」: 공격·상호작용·기본 스킬 쿨타임 배율
 
-	// 첫 지역과 이야기 데이터 파일(셰이더처럼 작업 폴더 기준 경로 — 다시 컴파일하지 않고 대사만 고칠 수 있게).
-	const char* kFirstLocation = "LOC_DELPHI";
+	// 이야기 데이터 파일(셰이더처럼 작업 폴더 기준 경로 — 다시 컴파일하지 않고 대사만 고칠 수 있게).
 	const char* kStoryDataPath = "./Data/Story.txt";
+
+	// 캐릭터(마을 사람·몬스터)를 움직이는 범위: 플레이어에게서 이보다 먼 캐릭터는 멈춰 있는다(SceneGraph::SetActiveArea).
+	// 가장 멀리 뺀 화면(대각선 약 32칸)보다 넉넉히 — 화면 안에서 멈춰 있는 사람이 보이지 않게.
+	const float kActiveRadius = 52.f;
 
 	const unsigned char kEscapeKey = 27;
 
@@ -118,11 +123,18 @@ NpcSociety *g_Society = NULL;
 // 화면 오른쪽 아래의 스킬 칸(Q 기본 스킬, R 궁극기).
 SkillBar *g_SkillBar = NULL;
 
-// 씬 그래프가 소유하는 액터들을 게임 코드가 빠르게 참조하기 위한 포인터. 지역을 옮기면 씬과 함께
-// 사라지므로 LoadMap이 새 맵의 것으로 바꿔 든다.
+// 마을과 마을 사이 황야의 몬스터(마을마다 주민 수만큼 — 쓰러지면 얼마 뒤 다시 채운다).
+Wilderness *g_Wilderness = NULL;
+
+// 지금 그리고 갱신하는 맵(g_TileMap·g_Scene)과 그 안의 액터를 게임 코드가 빠르게 참조하기 위한 포인터. 보통은 하나로
+// 이어진 월드이고, 이야기가 무대(크로노스의 배 속)로 옮기면 그동안만 무대의 것으로 바뀐다(EnterStage/LeaveStage).
 PlayerActor *g_Player = NULL;
 RingActor *g_AttackRing = NULL;
 RingActor *g_InteractRing = NULL;
+
+// 하나로 이어진 월드. 무대에 들어가 있는 동안에도 지우지 않고 들고 있다가(마을·몬스터·이야기 상태가 그대로) 돌아온다.
+LoadedMap g_World;
+bool g_InStage = false;
 
 MeshHandle g_CircleMesh;
 MeshHandle g_EllipseMesh; // 발밑 링(위치 마커/조준 링)에 쓰는 납작한 타원 메시
@@ -292,7 +304,10 @@ namespace
 
 		GameLog::Add(GameLog::Kind::Combat, "[" + std::string(names.object) + " 쓰러뜨렸다]");
 		g_Player->GrantXP(enemy.GetKillXP());
-		g_Monitor->RecordKill(g_Director->GetStory().Get("MAP"));
+
+		// 처치 기록은 그 몬스터가 속한 마을(황야의 몬스터는 가장 가까운 마을)에 남긴다.
+		const char* home = enemy.GetHomeRegion();
+		g_Monitor->RecordKill((home != nullptr) ? std::string(home) : g_Director->GetStory().Get("MAP"));
 
 		int lifeOnKill = g_Player->GetStats().lifeOnKill;
 		if (lifeOnKill > 0)
@@ -838,35 +853,10 @@ namespace
 		return GetForegroundWindow() == g_GameWindow;
 	}
 
-	// 지역(맵)을 새로 짓고 그곳으로 옮긴다. 이전 지역의 씬·타일맵은 지우고(그 안의 액터 포인터도 전부
-	// 무효가 됨), 플레이어 능력치(레벨·경험치·체력)와 수호신 축복은 그대로 이어받는다.
-	// arrivedByTravel이면 그 지역의 이정표 앞에, 아니면(새 게임) 그 지역의 시작 지점에 선다.
-	void LoadMap(const std::string& locId, bool arrivedByTravel)
+	// 지금 그리고 갱신할 맵을 바꿔 든다(월드 또는 무대). 플레이어 능력치(레벨·경험치·체력)는 넘겨받은 것으로 맞추고,
+	// 축복 효과를 다시 걸고, 미니맵·지도·카메라를 새 맵에 맞춘 뒤, 이야기에 그 지역에 들어섰다고 알린다.
+	void ActivateMap(const LoadedMap& map, const std::string& locId, const PlayerStats* stats, bool culling)
 	{
-		PlayerStats stats;
-		bool keepStats = (g_Player != NULL);
-		if (keepStats)
-		{
-			stats = g_Player->GetStats();
-		}
-
-		bool culling = (g_Scene != NULL) ? g_Scene->IsCullingEnabled() : true;
-
-		// 떠나는 지역의 마지막 모습을 모니터에 남긴다(지역은 지금 것 하나만 살아 있어서, 다른 지역은 이 기록으로 보여 준다).
-		if (g_Scene != NULL)
-		{
-			g_Monitor->Capture(*g_Scene, *g_Director);
-		}
-
-		g_Player = NULL;
-		g_AttackRing = NULL;
-		g_InteractRing = NULL;
-		delete g_Scene;
-		g_Scene = NULL;
-		delete g_TileMap;
-		g_TileMap = NULL;
-
-		LoadedMap map = WorldMaps::Build(locId, *g_Renderer, g_SessionSeed, arrivedByTravel);
 		g_TileMap = map.tileMap;
 		g_Scene = map.scene;
 		g_Player = map.player;
@@ -874,16 +864,15 @@ namespace
 		g_InteractRing = map.interactRing;
 		g_Scene->SetCullingEnabled(culling);
 
-		if (keepStats)
+		if (stats != NULL)
 		{
-			g_Player->SetStats(stats);
+			g_Player->SetStats(*stats);
 		}
 
-		// 이동 속도·괴물이 알아채는 거리·각성의 기운 같은 축복 효과는 플레이어 액터에 붙어 있어서 맵마다 다시 건다
-		// (「신속의 날개」 같은 잠깐의 버프는 지역을 옮기면 사라진다).
+		// 이동 속도·괴물이 알아채는 거리·각성의 기운 같은 축복 효과는 플레이어 액터에 붙어 있어서 맵마다 다시 건다.
 		StoryDirector::ApplyPatronModifiers(*g_Player, g_Director->GetStory());
 
-		// 마을 사람들의 교류는 새 지역의 사람들로 다시 시작한다.
+		// 마을 사람들의 교류는 이 맵의 사람들로 다시 시작한다.
 		g_Society->Reset();
 
 		g_MiniMap->Invalidate();
@@ -891,9 +880,95 @@ namespace
 		g_Camera->SetFocus(g_Player->GetWorldX(), g_Player->GetWorldY(), 0.f);
 
 		// 마지막에: 지역 이름 배너, 목표 표시, 이 지역에 들어설 때의 대화("on enter").
-		g_Director->OnMapLoaded(map.locId, *g_Scene, *g_Player);
+		g_Director->OnMapLoaded(locId, *g_Scene, *g_Player);
+	}
 
-		std::cout << "[지역] " << map.locId << " 로딩 완료\n";
+	// 새 게임: 하나로 이어진 월드 전체(마을 아홉 곳·성역 둘·황야·길)를 한 번 짓고 델포이에서 시작한다. 이후 지역 사이는
+	// 걸어서 오가고, 월드는 다시 짓지 않는다.
+	void LoadWorld()
+	{
+		std::chrono::steady_clock::time_point started = std::chrono::steady_clock::now();
+
+		g_World = WorldMaps::BuildOverworld(*g_Renderer, g_SessionSeed);
+		g_Wilderness->Populate(*g_World.scene, *g_World.tileMap, g_SessionSeed);
+		g_InStage = false;
+
+		ActivateMap(g_World, g_World.locId, NULL, true);
+
+		float seconds = std::chrono::duration<float>(std::chrono::steady_clock::now() - started).count();
+		std::cout << "[월드] " << g_World.tileMap->GetWidth() << "x" << g_World.tileMap->GetHeight() << "칸 월드 짓기 완료 ("
+			<< seconds << "초)\n";
+	}
+
+	// 이야기가 월드 밖의 무대(크로노스의 배 속)로 옮긴다. 월드는 지우지 않고 그대로 들고 있는다.
+	void EnterStage(const std::string& locId)
+	{
+		PlayerStats stats = g_Player->GetStats();
+		bool culling = g_Scene->IsCullingEnabled();
+
+		g_Monitor->Capture(*g_World.scene, *g_Director);
+		g_Director->DetachScene();
+
+		LoadedMap stage = WorldMaps::BuildStage(locId, *g_Renderer, g_SessionSeed);
+		g_InStage = true;
+		ActivateMap(stage, stage.locId, &stats, culling);
+
+		std::cout << "[지역] 무대 " << stage.locId << " 로 들어감\n";
+	}
+
+	// 무대를 지우고 월드로 돌아온다. 플레이어는 locId 지역의 어귀에 선다(이야기가 정한 곳 — 타르타로스 경계 등).
+	void LeaveStage(const std::string& locId)
+	{
+		PlayerStats stats = g_Player->GetStats();
+		bool culling = g_Scene->IsCullingEnabled();
+
+		g_Director->DetachScene();
+		g_Player = NULL;
+		g_AttackRing = NULL;
+		g_InteractRing = NULL;
+		delete g_Scene;
+		g_Scene = NULL;
+		delete g_TileMap;
+		g_TileMap = NULL;
+		g_InStage = false;
+
+		const WorldPlace* place = WorldLayout::Find(locId);
+		if (place != NULL)
+		{
+			WorldPoint arrival = WorldLayout::ArrivalPoint(*place);
+			g_World.player->SetPosition(arrival.x, arrival.y, 0.f);
+		}
+
+		ActivateMap(g_World, (place != NULL) ? locId : std::string("LOC_DELPHI"), &stats, culling);
+		std::cout << "[지역] 월드로 돌아옴: " << locId << "\n";
+	}
+
+	// 이야기의 TRAVEL(효과)을 처리한다: 무대로 들어가거나, 무대에서 나오거나, 월드 안에서 이야기가 정한 곳으로 옮긴다
+	// (지역 사이를 걸어서 오가는 것과 별개로, 이야기가 장면을 바꿀 때만 쓴다).
+	void HandleTravel(const std::string& locId)
+	{
+		if (WorldLayout::IsStage(locId))
+		{
+			if (!g_InStage)
+			{
+				EnterStage(locId);
+			}
+			return;
+		}
+
+		if (g_InStage)
+		{
+			LeaveStage(locId);
+			return;
+		}
+
+		const WorldPlace* place = WorldLayout::Find(locId);
+		if (place != NULL)
+		{
+			WorldPoint arrival = WorldLayout::ArrivalPoint(*place);
+			g_Player->SetPosition(arrival.x, arrival.y, 0.f);
+			g_Camera->SetFocus(arrival.x, arrival.y, 0.f);
+		}
 	}
 }
 
@@ -1075,7 +1150,15 @@ void Update(float deltaSeconds)
 		// 플레이어 이동, 짐승 AI, 애니메이션 타이머 등 모든 액터 갱신은 씬 그래프가 한다.
 		if (!paused)
 		{
+			// 플레이어에게서 먼 마을 사람·몬스터는 멈춰 둔다(마을 여러 곳이 한 월드에 있어서 — SceneGraph::SetActiveArea).
+			g_Scene->SetActiveArea(g_Player->GetWorldX(), g_Player->GetWorldY(), kActiveRadius);
 			g_Scene->Update(deltaSeconds, g_ElapsedSeconds, *g_TileMap);
+
+			// 황야의 몬스터: 쓰러진 만큼 얼마 뒤 플레이어 눈에 띄지 않는 곳에 다시 채운다(무대 안에선 월드가 멈춰 있다).
+			if (!g_InStage)
+			{
+				g_Wilderness->Update(deltaSeconds, *g_Scene, *g_Player);
+			}
 
 			// 쓰러졌으면(제자리로 돌아와 다시 일어선 직후) 이야기에 알린다 — 최종 보스전에서 쓰러지면 대화가 열린다.
 			if (g_Player->ConsumeDeath())
@@ -1117,7 +1200,7 @@ void Update(float deltaSeconds)
 		// 월드 모니터: 지금 지역 집계, 진행 변화 이벤트, 브라우저 요청 처리(논블로킹이라 기다리지 않는다).
 		Profiler::ScopedTimer timer(Profiler::Section::Monitor);
 		g_Monitor->SetSkillCooldowns(g_SkillCooldown, g_SkillCooldownTotal);
-		g_Monitor->Update(deltaSeconds, *g_Scene, *g_Director);
+		g_Monitor->Update(deltaSeconds, *g_World.scene, g_InStage ? g_Scene : NULL, *g_Director);
 	}
 }
 
@@ -1127,12 +1210,12 @@ void Idle(void)
 	// ScopedTimer들이 여기부터 EndFrame까지의 구간을 잰다.
 	Profiler::BeginFrame();
 
-	// 이야기가 지역 이동을 요청했으면(이정표 대화의 TRAVEL) 이번 프레임을 시작하기 전에 맵을 바꾼다.
-	// 맵을 짓는 시간이 다음 프레임의 dt로 들어가지 않도록 프레임 시각을 새로 잡는다.
+	// 이야기가 장면을 옮기라고 했으면(TRAVEL — 크로노스의 배 속으로 들어가고 나올 때) 이번 프레임을 시작하기 전에
+	// 맵을 바꾼다. 맵을 짓는 시간이 다음 프레임의 dt로 들어가지 않도록 프레임 시각을 새로 잡는다.
 	std::string travelTo;
 	if (g_Director->TakeTravelRequest(travelTo))
 	{
-		LoadMap(travelTo, true);
+		HandleTravel(travelTo);
 		g_LastFrameTime = std::chrono::steady_clock::now();
 	}
 
@@ -1304,14 +1387,23 @@ void ShutdownGame(void)
 	delete g_MiniMap;
 	g_MiniMap = NULL;
 
-	// 씬의 타일 배치 액터는 소멸자에서 렌더러로 GPU 버퍼를 지우므로, 렌더러보다 먼저 지운다.
+	// 씬의 타일 배치 액터는 소멸자에서 렌더러로 GPU 버퍼를 지우므로, 렌더러보다 먼저 지운다. 무대 안이었으면 무대와
+	// 월드 둘 다 지운다.
 	g_Player = NULL;
 	g_AttackRing = NULL;
 	g_InteractRing = NULL;
-	delete g_Scene;
+	if (g_InStage)
+	{
+		delete g_Scene;
+		delete g_TileMap;
+	}
 	g_Scene = NULL;
-	delete g_TileMap;
 	g_TileMap = NULL;
+	delete g_World.scene;
+	delete g_World.tileMap;
+	g_World = LoadedMap();
+	delete g_Wilderness;
+	g_Wilderness = NULL;
 
 	delete g_PostProcess;
 	g_PostProcess = NULL;
@@ -1397,12 +1489,13 @@ int main(int argc, char **argv)
 	GameLog::SetListener([](GameLog::Kind kind, const std::string& text) { g_Monitor->RecordLog(kind, text); });
 	g_Monitor->Start();
 
-	// 첫 지역(델포이)을 짓고 그곳에서 시작한다. 이후 지역 이동은 이야기(이정표 대화)가 요청한다.
+	// 하나로 이어진 월드를 짓고 델포이에서 시작한다. 지역 사이는 걸어서 오간다.
 	g_SessionSeed = std::random_device{}();
-	LoadMap(kFirstLocation, false);
+	g_Wilderness = new Wilderness();
+	LoadWorld();
 
 	GameLog::Add(GameLog::Kind::Info, "[조작] WASD 이동, E 대화·조사, Space 공격, Q 기본 스킬·R 궁극기(수호신의 축복 뒤), M 지도, 마우스 휠 확대/축소. 대화는 E/Space로 넘기고 숫자키로 고른다.");
-	GameLog::Add(GameLog::Kind::Info, "[길잡이] 발밑의 금빛 화살표와 미니맵의 금빛 점이 지금 목표를 가리킨다.");
+	GameLog::Add(GameLog::Kind::Info, "[길잡이] 발밑의 금빛 화살표와 미니맵의 금빛 점이 지금 목표를 가리킨다. 다른 마을은 길을 따라 걸어서 간다 — 마을 사이의 황야엔 몬스터가 산다.");
 	if (g_Monitor->IsRunning())
 	{
 		GameLog::Add(GameLog::Kind::Info, "[모니터] 월드 상태는 브라우저의 " + g_Monitor->GetUrl() + " 에서 볼 수 있다(F2로 다시 열기).");

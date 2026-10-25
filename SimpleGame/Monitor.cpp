@@ -26,6 +26,8 @@
 #include "LevelBuilder.h"
 #include "SceneGraph.h"
 #include "StoryDirector.h"
+#include "WorldActors.h"
+#include "WorldLayout.h"
 
 #pragma comment(lib, "Ws2_32.lib")
 
@@ -158,6 +160,10 @@ namespace
 		case AnimalKind::BronzeWarrior: return "bronzeWarrior";
 		case AnimalKind::KronosEcho: return "kronosEcho";
 		case AnimalKind::WhiteCow: return "whiteCow";
+		case AnimalKind::Boar: return "boar";
+		case AnimalKind::Bandit: return "bandit";
+		case AnimalKind::SeaSerpent: return "seaSerpent";
+		case AnimalKind::Maenad: return "maenad";
 		}
 		return "unknown";
 	}
@@ -321,9 +327,11 @@ std::string WorldMonitor::GetUrl() const
 	return m_Running ? "http://127.0.0.1:" + std::to_string(m_Port) + "/" : std::string();
 }
 
-void WorldMonitor::Update(float deltaSeconds, SceneGraph& scene, const StoryDirector& director)
+void WorldMonitor::Update(float deltaSeconds, SceneGraph& world, SceneGraph* stage, const StoryDirector& director)
 {
 	m_Time += deltaSeconds;
+	m_Stage = stage;
+	SceneGraph& scene = world;
 
 	// FPS는 게임 시간(한 프레임 최대 0.1초로 잘림)이 아니라 실제 시각으로 잰다.
 	std::chrono::steady_clock::time_point now = std::chrono::steady_clock::now();
@@ -383,23 +391,10 @@ void WorldMonitor::RequestAutoOpen(float delaySeconds)
 	m_AutoOpenAt = m_Time + delaySeconds;
 }
 
-void WorldMonitor::Capture(SceneGraph& scene, const StoryDirector& director)
+void WorldMonitor::Capture(SceneGraph& world, const StoryDirector& director)
 {
-	const std::string& map = director.GetStory().Get("MAP");
-	if (map.empty())
-	{
-		return;
-	}
-
-	VillageStatus& village = m_Villages[map];
-	village.captured = true;
-	village.capturedAt = m_Time;
-	village.npcs.clear();
-	village.mobs.clear();
-	village.herbs = 0;
-	village.storyItems = 0;
-
-	PlayerActor* player = scene.GetPlayer();
+	// 플레이어는 지금 움직이는 쪽(무대 안이면 무대의 플레이어).
+	PlayerActor* player = (m_Stage != nullptr) ? m_Stage->GetPlayer() : world.GetPlayer();
 	if (player != nullptr)
 	{
 		const PlayerStats& stats = player->GetStats();
@@ -418,15 +413,72 @@ void WorldMonitor::Capture(SceneGraph& scene, const StoryDirector& director)
 		m_PlayerBuff = player->GetBuffRemaining();
 	}
 
+	// 무대 안에 있는 동안 월드는 멈춰 있으므로 월드 쪽은 들어가기 직전의 기록을 그대로 둔다.
+	if (m_Stage == nullptr || m_Villages.empty())
+	{
+		CaptureScene(world, std::string(), director);
+	}
+	if (m_Stage != nullptr)
+	{
+		CaptureScene(*m_Stage, "LOC_KRONOS_BELLY", director);
+	}
+}
+
+void WorldMonitor::CaptureScene(SceneGraph& scene, const std::string& stageId, const StoryDirector& director)
+{
 	float playerX = m_PlayerX;
 	float playerY = m_PlayerY;
 
+	// 담을 마을: 무대면 그 무대 하나, 월드면 무대가 아닌 지역 모두.
+	for (int i = 0; i < WorldLayout::GetPlaceCount(); ++i)
+	{
+		const WorldPlace& place = WorldLayout::GetPlace(i);
+		bool isStage = (place.kind == PlaceKind::Stage);
+		if (stageId.empty() == isStage)
+		{
+			continue;
+		}
+
+		VillageStatus& village = m_Villages[place.locId];
+		village.captured = true;
+		village.capturedAt = m_Time;
+		village.npcs.clear();
+		village.mobs.clear();
+		village.herbs = 0;
+		village.storyItems = 0;
+		village.houses = 0;
+	}
+
+	// 액터의 소속 마을: 무대면 그 무대, 아니면 지은 지역(인물·물건·이야기 괴물)이나 황야의 몬스터가 속한 마을, 그것도
+	// 없으면(동료 피티아처럼 따라다니는 이) 지금 서 있는 지역, 황야면 플레이어가 지금 있는(마지막으로 들어선) 지역.
+	std::string fallback = director.GetCurrentRegion().empty() ? director.GetStory().Get("MAP") : director.GetCurrentRegion();
 	scene.ForEach([&](Actor& actor)
 	{
 		if (actor.IsPendingDestroy())
 		{
 			return;
 		}
+
+		std::string region = stageId;
+		if (region.empty())
+		{
+			if (actor.GetHomeRegion() != nullptr)
+			{
+				region = actor.GetHomeRegion();
+			}
+			else
+			{
+				const WorldPlace* place = WorldLayout::Containing(actor.GetWorldX(), actor.GetWorldY());
+				region = (place != nullptr) ? std::string(place->locId) : fallback;
+			}
+		}
+
+		std::map<std::string, VillageStatus>::iterator found = m_Villages.find(region);
+		if (found == m_Villages.end())
+		{
+			return;
+		}
+		VillageStatus& village = found->second;
 
 		const char* storyId = actor.GetStoryId();
 		std::string id = (storyId != nullptr) ? std::string(storyId) : std::string();
@@ -458,6 +510,7 @@ void WorldMonitor::Capture(SceneGraph& scene, const StoryDirector& director)
 				status.hotheaded = npc.GetTraits().hotheaded;
 				status.social = npc.GetTraits().social;
 				status.humbled = npc.Memory().humbled;
+				status.house = npc.GetHouseNumber();
 				village.npcs.push_back(status);
 			}
 			break;
@@ -481,7 +534,18 @@ void WorldMonitor::Capture(SceneGraph& scene, const StoryDirector& director)
 				status.stunned = animal.IsStunned();
 				status.charmed = animal.IsCharmed();
 				status.frightened = animal.IsFrightened();
+				status.wild = animal.IsWild();
 				village.mobs.push_back(status);
+			}
+			break;
+
+		case ActorType::Building:
+			{
+				const BuildingActor* house = dynamic_cast<const BuildingActor*>(&actor);
+				if (house != nullptr && house->GetHouseNumber() > 0)
+				{
+					++village.houses;
+				}
 			}
 			break;
 
@@ -780,6 +844,8 @@ std::string WorldMonitor::BuildStateJson(const StoryDirector& director, unsigned
 {
 	const StoryState& story = director.GetStory();
 	const std::string& here = story.Get("MAP");
+	const std::string& current = director.GetCurrentRegion(); // 지금 서 있는 지역(황야면 빈 문자열)
+	bool inStage = (m_Stage != nullptr);
 	std::string objectiveRegion = director.GetObjectiveRegion();
 
 	JsonWriter json;
@@ -798,6 +864,8 @@ std::string WorldMonitor::BuildStateJson(const StoryDirector& director, unsigned
 	json.BeginObject("player");
 	json.String("map", here);
 	json.String("mapName", director.GetRegionName(here));
+	json.String("region", current);
+	json.String("regionName", current.empty() ? std::string("황야(마을과 마을 사이)") : director.GetRegionName(current));
 	json.Number("x", m_PlayerX);
 	json.Number("y", m_PlayerY);
 	json.Int("level", m_PlayerLevel);
@@ -874,6 +942,9 @@ std::string WorldMonitor::BuildStateJson(const StoryDirector& director, unsigned
 	int totalMobsHostile = 0;
 	int totalMobsChasing = 0;
 	int totalKills = 0;
+	int totalResidents = 0;
+	int totalHouses = 0;
+	int totalWild = 0;
 
 	json.BeginArray("villages");
 	for (const StoryRegion& region : director.GetRegions())
@@ -881,12 +952,17 @@ std::string WorldMonitor::BuildStateJson(const StoryDirector& director, unsigned
 		std::map<std::string, VillageStatus>::const_iterator found = m_Villages.find(region.id);
 		const VillageStatus* village = (found != m_Villages.end() && found->second.captured) ? &found->second : nullptr;
 		int kills = (found != m_Villages.end()) ? found->second.kills : 0;
-		bool live = (region.id == here);
-		bool visited = (village != nullptr);
-		bool unlocked = live || story.IsTrue("UNLOCK_" + region.id);
+		const WorldPlace* place = WorldLayout::Find(region.id);
+		bool isStage = (place != nullptr && place->kind == PlaceKind::Stage);
+		bool isVillage = (place != nullptr && place->kind == PlaceKind::Village);
 
-		// 크로노스의 배 속은 마을이 아니라 이야기 속 무대라(이정표로 갈 수 없음), 지금 그 안에 있거나 다녀온 기록이 있을 때만 보낸다.
-		if (region.id == "LOC_KRONOS_BELLY" && !live && !visited)
+		// 월드의 지역은 모두 함께 살아 있다(무대에 들어가 있는 동안만 기록). 무대는 그 안에 있을 때만 실시간.
+		bool live = (village != nullptr) && (inStage ? (isStage && region.id == current) : !isStage);
+		bool visited = (village != nullptr);
+		bool unlocked = (place == nullptr || place->kind != PlaceKind::Sanctuary) || story.IsTrue("UNLOCK_" + region.id);
+
+		// 크로노스의 배 속은 마을이 아니라 이야기 속 무대라(걸어서 갈 수 없음), 지금 그 안에 있거나 다녀온 기록이 있을 때만 보낸다.
+		if (isStage && !visited)
 		{
 			continue;
 		}
@@ -899,6 +975,8 @@ std::string WorldMonitor::BuildStateJson(const StoryDirector& director, unsigned
 		int mobPresent = 0;
 		int mobHostile = 0;
 		int mobChasing = 0;
+		int residents = 0;
+		int wildMonsters = 0;
 		std::map<std::string, int> mobsByKind;
 
 		if (village != nullptr)
@@ -915,11 +993,19 @@ std::string WorldMonitor::BuildStateJson(const StoryDirector& director, unsigned
 				{
 					++npcPresent;
 				}
+				if (npc.house > 0)
+				{
+					++residents;
+				}
 			}
 
 			for (const MobStatus& mob : village->mobs)
 			{
 				++mobCount;
+				if (mob.wild)
+				{
+					++wildMonsters;
+				}
 				if (!mob.present)
 				{
 					continue;
@@ -968,15 +1054,36 @@ std::string WorldMonitor::BuildStateJson(const StoryDirector& director, unsigned
 		totalMobsHostile += mobHostile;
 		totalMobsChasing += mobChasing;
 		totalKills += kills;
+		totalResidents += residents;
+		totalHouses += (village != nullptr) ? village->houses : 0;
+		totalWild += wildMonsters;
 
 		json.BeginObject(nullptr);
 		json.String("id", region.id);
 		json.String("name", region.name);
 		json.String("shortName", director.GetRegionShortName(region.id));
+		json.String("kind", isVillage ? "village" : (isStage ? "stage" : "sanctuary"));
 		json.Bool("live", live);
 		json.Bool("visited", visited);
 		json.Bool("unlocked", unlocked);
 		json.Bool("objectiveHere", !objectiveRegion.empty() && objectiveRegion == region.id);
+		json.Bool("here", region.id == current);
+
+		// 숭배하는 신과 마을 분위기(WorldLayout.h의 표 — 분위기가 주민의 성미와 마을을 떠도는 빛의 색을 정한다).
+		json.String("worship", (place != nullptr) ? FaithInfo::Key(place->worship) : "NONE");
+		json.String("worshipName", (place != nullptr) ? place->worshipLabel : "");
+		json.String("mood", (place != nullptr) ? place->mood.key : "");
+		json.String("moodLabel", (place != nullptr) ? place->mood.label : "");
+		json.String("moodText", (place != nullptr) ? place->mood.text : "");
+		json.Number("x", (place != nullptr) ? place->centerX : 0.f);
+		json.Number("y", (place != nullptr) ? place->centerY : 0.f);
+
+		// 주민(집이 있는 사람)·집, 둘레 황야의 몬스터 — 마을은 주민 15명과 몬스터 15마리가 1:1.
+		json.Int("residents", residents);
+		json.Int("residentQuota", isVillage ? WorldLayout::kResidentsPerVillage : 0);
+		json.Int("houses", (village != nullptr) ? village->houses : 0);
+		json.Int("wildMonsters", wildMonsters);
+		json.Int("wildQuota", isVillage ? WorldLayout::kResidentsPerVillage : 0);
 		if (visited)
 		{
 			json.Number("capturedAt", village->capturedAt, 1);
@@ -1077,6 +1184,8 @@ std::string WorldMonitor::BuildStateJson(const StoryDirector& director, unsigned
 				json.Bool("hotheaded", npc.hotheaded);
 				json.Bool("social", npc.social);
 				json.Bool("humbled", npc.humbled);
+				json.Bool("resident", npc.house > 0);
+				json.Int("house", npc.house);
 				json.EndObject();
 			}
 		}
@@ -1130,6 +1239,7 @@ std::string WorldMonitor::BuildStateJson(const StoryDirector& director, unsigned
 				json.Int("maxHp", mob.maxHp);
 				json.Number("x", mob.x);
 				json.Number("y", mob.y);
+				json.Bool("wild", mob.wild);
 				if (live)
 				{
 					json.Number("distance", mob.distance, 1);
@@ -1167,6 +1277,9 @@ std::string WorldMonitor::BuildStateJson(const StoryDirector& director, unsigned
 	json.Int("mobsHostile", totalMobsHostile);
 	json.Int("mobsChasing", totalMobsChasing);
 	json.Int("kills", totalKills);
+	json.Int("residents", totalResidents);
+	json.Int("houses", totalHouses);
+	json.Int("wildMonsters", totalWild);
 	json.EndObject();
 
 	// ---- 신앙과 신들의 관계(관계도) ----

@@ -18,6 +18,7 @@ namespace
 	const float kScanInterval = 0.6f;          // 짝을 찾고 플레이어에게 반응할지 살피는 간격(초)
 	const float kEncounterRadius = 2.4f;       // 이 안에 있는 둘이 어울린다
 	const float kEncounterChance = 0.35f;      // 짝을 찾았을 때 실제로 어울릴 확률(지나칠 때마다 붙잡지 않게)
+	const float kSocialRadius = 44.f;          // 플레이어에게서 이 안의 사람만 어울린다(씬의 캐릭터 갱신 범위보다 조금 안쪽)
 	const float kHearingRadius = 8.f;          // 플레이어가 이 안에 있어야 NPC끼리의 대사가 채팅창에 뜬다
 	const float kLineCooldown = 7.f;           // NPC끼리의 대사 사이 최소 간격(채팅창을 뒤덮지 않게)
 	const float kSocialCooldownMin = 18.f;     // 한 번 어울린 사람이 다시 어울리기까지
@@ -93,10 +94,18 @@ void NpcSociety::OnPlayerHitBrawler(NpcActor& npc)
 //  - 적대 + 한쪽이 다혈질: 주먹다짐(다혈질이 fight로 먼저 덤비고, 상대는 argue로 받아친다)
 void NpcSociety::UpdateEncounters(SceneGraph& scene, PlayerActor& player, const StoryDirector& director)
 {
+	// 플레이어 곁(씬이 캐릭터를 갱신하는 범위 안)의 사람만 짝짓는다 — 멀리 있는 마을 사람은 그동안 멈춰 있으므로.
 	std::vector<NpcActor*> candidates;
-	scene.ForEach([&candidates](Actor& actor)
+	float centerX = player.GetWorldX();
+	float centerY = player.GetWorldY();
+	scene.ForEach([&candidates, centerX, centerY](Actor& actor)
 	{
 		if (actor.GetType() != ActorType::NPC || actor.IsPendingDestroy())
+		{
+			return;
+		}
+
+		if (DistanceSq(actor, centerX, centerY) > kSocialRadius * kSocialRadius)
 		{
 			return;
 		}
@@ -133,7 +142,9 @@ void NpcSociety::UpdateEncounters(SceneGraph& scene, PlayerActor& player, const 
 				continue;
 			}
 
-			if (unit(m_Rng) > kEncounterChance)
+			// 마을 분위기에 따라 잘 어울리는 마을(키프로스·테베)과 말이 없는 마을(타이나론)이 있다.
+			float sociability = (a->GetTraits().sociability + b->GetTraits().sociability) * 0.5f;
+			if (unit(m_Rng) > kEncounterChance * sociability)
 			{
 				break; // 이번엔 그냥 스쳐 지나간다
 			}

@@ -73,6 +73,31 @@ public:
 	Actor* GetParent() const { return m_Parent; }
 	const std::vector<std::unique_ptr<Actor>>& GetChildren() const { return m_Children; }
 
+	// shouldMove가 true인 자식들을 순서를 지키며 떼어 내 out 뒤에 붙인다(부모 연결은 끊긴다). 큰 월드를 다 지은 뒤
+	// 움직이지 않는 액터들을 공간 칸(그룹 노드)으로 옮겨 담을 때 쓴다 — 하나씩 찾아 떼면 자식 수의 제곱만큼 걸린다.
+	template <typename Predicate>
+	void TakeChildrenIf(Predicate shouldMove, std::vector<std::unique_ptr<Actor>>& out)
+	{
+		std::vector<std::unique_ptr<Actor>> kept;
+		kept.reserve(m_Children.size());
+
+		for (std::unique_ptr<Actor>& child : m_Children)
+		{
+			if (shouldMove(*child))
+			{
+				child->m_Parent = nullptr;
+				out.push_back(std::move(child));
+			}
+			else
+			{
+				kept.push_back(std::move(child));
+			}
+		}
+
+		m_Children.swap(kept);
+		MarkSubtreeDirty();
+	}
+
 	// ---- 트랜스폼 ----
 	void SetPosition(float x, float y, float z);
 	float GetX() const { return m_X; }
@@ -122,6 +147,11 @@ public:
 
 	void SetVisible(bool visible) { m_Visible = visible; }
 	bool IsVisible() const { return m_Visible; }
+
+	// 이 액터가 속한 지역(마을)의 ID(LOC_*). 지역을 지을 때 붙이고, 모니터의 마을별 집계(주민·집·몬스터 수)와 황야
+	// 몬스터의 소속에 쓴다. 정적 문자열만 받는다(WorldLayout의 표). nullptr이면 어느 지역에도 속하지 않는다.
+	void SetHomeRegion(const char* locId) { m_HomeRegion = locId; }
+	const char* GetHomeRegion() const { return m_HomeRegion; }
 
 	// 화면에 그려지는 액터인지(Group은 자식을 묶기만 하므로 아님).
 	bool IsRenderable() const { return m_Type != ActorType::Group; }
@@ -193,6 +223,7 @@ private:
 	int m_InteractId = 0;
 	const char* m_StoryId = nullptr;
 	const char* m_Presence = nullptr;
+	const char* m_HomeRegion = nullptr;
 	bool m_Visible = true;
 	bool m_PendingDestroy = false;
 

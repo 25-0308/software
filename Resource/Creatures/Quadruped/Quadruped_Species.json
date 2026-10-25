@@ -1,0 +1,252 @@
+{
+	"species": [
+		{
+			"id": "WOLF",
+			"name": "늑대",
+			"frame": "Canid",
+			"scale": 1.0,
+			"disposition": "hostile",
+			"parts": [
+				"Body_Lean",
+				"Legs",
+				"Head_Wolf",
+				"Ears_Pointed",
+				"Tail_Bushy"
+			],
+			"colors": {
+				"Fur": "WolfGray",
+				"FurDark": "WolfDark",
+				"FurLight": "WolfLight",
+				"Mane": "LionMane",
+				"Eye": "IrisGold",
+				"Nose": "Nose",
+				"Horn": "Horn",
+				"Hoof": "Hoof"
+			},
+			"gameKind": "Wolf",
+			"note": "회색 늑대 — 무리 지어 덤비는 포식자",
+			"file": "Species/WOLF.glb"
+		},
+		{
+			"id": "SHADOW_WOLF",
+			"name": "그림자 늑대",
+			"frame": "Canid",
+			"scale": 0.95,
+			"disposition": "hostile",
+			"parts": [
+				"Body_Lean",
+				"Legs",
+				"Head_Wolf",
+				"Ears_Pointed",
+				"Tail_Bushy"
+			],
+			"colors": {
+				"Fur": "ShadeBody",
+				"FurDark": "ShadeDark",
+				"FurLight": "ShadeLight",
+				"Mane": "LionMane",
+				"Eye": "GlowPurple",
+				"Nose": "ShadeDark",
+				"Horn": "Horn",
+				"Hoof": "Hoof"
+			},
+			"gameKind": "ShadowWolf",
+			"note": "신탁의 균열에서 나온 그림자(Shade) — 보랏빛 눈",
+			"file": "Species/SHADOW_WOLF.glb"
+		},
+		{
+			"id": "LION",
+			"name": "사자",
+			"frame": "Canid",
+			"scale": 1.25,
+			"disposition": "hostile",
+			"parts": [
+				"Body_Muscular",
+				"Legs",
+				"Head_Lion",
+				"Mane",
+				"Ears_Round",
+				"Tail_Tuft"
+			],
+			"colors": {
+				"Fur": "LionTawny",
+				"FurDark": "LionMane",
+				"FurLight": "LionLight",
+				"Mane": "LionMane",
+				"Eye": "IrisGold",
+				"Nose": "Nose",
+				"Horn": "Horn",
+				"Hoof": "Hoof"
+			},
+			"gameKind": null,
+			"note": "갈기 사자(네메아의 사자 같은 위험한 짐승)",
+			"file": "Species/LION.glb"
+		},
+		{
+			"id": "RAM",
+			"name": "숫양",
+			"frame": "Cervid",
+			"scale": 0.8,
+			"disposition": "neutral",
+			"parts": [
+				"Body_Wool",
+				"Legs",
+				"Head_Sheep",
+				"Horns_Ram",
+				"Ears_Droopy",
+				"Tail_Short"
+			],
+			"colors": {
+				"Fur": "Wool",
+				"FurDark": "SheepFace",
+				"FurLight": "WoolDark",
+				"Mane": "LionMane",
+				"Eye": "AnimalEye",
+				"Nose": "Nose",
+				"Horn": "HornDark",
+				"Hoof": "Hoof"
+			},
+			"gameKind": null,
+			"note": "말린 뿔의 숫양 — 다가오면 들이받음",
+			"file": "Species/RAM.glb"
+		},
+		{
+			"id": "DEER",
+			"name": "사슴",
+			"frame": "Cervid",
+			"scale": 1.0,
+			"disposition": "passive",
+			"parts": [
+				"Body_Sleek",
+				"Legs",
+				"Head_Deer",
+				"Ears_Long",
+				"Horns_Antlers",
+				"Tail_Short"
+			],
+			"colors": {
+				"Fur": "DeerTan",
+				"FurDark": "DeerDark",
+				"FurLight": "DeerBelly",
+				"Mane": "LionMane",
+				"Eye": "AnimalEye",
+				"Nose": "Nose",
+				"Horn": "Antler",
+				"Hoof": "Hoof"
+			},
+			"gameKind": "Deer",
+			"note": "수사슴 — 뿔(Horns_Antlers)을 빼면 암사슴",
+			"file": "Species/DEER.glb"
+		},
+		{
+			"id": "SHEEP",
+			"name": "양",
+			"frame": "Cervid",
+			"scale": 0.75,
+			"disposition": "passive",
+			"parts": [
+				"Body_Wool",
+				"Legs",
+				"Head_Sheep",
+				"Ears_Droopy",
+				"Tail_Short"
+			],
+			"colors": {
+				"Fur": "Wool",
+				"FurDark": "SheepFace",
+				"FurLight": "WoolDark",
+				"Mane": "LionMane",
+				"Eye": "AnimalEye",
+				"Nose": "Nose",
+				"Horn": "Horn",
+				"Hoof": "Hoof"
+			},
+			"gameKind": null,
+			"note": "양치기의 양",
+			"file": "Species/SHEEP.glb"
+		},
+		{
+			"id": "BOAR",
+			"name": "멧돼지",
+			"frame": "Heavy",
+			"scale": 0.62,
+			"disposition": "neutral",
+			"parts": [
+				"Body_Boar",
+				"Legs",
+				"Head_Boar",
+				"Ears_Small",
+				"Tail_Thin"
+			],
+			"colors": {
+				"Fur": "BoarBrown",
+				"FurDark": "BoarBristle",
+				"FurLight": "BoarSnout",
+				"Mane": "LionMane",
+				"Eye": "AnimalEye",
+				"Nose": "Nose",
+				"Horn": "Horn",
+				"Hoof": "Hoof"
+			},
+			"gameKind": null,
+			"note": "건드리면 엄니로 들이받는 멧돼지",
+			"file": "Species/BOAR.glb"
+		},
+		{
+			"id": "BULL",
+			"name": "황소",
+			"frame": "Heavy",
+			"scale": 1.12,
+			"disposition": "neutral",
+			"parts": [
+				"Body_Bovine",
+				"Legs",
+				"Head_Bull",
+				"Horns_Bull",
+				"Ears_Side",
+				"Tail_Tuft"
+			],
+			"colors": {
+				"Fur": "BullBlack",
+				"FurDark": "BullBlack",
+				"FurLight": "BullMuzzle",
+				"Mane": "BullBlack",
+				"Eye": "AnimalEye",
+				"Nose": "Nose",
+				"Horn": "Horn",
+				"Hoof": "Hoof"
+			},
+			"gameKind": null,
+			"note": "검은 황소 — 화나면 머리를 낮춰 돌진",
+			"file": "Species/BULL.glb"
+		},
+		{
+			"id": "CHR_IO",
+			"name": "하얀 암소(이오)",
+			"frame": "Heavy",
+			"scale": 0.95,
+			"disposition": "passive",
+			"parts": [
+				"Body_Bovine",
+				"Legs",
+				"Head_Bull",
+				"Horns_Short",
+				"Ears_Side",
+				"Tail_Tuft"
+			],
+			"colors": {
+				"Fur": "CowWhite",
+				"FurDark": "CowWhite",
+				"FurLight": "CowPink",
+				"Mane": "WoolDark",
+				"Eye": "AnimalEye",
+				"Nose": "CowPink",
+				"Horn": "Horn",
+				"Hoof": "Hoof"
+			},
+			"gameKind": "WhiteCow",
+			"note": "말을 걸 수 있는 하얀 암소(SQ_AEGEAN_02)",
+			"file": "Species/CHR_IO.glb"
+		}
+	]
+}

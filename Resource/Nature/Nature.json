@@ -1,0 +1,644 @@
+{
+	"textures": {
+		"Grass": {
+			"color": "Textures/T_Grass.png",
+			"normal": "Textures/T_Grass_N.png",
+			"desc": "풀밭(짙은 얼룩·마른 풀빛)",
+			"size": 512,
+			"tileable": true
+		},
+		"GrassDry": {
+			"color": "Textures/T_GrassDry.png",
+			"normal": "Textures/T_GrassDry_N.png",
+			"desc": "마른 풀밭(여름 언덕·산기슭)",
+			"size": 512,
+			"tileable": true
+		},
+		"Dirt": {
+			"color": "Textures/T_Dirt.png",
+			"normal": "Textures/T_Dirt_N.png",
+			"desc": "흙길(자갈 알갱이)",
+			"size": 512,
+			"tileable": true
+		},
+		"StonePaving": {
+			"color": "Textures/T_StonePaving.png",
+			"normal": "Textures/T_StonePaving_N.png",
+			"desc": "판석 돌바닥(광장·신전 경내)",
+			"size": 512,
+			"tileable": true
+		},
+		"Sand": {
+			"color": "Textures/T_Sand.png",
+			"normal": "Textures/T_Sand_N.png",
+			"desc": "모래사장(바람 물결)",
+			"size": 512,
+			"tileable": true
+		},
+		"Rock": {
+			"color": "Textures/T_Rock.png",
+			"normal": "Textures/T_Rock_N.png",
+			"desc": "바위 표면(절벽·산)",
+			"size": 512,
+			"tileable": true
+		},
+		"Snow": {
+			"color": "Textures/T_Snow.png",
+			"normal": "Textures/T_Snow_N.png",
+			"desc": "눈(올림포스 산자락)",
+			"size": 512,
+			"tileable": true
+		},
+		"Water": {
+			"color": "Textures/T_Water.png",
+			"normal": "Textures/T_Water_N.png",
+			"desc": "물(깊이 얼룩·물결 빛무늬) — 셰이더에서 UV를 흘리면 흐르는 물",
+			"size": 512,
+			"tileable": true
+		},
+		"Marble": {
+			"color": "Textures/T_Marble.png",
+			"normal": "Textures/T_Marble_N.png",
+			"desc": "대리석(신전·신상)",
+			"size": 512,
+			"tileable": true
+		},
+		"Plaster": {
+			"color": "Textures/T_Plaster.png",
+			"normal": "Textures/T_Plaster_N.png",
+			"desc": "회벽(집 벽)",
+			"size": 512,
+			"tileable": true
+		}
+	},
+	"tiles": [
+		{
+			"name": "Tile_Grass",
+			"texture": "Grass",
+			"size": 2.0,
+			"uvRepeat": 1.0,
+			"height": 0.0,
+			"roughness": 0.95,
+			"alpha": 1.0,
+			"desc": "풀밭 2×2 m"
+		},
+		{
+			"name": "Tile_GrassDry",
+			"texture": "GrassDry",
+			"size": 2.0,
+			"uvRepeat": 1.0,
+			"height": 0.0,
+			"roughness": 0.95,
+			"alpha": 1.0,
+			"desc": "마른 풀밭 2×2 m"
+		},
+		{
+			"name": "Tile_Dirt",
+			"texture": "Dirt",
+			"size": 2.0,
+			"uvRepeat": 1.0,
+			"height": 0.0,
+			"roughness": 0.95,
+			"alpha": 1.0,
+			"desc": "흙길 2×2 m"
+		},
+		{
+			"name": "Tile_StonePaving",
+			"texture": "StonePaving",
+			"size": 2.0,
+			"uvRepeat": 1.0,
+			"height": 0.0,
+			"roughness": 0.8,
+			"alpha": 1.0,
+			"desc": "판석 돌바닥 2×2 m"
+		},
+		{
+			"name": "Tile_Sand",
+			"texture": "Sand",
+			"size": 2.0,
+			"uvRepeat": 1.0,
+			"height": 0.0,
+			"roughness": 0.95,
+			"alpha": 1.0,
+			"desc": "모래 2×2 m"
+		},
+		{
+			"name": "Tile_Rock",
+			"texture": "Rock",
+			"size": 2.0,
+			"uvRepeat": 1.0,
+			"height": 0.0,
+			"roughness": 0.9,
+			"alpha": 1.0,
+			"desc": "바위 바닥 2×2 m"
+		},
+		{
+			"name": "Tile_Snow",
+			"texture": "Snow",
+			"size": 2.0,
+			"uvRepeat": 1.0,
+			"height": 0.0,
+			"roughness": 0.6,
+			"alpha": 1.0,
+			"desc": "눈 2×2 m"
+		},
+		{
+			"name": "Tile_Marble",
+			"texture": "Marble",
+			"size": 2.0,
+			"uvRepeat": 1.0,
+			"height": 0.0,
+			"roughness": 0.4,
+			"alpha": 1.0,
+			"desc": "대리석 바닥 2×2 m"
+		},
+		{
+			"name": "Water_Tile",
+			"texture": "Water",
+			"size": 2.0,
+			"uvRepeat": 1.0,
+			"height": -0.05,
+			"roughness": 0.05,
+			"alpha": 0.82,
+			"desc": "물 2×2 m(반투명, 땅보다 5 cm 낮음)"
+		},
+		{
+			"name": "Water_Large",
+			"texture": "Water",
+			"size": 20.0,
+			"uvRepeat": 10.0,
+			"height": -0.05,
+			"roughness": 0.05,
+			"alpha": 0.82,
+			"desc": "넓은 물 20×20 m(바다·호수, 텍스처 10번 반복)"
+		}
+	],
+	"props": [
+		{
+			"name": "Tree_Olive_A",
+			"category": "Tree",
+			"desc": "올리브나무(뒤틀린 줄기·은빛 잎) ~3.5 m",
+			"verts": 378,
+			"faces": 546,
+			"materials": [
+				"TrunkOlive",
+				"LeafOlive",
+				"LeafOliveDark"
+			]
+		},
+		{
+			"name": "Tree_Olive_B",
+			"category": "Tree",
+			"desc": "올리브나무(뒤틀린 줄기·은빛 잎) ~3.5 m",
+			"verts": 378,
+			"faces": 546,
+			"materials": [
+				"TrunkOlive",
+				"LeafOlive",
+				"LeafOliveDark"
+			]
+		},
+		{
+			"name": "Tree_Olive_C",
+			"category": "Tree",
+			"desc": "올리브나무(뒤틀린 줄기·은빛 잎) ~3.5 m",
+			"verts": 378,
+			"faces": 546,
+			"materials": [
+				"TrunkOlive",
+				"LeafOlive",
+				"LeafOliveDark"
+			]
+		},
+		{
+			"name": "Tree_Cypress_A",
+			"category": "Tree",
+			"desc": "사이프러스(가늘고 높은 짙은 초록) ~6 m",
+			"verts": 68,
+			"faces": 71,
+			"materials": [
+				"Trunk",
+				"Cypress",
+				"Pine"
+			]
+		},
+		{
+			"name": "Tree_Cypress_B",
+			"category": "Tree",
+			"desc": "사이프러스(가늘고 높은 짙은 초록) ~6 m",
+			"verts": 68,
+			"faces": 71,
+			"materials": [
+				"Trunk",
+				"Cypress",
+				"Pine"
+			]
+		},
+		{
+			"name": "Tree_Oak_A",
+			"category": "Tree",
+			"desc": "활엽수(떡갈나무) ~5 m",
+			"verts": 294,
+			"faces": 386,
+			"materials": [
+				"Trunk",
+				"Leaf",
+				"LeafDark",
+				"LeafLight"
+			]
+		},
+		{
+			"name": "Tree_Oak_B",
+			"category": "Tree",
+			"desc": "활엽수(떡갈나무) ~5 m",
+			"verts": 294,
+			"faces": 386,
+			"materials": [
+				"Trunk",
+				"Leaf",
+				"LeafDark",
+				"LeafLight"
+			]
+		},
+		{
+			"name": "Tree_Pine_A",
+			"category": "Tree",
+			"desc": "우산소나무(높은 줄기·넓적한 수관) ~7 m",
+			"verts": 270,
+			"faces": 342,
+			"materials": [
+				"TrunkDark",
+				"Pine",
+				"Cypress"
+			]
+		},
+		{
+			"name": "Tree_Pine_B",
+			"category": "Tree",
+			"desc": "우산소나무(높은 줄기·넓적한 수관) ~7 m",
+			"verts": 270,
+			"faces": 342,
+			"materials": [
+				"TrunkDark",
+				"Pine",
+				"Cypress"
+			]
+		},
+		{
+			"name": "Tree_Laurel",
+			"category": "Tree",
+			"desc": "월계수(델포이 카스탈리아 샘가) ~3 m",
+			"verts": 144,
+			"faces": 220,
+			"materials": [
+				"Trunk",
+				"Laurel",
+				"LeafDark"
+			]
+		},
+		{
+			"name": "Tree_Dead_A",
+			"category": "Tree",
+			"desc": "마른 나무(타이나론·타르타로스)",
+			"verts": 221,
+			"faces": 197,
+			"materials": [
+				"DeadWood"
+			]
+		},
+		{
+			"name": "Tree_Dead_B",
+			"category": "Tree",
+			"desc": "마른 나무(타이나론·타르타로스)",
+			"verts": 221,
+			"faces": 197,
+			"materials": [
+				"DeadWood"
+			]
+		},
+		{
+			"name": "Bush_Round_A",
+			"category": "Plant",
+			"desc": "둥근 덤불",
+			"verts": 84,
+			"faces": 140,
+			"materials": [
+				"Leaf",
+				"LeafDark",
+				"LeafLight"
+			]
+		},
+		{
+			"name": "Bush_Round_B",
+			"category": "Plant",
+			"desc": "둥근 덤불",
+			"verts": 84,
+			"faces": 140,
+			"materials": [
+				"Leaf",
+				"LeafDark",
+				"LeafLight"
+			]
+		},
+		{
+			"name": "Bush_Oleander",
+			"category": "Plant",
+			"desc": "협죽도 덤불(분홍 꽃)",
+			"verts": 312,
+			"faces": 520,
+			"materials": [
+				"LeafDark",
+				"Leaf",
+				"FlowerWhite",
+				"FlowerPink"
+			]
+		},
+		{
+			"name": "Grass_Tuft_A",
+			"category": "Plant",
+			"desc": "풀 포기",
+			"verts": 80,
+			"faces": 80,
+			"materials": [
+				"Grass",
+				"GrassDark"
+			]
+		},
+		{
+			"name": "Grass_Tuft_B",
+			"category": "Plant",
+			"desc": "풀 포기",
+			"verts": 80,
+			"faces": 80,
+			"materials": [
+				"Grass",
+				"GrassDark"
+			]
+		},
+		{
+			"name": "Grass_TuftDry",
+			"category": "Plant",
+			"desc": "마른 풀 포기",
+			"verts": 76,
+			"faces": 76,
+			"materials": [
+				"GrassDry",
+				"Reed"
+			]
+		},
+		{
+			"name": "Grass_Patch",
+			"category": "Plant",
+			"desc": "풀 무더기 1.2 m",
+			"verts": 280,
+			"faces": 280,
+			"materials": [
+				"GrassDark",
+				"Grass"
+			]
+		},
+		{
+			"name": "Reeds",
+			"category": "Plant",
+			"desc": "물가 갈대",
+			"verts": 136,
+			"faces": 100,
+			"materials": [
+				"Reed",
+				"Brown"
+			]
+		},
+		{
+			"name": "Flowers_Poppy",
+			"category": "Plant",
+			"desc": "양귀비 무리(빨강)",
+			"verts": 417,
+			"faces": 564,
+			"materials": [
+				"GrassDark",
+				"Poppy",
+				"BlackFigure",
+				"Grass"
+			]
+		},
+		{
+			"name": "Flowers_Anemone",
+			"category": "Plant",
+			"desc": "아네모네 무리(연보라)",
+			"verts": 417,
+			"faces": 564,
+			"materials": [
+				"GrassDark",
+				"FlowerLilac",
+				"HairBlack",
+				"Grass"
+			]
+		},
+		{
+			"name": "Flowers_Daisy",
+			"category": "Plant",
+			"desc": "들국화 무리(흰색)",
+			"verts": 527,
+			"faces": 716,
+			"materials": [
+				"GrassDark",
+				"FlowerWhite",
+				"FlowerYellow",
+				"Grass"
+			]
+		},
+		{
+			"name": "Flowers_Yellow",
+			"category": "Plant",
+			"desc": "노란 들꽃 무리",
+			"verts": 472,
+			"faces": 640,
+			"materials": [
+				"GrassDark",
+				"FlowerYellow",
+				"Ochre",
+				"Grass"
+			]
+		},
+		{
+			"name": "Rock_Small_A",
+			"category": "Rock",
+			"desc": "작은 돌",
+			"verts": 12,
+			"faces": 20,
+			"materials": [
+				"Rock",
+				"RockDark"
+			]
+		},
+		{
+			"name": "Rock_Small_B",
+			"category": "Rock",
+			"desc": "작은 돌",
+			"verts": 12,
+			"faces": 20,
+			"materials": [
+				"Rock",
+				"RockDark"
+			]
+		},
+		{
+			"name": "Rock_Small_C",
+			"category": "Rock",
+			"desc": "작은 돌",
+			"verts": 12,
+			"faces": 20,
+			"materials": [
+				"Rock",
+				"RockDark"
+			]
+		},
+		{
+			"name": "Rock_Medium_A",
+			"category": "Rock",
+			"desc": "바위",
+			"verts": 12,
+			"faces": 20,
+			"materials": [
+				"Rock",
+				"RockDark"
+			]
+		},
+		{
+			"name": "Rock_Medium_B",
+			"category": "Rock",
+			"desc": "바위",
+			"verts": 12,
+			"faces": 20,
+			"materials": [
+				"Rock",
+				"RockDark"
+			]
+		},
+		{
+			"name": "Rock_Large_A",
+			"category": "Rock",
+			"desc": "큰 바위",
+			"verts": 12,
+			"faces": 20,
+			"materials": [
+				"Rock",
+				"RockDark"
+			]
+		},
+		{
+			"name": "Rock_Large_B",
+			"category": "Rock",
+			"desc": "큰 바위",
+			"verts": 12,
+			"faces": 20,
+			"materials": [
+				"Rock",
+				"RockDark"
+			]
+		},
+		{
+			"name": "Rock_Snowy",
+			"category": "Rock",
+			"desc": "눈 덮인 바위(올림포스)",
+			"verts": 12,
+			"faces": 20,
+			"materials": [
+				"Rock",
+				"RockDark",
+				"Snow"
+			]
+		},
+		{
+			"name": "Rock_Mossy",
+			"category": "Rock",
+			"desc": "이끼 낀 바위",
+			"verts": 12,
+			"faces": 20,
+			"materials": [
+				"Rock",
+				"RockDark",
+				"Moss"
+			]
+		},
+		{
+			"name": "Rock_Ash",
+			"category": "Rock",
+			"desc": "잿빛 바위(타이나론·저승)",
+			"verts": 12,
+			"faces": 20,
+			"materials": [
+				"RockAsh",
+				"RockDark"
+			]
+		},
+		{
+			"name": "Cliff_A",
+			"category": "Rock",
+			"desc": "절벽 덩어리 ~3 m(이어 세워 산자락)",
+			"verts": 60,
+			"faces": 100,
+			"materials": [
+				"RockDark",
+				"Rock"
+			]
+		},
+		{
+			"name": "Cliff_B",
+			"category": "Rock",
+			"desc": "절벽 덩어리 ~3 m(이어 세워 산자락)",
+			"verts": 60,
+			"faces": 100,
+			"materials": [
+				"RockDark",
+				"Rock"
+			]
+		},
+		{
+			"name": "Pebbles",
+			"category": "Rock",
+			"desc": "자갈 무리",
+			"verts": 108,
+			"faces": 180,
+			"materials": [
+				"StoneGray",
+				"Rock",
+				"Limestone"
+			]
+		},
+		{
+			"name": "Stump",
+			"category": "Wood",
+			"desc": "그루터기",
+			"verts": 72,
+			"faces": 48,
+			"materials": [
+				"Trunk",
+				"WoodLight"
+			]
+		},
+		{
+			"name": "Log",
+			"category": "Wood",
+			"desc": "쓰러진 통나무",
+			"verts": 58,
+			"faces": 37,
+			"materials": [
+				"Trunk",
+				"WoodLight"
+			]
+		},
+		{
+			"name": "Mushrooms",
+			"category": "Wood",
+			"desc": "버섯 무리",
+			"verts": 130,
+			"faces": 140,
+			"materials": [
+				"Mushroom",
+				"Brown",
+				"Crimson"
+			]
+		}
+	]
+}

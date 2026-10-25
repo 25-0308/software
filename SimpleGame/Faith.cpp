@@ -127,6 +127,7 @@ namespace
 		{ "NPC_WEST_PRIEST",     { Faith::Jupiter,   0.8f, false, true } },
 		{ "NPC_WEST_CITIZEN",    { Faith::Jupiter,   2.5f, true,  true } },
 		{ "NPC_SURVIVOR",        { Faith::Zeus,      0.f,  false, false } },
+		{ "NPC_THEBES_CITIZEN",  { Faith::Dionysus,  3.f,  true,  true } },
 		{ "CHR_PYTHIA",          { Faith::Apollo,    0.f,  false, false } },
 		{ "CHR_PERSEPHONE",      { Faith::Hades,     0.f,  false, false } },
 	};

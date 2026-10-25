@@ -45,9 +45,17 @@ public:
 	StoryState& GetStory() { return m_Story; }
 	const StoryState& GetStory() const { return m_Story; }
 
-	// 맵을 새로 지은 직후: 현재 지역 기록(MAP), 다시 올 수 있게 지역 열기, 목표 표시 생성, 지역 이름 배너,
-	// "on enter" 대화. 이전 맵의 씬·플레이어는 이미 지워졌으므로 여기서 새 것으로 바꿔 든다.
+	// 맵(하나로 이어진 월드, 또는 월드 밖의 이야기 무대)을 지었거나 그리로 옮긴 직후: 목표 표시를 새 씬에 만들고,
+	// locId 지역에 들어선 것으로 친다(현재 지역 기록 MAP, 지역 열기, 쓰러지면 돌아올 자리, 지역 이름 배너, "on enter" 대화).
+	// 그 뒤로 월드에서는 플레이어가 걸어서 다른 지역의 정사각형 안으로 들어설 때마다 같은 일을 한다(UpdateRegion).
 	void OnMapLoaded(const std::string& locId, SceneGraph& scene, PlayerActor& player);
+
+	// 지금 씬을 떠나기 직전(무대로 옮기거나 무대를 지우기 전): 그 씬에 만든 목표 표시를 정리하고 씬을 잊는다.
+	void DetachScene();
+
+	// 플레이어가 지금 서 있는 지역 ID(월드의 지역 정사각형 안, 또는 이야기 무대). 마을과 마을 사이 황야면 빈 문자열.
+	// 이야기 변수 MAP은 마지막으로 들어선 지역을 기억한다(황야에선 그대로).
+	const std::string& GetCurrentRegion() const { return m_CurrentRegion; }
 
 	// 게임 쪽 상호작용 → 이야기. 대화가 열렸으면(= 이야기 데이터가 반응했으면) true.
 	bool OnTalk(const Actor& actor);
@@ -78,7 +86,7 @@ public:
 	const std::string& GetObjectiveText() const { return m_ObjectiveString; }
 	std::string GetObjectiveRegion() const;
 
-	// 목표가 지금 지역이 아닌 다른 지역에 있으면 그 지역 ID, 아니면 빈 문자열(이정표로 가야 하는지).
+	// 목표가 지금 서 있는 지역이 아닌 다른 지역에 있으면 그 지역 ID, 아니면 빈 문자열(길을 따라 걸어가야 하는지).
 	std::string GetTravelRegion() const;
 
 	// 데이터 파일에 선언된 지역들(region 줄, 선언 순서)과 표시 이름. 짧은 이름은 가운뎃점 앞부분
@@ -122,9 +130,16 @@ private:
 	void Awaken();
 
 	void UpdatePresence();
+	void UpdateRegion();
 	void UpdateTriggers();
 	void UpdateObjective();
 	void UpdateBarks(float deltaSeconds);
+
+	// locId 지역에 들어섰다: MAP·UNLOCK 기록, 쓰러지면 돌아올 자리, 지역 이름 배너, "on enter" 대화.
+	void EnterRegion(const std::string& locId);
+
+	// 액터가 있는 지역(월드면 그 자리의 지역 정사각형, 무대면 그 무대). 황야면 빈 문자열.
+	std::string RegionOf(const Actor& actor) const;
 
 	void ShowRegionBanner(const std::string& locId);
 
@@ -151,6 +166,8 @@ private:
 	ObjectiveMarkerActor* m_Marker = nullptr;
 	GuideArrowActor* m_Guide = nullptr; // 플레이어의 자식(맵이 바뀌면 플레이어와 함께 새로 생긴다)
 	std::vector<Spot> m_ObjectiveSpots;
+	std::string m_CurrentRegion; // 플레이어가 서 있는 지역(황야면 빈 문자열)
+	std::string m_StageId;       // 이야기 무대 안이면 그 무대 ID, 월드면 빈 문자열
 
 	std::mt19937 m_Rng;
 	float m_BarkTimer = 30.f;

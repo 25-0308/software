@@ -10,10 +10,10 @@
 # name <화자ID> <표시 이름>          대화창 이름표. 표시 이름을 비우면 지문(이름표 없음).
 # step <단계ID> [<지역ID>] [@대상,대상,...] <목표 문구>
 #                                    진행 단계. 선언한 순서가 곧 진행 순서다(조건식의 STORY_STEP 크기 비교).
-#                                    <지역ID>(LOC_로 시작): 목표가 있는 지역. 플레이어가 다른 지역에 있으면 목표 표시
-#                                    (머리 위 마름모·발밑 화살표·미니맵·지도)가 지금 있는 지역의 이정표를 가리키고, 목표
-#                                    문구 아래에 목적지가 뜨며, 이정표 선택지 중 그 지역으로 가는 것에 "◆ 목표"가 붙는다.
-#                                    지역을 비우면 따지지 않는다(대상이 지금 지역에 하나도 없을 때만 이정표를 가리킴).
+#                                    <지역ID>(LOC_로 시작): 목표가 있는 지역. 플레이어가 그 지역 밖에 있으면 목표 표시
+#                                    (머리 위 마름모·발밑 화살표·미니맵·지도)가 그 지역으로 가는 길의 다음 굽이(지금 지역의
+#                                    출구 → 황야의 길 → 목표 지역 어귀)를 가리키고, 목표 문구 아래에 목적지가 뜬다.
+#                                    지역 안에선 그 지역에 있는 대상만 목표로 표시한다. 지역을 비우면 월드 어디의 대상이든 표시.
 #                                    @대상: 머리 위에 금빛 마름모를 띄울 스토리 ID들(쉼표로 잇고 공백 없이).
 #                                    "ID?조건"이면 그 조건이 참일 때만 표시한다(조건에도 공백 없이, 예: A&&!B, PATRON==ZEUS).
 #                                    목표 문구엔 {변수}를 쓸 수 있다.
@@ -24,7 +24,7 @@
 #                                    {god}은 말하는 사람의 신, {other}는 상대(다른 NPC의 신·플레이어의 수호신) 이름.
 #
 # == <대화ID>                         대화 블록 시작. 다음 == 까지가 이 블록이다.
-#   on talk|pickup|trigger|kill|enter|death <대상ID>
+#   on talk|pickup|trigger|kill|enter|death <대상ID>   (enter: 걸어서 그 지역 정사각형 안으로 들어설 때마다)
 #                                    대화가 저절로 열리는 계기(말 걸기/줍기/트리거 영역 진입/처치/지역 도착/플레이어가
 #                                    쓰러져 되살아난 직후 — death의 대상은 PLAYER). on 줄이 없으면 다른 대화의 GOTO로만 열린다.
 #   if <조건>                         모두 참이어야 열린다(여러 줄 가능).
@@ -42,11 +42,12 @@
 #       STORY_STEP끼리는 step 선언 순서로, 정수끼리는 수로, true/false는 참거짓으로 비교한다.
 #       설정한 적 없는 변수는 빈 값이다(거짓, 수로는 0).
 # 효과: SET 변수 값 / ADD 변수 수 / STEP 단계ID / UNLOCK 지역ID / GOTO 대화ID(그 대화의 조건이 참일 때만 열림) /
-#       TRAVEL 지역ID / XP 수 / HEAL / NOTICE 문구(채팅창 안내 — 문구에 ; 는 쓸 수 없음) /
+#       TRAVEL 지역ID(이야기가 장면을 옮길 때만 — 크로노스의 배 속으로 들어가고 나오기. 지역 사이는 걸어서 오간다) / XP 수 / HEAL / NOTICE 문구(채팅창 안내 — 문구에 ; 는 쓸 수 없음) /
 #       EVENT BLESSING(수호신의 첫 축복 — 상시 능력치 + 기본 스킬 Q) / EVENT AWAKEN(주인공의 각성 — 궁극기 R) / EVENT SHAKE 초(화면 흔들림) / EVENT FLARE 스토리ID(흐려진 신이 잠깐 선명해짐) /
 #       EVENT BANNER 제목 | 한마디(화면 위쪽에 큰 제목 — 장 제목·엔딩 제목. {변수} 사용 가능)
 #       대화가 열려 있는 동안 GOTO로 부른 대화는 지금 대화가 끝난 뒤에 차례로 열린다(부른 순서대로).
-#       UNLOCK은 채팅창에 "[새 지역]" 안내를 띄운다. 안내 없이 열려면 SET UNLOCK_<지역ID> true.
+#       UNLOCK은 채팅창에 안내를 띄운다(마을은 "[새 목적지]", 성역은 "[길이 열렸다]" — 올림포스 정상·타르타로스 경계는 이때
+#       길을 막던 안개 장벽이 걷힌다). 안내 없이 열려면 SET UNLOCK_<지역ID> true.
 #
 # ---- 변수 ----
 # STORY.md 8장의 변수(분기·엔딩 판정은 이것만 본다): PATRON, PATRON_TRUST(기본 50), HUMAN_FAITH(기본 50), ERIS_CLUE(0~5),
@@ -55,8 +56,9 @@
 #   (MAENAD_STOPPED는 SQ_THEBES_01이 없어 아직 쓰지 않는다.)
 # 구현용 진행 기록(게임 진행을 기록하는 변수라 여기에만 정리한다 — STORY.md 8장은 분기·엔딩 판정 변수만 둔다):
 #   STORY_STEP            지금 진행 단계(아래 step 목록)
-#   MAP                   지금 있는 지역 ID(지역에 들어설 때 게임이 설정)
-#   UNLOCK_<지역ID>       이정표로 갈 수 있는 지역(UNLOCK 효과로 열리고, 한 번 가 본 지역은 게임이 자동으로 true)
+#   MAP                   마지막으로 들어선 지역 ID(걸어서 지역 정사각형 안으로 들어설 때 게임이 설정 — 황야에선 그대로)
+#   UNLOCK_<지역ID>       이야기가 연 지역(UNLOCK 효과로 열리고, 한 번 들어선 지역은 게임이 자동으로 true). 마을은 늘 걸어서 갈 수
+#                         있고, 성역(올림포스 정상·타르타로스 경계)만 이 값이 참이 될 때까지 안개 장벽이 길을 막는다.
 #   SEEN_<지역>           새 지역(AEGEAN/CYPRUS/TAENARON)의 첫 도착 연출을 봤는지
 #   LAUREL                MQ_00 축제 준비로 모은 월계수 가지 수
 #   CRACK_OPEN            신탁의 균열이 열렸는지(그림자 괴물이 나오고 순례객이 흩어짐)
@@ -99,11 +101,11 @@
 # - 루트마다 에리스의 숨은 단서(ERIS_CLUE +1) 자리: 제우스 — 산길 낙석 위쪽, 포세이돈 — 해저 동굴 안쪽, 하데스 — 페르세포네의
 #   이야기, 아프로디테 — 기둥 문양의 홈, 헤르메스 — 비밀 우편함(이 루트만 자동).
 # - 제우스 루트의 "사고"(산길 낙석)는 누가 일으켰는지 끝까지 밝히지 않는다(제우스는 침묵, 위쪽에 사과 껍질).
-# - MQ_02가 끝나면(3장 시작) 에게해·키프로스·타이나론 곶을 이정표로 갈 수 있게 연다(서브 퀘스트와 이오를 3장 전에 만날 수 있게).
+# - MQ_02가 끝나면(3장 시작) 에게해·키프로스·타이나론 곶을 연다(서브 퀘스트와 이오를 3장 전에 만날 수 있게).
 # - MQ_04의 적 "청동 전사"는 헤파이스토스가 양쪽에 똑같이 판 자동 병사다.
 # - 아프로디테가 요구하는 "우세 진영"은 인간의 신앙으로 정한다: HUMAN_FAITH >= 50이면 제우스 쪽, 아니면 반란군 쪽.
 # - 에리스의 정체 공개는 모이라이를 깨우는 순간(베틀실), 에리스와의 "보스전"은 그녀가 부른 불화의 그림자 셋.
-# - 크로노스 2페이즈 「아버지의 배 속」은 별도 지역 LOC_KRONOS_BELLY(이정표 없음 — 이야기로만 드나든다).
+# - 크로노스 2페이즈 「아버지의 배 속」은 별도 지역 LOC_KRONOS_BELLY(월드 밖의 무대 — 이야기의 TRAVEL로만 드나든다).
 # - 최종 보스전 패배(STORY.md 10.3의 1번): 크로노스·불화의 그림자와 싸우다 쓰러지면 [다시 일어선다]/[눈을 감는다]를 고르고,
 #   눈을 감으면 END_DISCORD. 억지로 배드 엔딩을 보게 하지 않는다.
 # - 이오는 말을 걸 수 있는 하얀 암소로 표현한다(공격 대상이 아님). 실 없는 자라서 그녀의 말을 알아듣는다(STORY.md 12.3).
@@ -115,6 +117,18 @@
 #   아테네 시민 = 아테나(유피테르 신전으로 갈아탄 시민 하나), 어부 = 포세이돈, 서쪽 = 유피테르, 키프로스 손님 = 아레스·
 #   아프로디테·헤르메스, 기록 관리인 = 헤라. 신들의 관계는 STORY.md 5장의 인물 관계에서 정했다(아테나 대 유피테르는 적대 —
 #   아테나의 도시에 로마식 신전을 세운 새 숭배).
+# (2026-10-21)
+# - 지역은 하나로 이어진 월드 위에 놓이고 걸어서 오간다(WorldLayout.h — 이웃 마을 중심 사이 약 90칸, 걸어서 20초 남짓).
+#   이정표는 순간이동 대신 길 안내만 한다. 마을은 늘 걸어서 들어갈 수 있고, 성역(올림포스 정상·타르타로스 경계)은 바위
+#   띠로 둘러싸여 길 하나로만 들어가며 UNLOCK 전엔 안개 장벽이 막는다. 프롤로그(MQ_01 전) 동안은 델포이를 떠날 수 없다.
+# - 새 마을 테베(LOC_THEBES — STORY.md 12장 SQ_THEBES_01의 "아테네 인근 신규 구역")를 델포이·산기슭·아테네 사이의 갈림길에
+#   두었다. 디오니소스를 숭배하는 축제의 도시. SQ_THEBES_01 자체는 아직 없다(TODO).
+# - 마을마다 숭배하는 신(STORY.md 4장의 주요 신 + 테베 = 디오니소스)과 그에 맞춘 분위기를 둔다: 델포이 = 아폴론(경건한 순례지),
+#   테베 = 디오니소스(흥청망청 축제), 산기슭 = 제우스(권위와 불안), 아테네 = 아테나(논쟁과 회의), 에게해 = 포세이돈(거친
+#   뱃사람 기질), 키프로스 = 아프로디테(향락과 소문), 타이나론 = 하데스(침묵과 체념), 서쪽 해안 = 유피테르(질서와 규율).
+#   분위기는 주민의 다혈질 비율·돌아다니는 반경·어울리는 정도와 마을 위를 떠도는 빛의 색으로 드러난다.
+# - 마을마다 주민 15명(모두 집이 있음 — 한 집에 1~3명)과 둘레 황야의 몬스터 15마리(1:1). 순례객·조난자·줄 선 영혼·가면 쓴
+#   손님·살아남은 양치기와 신·이야기 인물은 주민이 아니라 집이 없다. 새 주민은 그 마을의 주민 ID(NPC_DELPHI_VILLAGER 등)를 쓴다.
 # =====================================================================================
 
 
@@ -176,6 +190,7 @@ name NPC_RECORD_KEEPER 기록 관리인
 name NPC_WEST_PRIEST 대신전 사제장
 name NPC_WEST_CITIZEN 서쪽 시민
 name NPC_SURVIVOR 살아남은 양치기
+name NPC_THEBES_CITIZEN 테베 시민
 
 
 # ---- 진행 단계(선언 순서 = 진행 순서) ----
@@ -267,6 +282,7 @@ step ENDING.DONE [엔딩] {ENDING_NAME} — 이야기는 끝났다. 세상을 �
 
 # ---- 지역 ----
 region LOC_DELPHI 델포이 · 파르나소스 산기슭 | 헤르메스: "세상의 배꼽이래. 신탁은 애매하고, 무화과는 비싸."
+region LOC_THEBES 테베 · 카드모스의 도시 | 헤르메스: "디오니소스의 고향이야. 잔은 받되, 밤까지 남아 있진 마."
 region LOC_OLYMPUS_FOOT 올림포스 산기슭 · 테살리아 | 헤르메스: "제우스 신전 근처에서 이상하게 잘생긴 동물을 보면, 일단 피하세요."
 region LOC_ATHENS 아테네 · 폴리스 연합 | 헤르메스: "말 많은 도시야. 신들 험담도 여기가 제일 빨라. 나 다음으로."
 region LOC_AEGEAN 에게해 군도 | 헤르메스: "여기서 제우스 얘기 꺼내면 섬 하나가 흔들려. 진짜로."
@@ -927,28 +943,28 @@ if PATRON == ZEUS
 CHR_ZEUS: 첫 임무를 주마. 테살리아 들판의 마을들이 요즘 내 이름을 잊어 간다더군. 순회 공연을 한다.
 CHR_ZEUS: 번개 기적 한 번이면 신앙은 돌아온다. 너는 내 곁에서 박수를 유도해라. 크게. 진심으로.
 CHR_HERMES: (작게) 대회의는 다들 수호신 일이 끝나면 산기슭에서 열린대. 그때 보자. …박수 연습해 둬.
-do UNLOCK LOC_OLYMPUS_FOOT; NOTICE [수호신 루트] 「번개 순회 공연」 — 마을 끝 이정표에서 올림포스 산기슭으로 가자.; STEP RQ_ZEUS_01.TOUR
+do UNLOCK LOC_OLYMPUS_FOOT; NOTICE [수호신 루트] 「번개 순회 공연」 — 길을 따라 테베를 지나 올림포스 산기슭으로 걸어가자.; STEP RQ_ZEUS_01.TOUR
 
 == RQ_POSEIDON_START
 if PATRON == POSEIDON
 CHR_POSEIDON: 첫 일이다. 에게해로 와라. 형님 하늘 아래가 아니라 내 바다 위에서 일하는 거다. 공기부터 다르지.
 CHR_POSEIDON: 엉터리 신탁을 믿고 배를 띄운 자들이 있다. 바다는 누구도 버리지 않는다. 내 바다에서 죽는 꼴은 못 본다는 뜻이다.
 CHR_HERMES: (작게) 대회의는 수호신 일이 끝나면 산기슭에서 열린대. 멀미약 챙겨.
-do UNLOCK LOC_AEGEAN; NOTICE [수호신 루트] 「틀린 항로」 — 마을 끝 이정표에서 에게해 군도로 가자.; STEP RQ_POSEIDON_01.HARBOR
+do UNLOCK LOC_AEGEAN; NOTICE [수호신 루트] 「틀린 항로」 — 길을 따라 테베·아테네를 지나 에게해 군도로 걸어가자.; STEP RQ_POSEIDON_01.HARBOR
 
 == RQ_HADES_START
 if PATRON == HADES
 CHR_HADES: 첫 출근이다. 장소는 타이나론 곶, 저승 입구. 접수 창구가 마비됐다.
 CHR_HADES: 죽을 날이 아닌데 온 자, 죽을 날이 지났는데 이제야 온 자. 서류가 뒤엉켜 줄이 강을 건너가 버렸다.
 CHR_HERMES: (작게) 대회의는 수호신 일이 끝나면 산기슭에서 열린대. 첫 출근 축하해. 퇴근은… 응원할게.
-do UNLOCK LOC_TAENARON; NOTICE [수호신 루트] 「접수 창구 대란」 — 마을 끝 이정표에서 타이나론 곶으로 가자.; STEP RQ_HADES_01.DESK
+do UNLOCK LOC_TAENARON; NOTICE [수호신 루트] 「접수 창구 대란」 — 길을 따라 테베·아테네를 지나 타이나론 곶으로 걸어가자.; STEP RQ_HADES_01.DESK
 
 == RQ_APHRODITE_START
 if PATRON == APHRODITE
 CHR_APHRODITE: 첫 데이트… 아니, 첫 임무야. 키프로스 파포스에서 연회가 열려. 신이랑 영웅이랑, 소문이랑.
 CHR_APHRODITE: 가면을 쓰고 들어가서 듣기만 하면 돼. 쉬워. 사람들은 가면 앞에서 제일 솔직해지거든.
 CHR_HERMES: (작게) 대회의는 수호신 일이 끝나면 산기슭에서 열린대. 연회에서 들은 거 나한테도 좀… 아냐, 농담이야.
-do UNLOCK LOC_CYPRUS; NOTICE [수호신 루트] 「파포스의 연회」 — 마을 끝 이정표에서 키프로스로 가자.; STEP RQ_APHRODITE_01.MASK
+do UNLOCK LOC_CYPRUS; NOTICE [수호신 루트] 「파포스의 연회」 — 길을 따라 아테네·에게해를 지나 키프로스로 걸어가자.; STEP RQ_APHRODITE_01.MASK
 
 == RQ_HERMES_START
 if PATRON == HERMES
@@ -1913,7 +1929,7 @@ narr: 모든 신의 시선이 당신에게 쏠린다. 그렇게 회의가 끝나
 narr: 텅 빈 회의장. 기둥 그늘에서 피티아가 혼잣말처럼 중얼거린다.
 CHR_PYTHIA: …왕관이… 계단에서 넘어진다.
 narr: 이번엔 아무도 웃지 않는다.
-do UNLOCK LOC_ATHENS; XP 40; NOTICE [다음 목적지] 이정표에서 아테네로 가자.; STEP MQ_02.ATHENS
+do UNLOCK LOC_ATHENS; XP 40; NOTICE [다음 목적지] 길을 따라 테베를 지나 아테네로 가자.; STEP MQ_02.ATHENS
 
 # 회의 참석자에게 먼저 말을 걸어도(트리거 영역을 거치지 않았을 때를 대비해) 회의가 시작된다.
 == COUNCIL_TALK_ZEUS
@@ -2098,7 +2114,7 @@ CHR_PYTHIA: 이건 헤르메스한테… 아니, 헤르메스는 말이 너무 �
 narr: 장부 맨 뒷장, 금화를 싼 천에 낯선 도장이 찍혀 있다. 배 모양 테두리 안의 저울. 항구 세관의 표시다.
 CHR_PYTHIA: 이 표시, 시장에서 많이 봤어. 서쪽 해안에서 오는 배들 짐에 찍혀 있던 거야. 유피테르 신전이 처음 생긴 데도 거기고.
 narr: 신들은 늙어 가고, 누군가는 그 틈을 파고들고 있다. — 2장 「흔들리는 왕좌」 끝.
-do SET MQ02_DONE true; XP 60; UNLOCK LOC_WEST; SET UNLOCK_LOC_AEGEAN true; SET UNLOCK_LOC_CYPRUS true; SET UNLOCK_LOC_TAENARON true; EVENT BANNER 3장 · 배신자의 이름 | 헤르메스: "이번 장은 제목부터 스포일러야. 미안."; NOTICE [2장 완료] 금화의 흔적을 따라 서쪽 해안으로 가자. 에게해·키프로스·타이나론 곶도 이정표로 갈 수 있다.; STEP MQ_03.WEST
+do SET MQ02_DONE true; XP 60; UNLOCK LOC_WEST; SET UNLOCK_LOC_AEGEAN true; SET UNLOCK_LOC_CYPRUS true; SET UNLOCK_LOC_TAENARON true; EVENT BANNER 3장 · 배신자의 이름 | 헤르메스: "이번 장은 제목부터 스포일러야. 미안."; NOTICE [2장 완료] 금화의 흔적을 따라 서쪽 해안으로 가자. 에게해·키프로스·타이나론 곶에도 들러 볼 수 있다.; STEP MQ_03.WEST
 == PRIEST_PRIESTS
 on talk NPC_PRIEST
 if STORY_STEP == MQ_02.PRIESTS
@@ -2477,7 +2493,7 @@ narr: 오래된 벽화 앞에 제우스가 홀로 서 있다. 번개도, 관객�
 narr: 강보에 싼 돌을 삼키려는 왕의 얼굴을, 그 왕의 아들이 올려다본다.
 CHR_ZEUS: 아버지. 당신도 이렇게 무서웠습니까.
 narr: 대답은 없다. 벽화 속 크로노스의 입만 영원히 벌어져 있다. — 3장 「배신자의 이름」 끝.
-do XP 60; UNLOCK LOC_OLYMPUS; EVENT BANNER 4장 · 올림포스 내전 | 헤르메스: "가족 싸움에 구경꾼은 없어. 다 휘말려."; NOTICE [3장 완료] 헤라가 왕의 퇴위를 요구했다. 이정표에서 올림포스 정상으로.; STEP MQ_04.DECLARE
+do XP 60; UNLOCK LOC_OLYMPUS; EVENT BANNER 4장 · 올림포스 내전 | 헤르메스: "가족 싸움에 구경꾼은 없어. 다 휘말려."; NOTICE [3장 완료] 헤라가 왕의 퇴위를 요구했다. 올림포스 산기슭의 북쪽 산길로 정상에 오르자.; STEP MQ_04.DECLARE
 
 
 # =====================================================================================
@@ -2641,14 +2657,14 @@ CHR_ZEUS: …좋다. 내 곁에 서라. 내 눈 아래.
 CHR_HERA: 그래. 결국 너도 그 남자의 그늘을 고르는구나.
 CHR_HERMES: (작게) 기록했어. 양쪽에 팔 거야. 미안.
 narr: 첫 전갈이 날아든다. 아테네 항구에 해일이 덮쳤고, 반란군이 사들인 청동 전사들이 그 틈에 상륙했다.
-do STEP MQ_04.FRONT1; NOTICE [진영: 제우스] 첫 번째 전선 — 이정표에서 아테네로 가자.
+do STEP MQ_04.FRONT1; NOTICE [진영: 제우스] 첫 번째 전선 — 산길을 내려가 아테네로 가자.
 
 == MQ04_SIDE_REBEL
 CHR_HERA: 현명하구나. 그 남자의 거짓을 끝낼 수 있는 건 너뿐이야.
 CHR_ZEUS: …예언대로군.
 CHR_HERMES: (작게) 기록했어. 양쪽에 팔 거야. 미안.
 narr: 첫 전갈이 날아든다. 아테네 항구에 해일이 덮쳤고, 제우스 쪽이 사들인 청동 전사들이 항구를 막고 있다. 사람들이 아직 거리에 있다.
-do STEP MQ_04.FRONT1; NOTICE [진영: 반란군] 첫 번째 전선 — 이정표에서 아테네로 가자.
+do STEP MQ_04.FRONT1; NOTICE [진영: 반란군] 첫 번째 전선 — 산길을 내려가 아테네로 가자.
 
 == MQ04_SIDE_THIRD
 narr: 당신은 두 천막 어느 쪽으로도 걷지 않는다.
@@ -2685,7 +2701,7 @@ if STORY_STEP == MQ_04.FRONT1_FIGHT && WAR_KILLS_ATHENS >= 2
 narr: 마지막 청동 전사가 진흙탕에 쓰러진다. 가슴판 안쪽에 새겨진 글자가 보인다. "헤파이스토스 공방 — 견적 정확."
 narr: 항구는 조용해졌다. 이름을 부르던 목소리도 멎었다. 찾았는지, 지쳤는지는 알 수 없다.
 CHR_PYTHIA: 다음 전선은 테살리아래. 올림포스 산기슭의 목동 마을. …번개가 빗나갔대.
-do ADD WAR_KILLS_ATHENS 1; XP 40; NOTICE [전선] 두 번째 전선 — 이정표에서 올림포스 산기슭으로.; STEP MQ_04.FRONT2
+do ADD WAR_KILLS_ATHENS 1; XP 40; NOTICE [전선] 두 번째 전선 — 올림포스 산기슭의 목동 마을로.; STEP MQ_04.FRONT2
 
 == MQ04_BRONZE_ATHENS
 on kill MON_BRONZE_ATHENS
@@ -2728,7 +2744,7 @@ narr: 무너진 지붕 아래에서 사람들을 끌어낸다. 숨이 붙은 사
 narr: 해가 질 무렵, 불이 꺼진다. 양치기가 지팡이를 짚고 일어선다.
 NPC_SURVIVOR: 고마워요. 신들한텐… 이제 뭘 빌어야 할지 모르겠어요. 내일 해가 뜨게 해 달라고나 빌까요.
 CHR_PYTHIA: 마지막 전선은 올림포스 정상이래. 왕좌의 홀 앞. …거기 가면 끝나겠지? 그렇지?
-do SET WAR_KILLS_SUMMIT 0; HEAL; XP 40; NOTICE [전선] 마지막 전선 — 이정표에서 올림포스 정상으로.; STEP MQ_04.FRONT3
+do SET WAR_KILLS_SUMMIT 0; HEAL; XP 40; NOTICE [전선] 마지막 전선 — 다시 올림포스 정상으로.; STEP MQ_04.FRONT3
 
 == MQ04_SURVIVOR_EARLY
 on talk NPC_SURVIVOR
@@ -3131,7 +3147,7 @@ do GOTO MQ05_ERIS_END
 == MQ05_ERIS_END
 narr: 심연이 조용해진다. 크로노스도, 불화의 그림자도 없다. 신들이 지친 얼굴로 당신을 본다. 모두가 같은 질문을 하는 얼굴로.
 CHR_ATHENA: 베틀로 가라. 모이라이가 기다린다. …회의록의 마지막 장은 네가 써라.
-do XP 60; NOTICE [마지막 실] 이정표에서 올림포스 정상으로, 지하 베틀실로 돌아가자.; STEP MQ_05.LOOM
+do XP 60; NOTICE [마지막 실] 올림포스 정상으로 돌아가 지하 베틀실로 내려가자 — 먼 길이다.; STEP MQ_05.LOOM
 
 # 최종 보스전 패배(STORY.md 10.3의 1번). 다시 일어설지, 눈을 감을지 고른다.
 == MQ05_DEATH
@@ -4048,143 +4064,71 @@ CHR_ARES: 뭘 봐. 싸울 거야? …아니면 그냥 가. 어머니가 시비 �
 
 
 # =====================================================================================
-# 이정표 — 지역 이동(지역마다 하나). 갈 수 있는 곳만 선택지로 보인다(UNLOCK_<지역ID>).
+# 이정표 — 길 안내(지역마다 하나, 마을 어귀). 지역 사이는 길을 따라 걸어서 오간다(이정표로 순간이동하지 않는다 — 2026-10-21).
+# 방향은 화면 기준(위 = 북쪽). 이웃 마을까지는 걸어서 20초 남짓이고, 길 사이 황야엔 그 마을 주민 수만큼 몬스터가 산다.
 # =====================================================================================
 
 == SIGNPOST_LOCKED
 on talk OBJ_SIGNPOST
-if MAP == LOC_DELPHI && !PATRON
-narr: 낡은 이정표. 북쪽 길은 테살리아로, 동쪽 길은 아테네로, 남쪽 항구에선 섬으로 가는 배가 뜬다. 하지만 지금은 델포이를 떠날 때가 아니다.
+if MAP == LOC_DELPHI && STORY_STEP < MQ_01.INTERVIEW
+narr: 낡은 이정표. 남동쪽 길은 테베로, 남서쪽 길은 해협의 둑길을 건너 서쪽 해안으로 이어진다. 하지만 오늘은 축제 날이다. 델포이를 떠날 때가 아니다.
 or
 narr: 이정표 아래 누군가 낙서를 해 놓았다. "신탁 축제 무사고 300일째." 숫자가 여러 번 고쳐져 있다.
 
-# 지역마다 갈 수 있는 곳(UNLOCK_<지역ID>)만 선택지로 보인다. 순서는 늘 같다: 델포이 · 산기슭 · 아테네 · 에게해 · 키프로스 ·
-# 타이나론 · 서쪽 해안 · 올림포스 정상 · 타르타로스 경계 · 머문다(선택지는 9개까지 — 숫자키 1~9).
 == SIGNPOST_DELPHI
 on talk OBJ_SIGNPOST
 if MAP == LOC_DELPHI
-narr: 낡은 이정표. 북쪽 길은 테살리아로, 동쪽 길은 아테네로 이어진다. 남쪽 항구에선 섬과 바다 건너로 가는 배가 뜬다.
-choice (UNLOCK_LOC_OLYMPUS_FOOT) 올림포스 산기슭 · 테살리아로 간다 -> TRAVEL LOC_OLYMPUS_FOOT
-choice (UNLOCK_LOC_ATHENS) 아테네로 간다 -> TRAVEL LOC_ATHENS
-choice (UNLOCK_LOC_AEGEAN) 배를 타고 에게해 군도로 간다 -> TRAVEL LOC_AEGEAN
-choice (UNLOCK_LOC_CYPRUS) 배를 타고 키프로스 · 파포스로 간다 -> TRAVEL LOC_CYPRUS
-choice (UNLOCK_LOC_TAENARON) 남쪽 끝 타이나론 곶으로 간다 -> TRAVEL LOC_TAENARON
-choice (UNLOCK_LOC_WEST) 배를 타고 서쪽 해안으로 간다 -> TRAVEL LOC_WEST
-choice (UNLOCK_LOC_OLYMPUS) 올림포스 정상으로 오른다 -> TRAVEL LOC_OLYMPUS
-choice (UNLOCK_LOC_TARTARUS_RIM) 타르타로스 경계로 내려간다 -> TRAVEL LOC_TARTARUS_RIM
-choice 아직은 머문다
+narr: 낡은 이정표. 남동쪽 길: 테베 — 그 갈림길에서 북동쪽은 올림포스 산기슭, 남동쪽은 아테네. 남서쪽 길: 해협의 둑길을 건너 서쪽 해안.
+narr: 팻말 아래 누군가 덧붙여 적었다. "길 밖 숲엔 늑대와 멧돼지. 해 지기 전에 걸을 것."
+
+== SIGNPOST_THEBES
+on talk OBJ_SIGNPOST
+if MAP == LOC_THEBES
+narr: 포도덩굴이 감긴 네거리의 이정표. 북서쪽: 델포이. 북동쪽: 올림포스 산기슭. 남동쪽: 아테네 — 그 너머 바다 쪽으로 에게해와 키프로스, 남쪽 끝으로 타이나론 곶.
+narr: 맨 아래 팻말엔 누가 칼로 새겨 놓았다. "성 밖에서 노래하는 여자들을 따라가지 마시오." 그 밑에 다른 글씨로: "따라갔다가 사흘 만에 돌아옴. 기억 없음."
 
 == SIGNPOST_OLYMPUS_FOOT
 on talk OBJ_SIGNPOST
 if MAP == LOC_OLYMPUS_FOOT
-narr: 이정표. 남쪽으로 델포이, 남동쪽으로 아테네. 북쪽 산길엔 번개 모양 낙서로 "관계자 외 출입 금지"라고 적혀 있다.
-choice (UNLOCK_LOC_DELPHI) 델포이로 간다 -> TRAVEL LOC_DELPHI
-choice (UNLOCK_LOC_ATHENS) 아테네로 간다 -> TRAVEL LOC_ATHENS
-choice (UNLOCK_LOC_AEGEAN) 배를 타고 에게해 군도로 간다 -> TRAVEL LOC_AEGEAN
-choice (UNLOCK_LOC_CYPRUS) 배를 타고 키프로스 · 파포스로 간다 -> TRAVEL LOC_CYPRUS
-choice (UNLOCK_LOC_TAENARON) 남쪽 끝 타이나론 곶으로 간다 -> TRAVEL LOC_TAENARON
-choice (UNLOCK_LOC_WEST) 서쪽 해안으로 간다 -> TRAVEL LOC_WEST
-choice (UNLOCK_LOC_OLYMPUS) 북쪽 산길로 올림포스 정상에 오른다 -> TRAVEL LOC_OLYMPUS
-choice (UNLOCK_LOC_TARTARUS_RIM) 타르타로스 경계로 내려간다 -> TRAVEL LOC_TARTARUS_RIM
-choice 아직은 머문다
+narr: 이정표. 남서쪽 길: 테베 — 그 너머 델포이와 아테네. 북서쪽 산길: 올림포스 정상. 산길 팻말엔 번개 모양 낙서로 "관계자 외 출입 금지"라고 적혀 있다.
+narr: 아래쪽엔 목동들의 경고문. "들판의 청동 인형은 대장간 물건이 아님. 말 걸지 말 것. 대답함."
 
 == SIGNPOST_ATHENS
 on talk OBJ_SIGNPOST
 if MAP == LOC_ATHENS
-narr: 항구 앞 이정표. 서쪽 길은 델포이로, 북쪽 길은 테살리아로. 부두에선 섬으로, 키프로스로 가는 배가 손님을 부른다.
-choice (UNLOCK_LOC_DELPHI) 델포이로 간다 -> TRAVEL LOC_DELPHI
-choice (UNLOCK_LOC_OLYMPUS_FOOT) 올림포스 산기슭 · 테살리아로 간다 -> TRAVEL LOC_OLYMPUS_FOOT
-choice (UNLOCK_LOC_AEGEAN) 배를 타고 에게해 군도로 간다 -> TRAVEL LOC_AEGEAN
-choice (UNLOCK_LOC_CYPRUS) 배를 타고 키프로스 · 파포스로 간다 -> TRAVEL LOC_CYPRUS
-choice (UNLOCK_LOC_TAENARON) 배를 타고 타이나론 곶으로 간다 -> TRAVEL LOC_TAENARON
-choice (UNLOCK_LOC_WEST) 배를 타고 서쪽 해안으로 간다 -> TRAVEL LOC_WEST
-choice (UNLOCK_LOC_OLYMPUS) 올림포스 정상으로 오른다 -> TRAVEL LOC_OLYMPUS
-choice (UNLOCK_LOC_TARTARUS_RIM) 타르타로스 경계로 내려간다 -> TRAVEL LOC_TARTARUS_RIM
-choice 아직은 머문다
+narr: 항구 앞 이정표. 북서쪽 길: 테베와 델포이. 북동쪽 둑길: 에게해 군도 — 그 너머 키프로스. 남서쪽 해안 둑길: 타이나론 곶.
+narr: 누군가 팻말마다 덧붙였다. "길 밖엔 산적. 신에게 기도하든 말든 지갑은 따로 챙길 것." 그 밑에 철학자의 글씨: "기도와 지갑의 관계에 대해선 토론 가능."
 
 == SIGNPOST_AEGEAN
 on talk OBJ_SIGNPOST
 if MAP == LOC_AEGEAN
-narr: 부두의 이정표. 노를 그린 화살표들이 사방을 가리킨다. 어느 쪽이든 결국 바다를 건너야 한다.
-choice (UNLOCK_LOC_DELPHI) 델포이로 간다 -> TRAVEL LOC_DELPHI
-choice (UNLOCK_LOC_OLYMPUS_FOOT) 올림포스 산기슭 · 테살리아로 간다 -> TRAVEL LOC_OLYMPUS_FOOT
-choice (UNLOCK_LOC_ATHENS) 아테네로 간다 -> TRAVEL LOC_ATHENS
-choice (UNLOCK_LOC_CYPRUS) 키프로스 · 파포스로 간다 -> TRAVEL LOC_CYPRUS
-choice (UNLOCK_LOC_TAENARON) 타이나론 곶으로 간다 -> TRAVEL LOC_TAENARON
-choice (UNLOCK_LOC_WEST) 서쪽 해안으로 간다 -> TRAVEL LOC_WEST
-choice (UNLOCK_LOC_OLYMPUS) 올림포스 정상으로 오른다 -> TRAVEL LOC_OLYMPUS
-choice (UNLOCK_LOC_TARTARUS_RIM) 타르타로스 경계로 내려간다 -> TRAVEL LOC_TARTARUS_RIM
-choice 아직은 머문다
+narr: 부두의 이정표. 노를 그린 화살표들. 남서쪽 둑길: 아테네. 남동쪽 모래톱 길: 키프로스. 썰물에 드러난 길이라 발밑이 젖는다.
+narr: 어부들의 낙서. "둑길에 바다뱀. 물리면 포세이돈 님 탓 아님. 네 탓임."
 
 == SIGNPOST_CYPRUS
 on talk OBJ_SIGNPOST
 if MAP == LOC_CYPRUS
-narr: 장미 넝쿨이 감긴 이정표. "파포스에서 즐거운 시간 되셨나요? 소문은 두고 가세요."
-choice (UNLOCK_LOC_DELPHI) 델포이로 간다 -> TRAVEL LOC_DELPHI
-choice (UNLOCK_LOC_OLYMPUS_FOOT) 올림포스 산기슭 · 테살리아로 간다 -> TRAVEL LOC_OLYMPUS_FOOT
-choice (UNLOCK_LOC_ATHENS) 아테네로 간다 -> TRAVEL LOC_ATHENS
-choice (UNLOCK_LOC_AEGEAN) 에게해 군도로 간다 -> TRAVEL LOC_AEGEAN
-choice (UNLOCK_LOC_TAENARON) 타이나론 곶으로 간다 -> TRAVEL LOC_TAENARON
-choice (UNLOCK_LOC_WEST) 서쪽 해안으로 간다 -> TRAVEL LOC_WEST
-choice (UNLOCK_LOC_OLYMPUS) 올림포스 정상으로 오른다 -> TRAVEL LOC_OLYMPUS
-choice (UNLOCK_LOC_TARTARUS_RIM) 타르타로스 경계로 내려간다 -> TRAVEL LOC_TARTARUS_RIM
-choice 아직은 머문다
+narr: 장미 넝쿨이 감긴 이정표. 북서쪽 모래톱 길: 에게해 군도 — 그 너머 아테네. "파포스에서 즐거운 시간 되셨나요? 소문은 두고 가세요."
 
 == SIGNPOST_TAENARON
 on talk OBJ_SIGNPOST
 if MAP == LOC_TAENARON
-narr: 잿빛 이정표. 한쪽 팻말은 "지상", 다른 쪽은 "저승". 저승 쪽 팻말만 반들반들 닳아 있다.
-choice (UNLOCK_LOC_DELPHI) 델포이로 간다 -> TRAVEL LOC_DELPHI
-choice (UNLOCK_LOC_OLYMPUS_FOOT) 올림포스 산기슭 · 테살리아로 간다 -> TRAVEL LOC_OLYMPUS_FOOT
-choice (UNLOCK_LOC_ATHENS) 아테네로 간다 -> TRAVEL LOC_ATHENS
-choice (UNLOCK_LOC_AEGEAN) 에게해 군도로 간다 -> TRAVEL LOC_AEGEAN
-choice (UNLOCK_LOC_CYPRUS) 키프로스 · 파포스로 간다 -> TRAVEL LOC_CYPRUS
-choice (UNLOCK_LOC_WEST) 서쪽 해안으로 간다 -> TRAVEL LOC_WEST
-choice (UNLOCK_LOC_OLYMPUS) 올림포스 정상으로 오른다 -> TRAVEL LOC_OLYMPUS
-choice (UNLOCK_LOC_TARTARUS_RIM) 타르타로스 경계로 내려간다 -> TRAVEL LOC_TARTARUS_RIM
-choice 아직은 머문다
+narr: 잿빛 이정표. 한쪽 팻말은 "지상 — 북동쪽 둑길로 아테네", 다른 쪽은 "저승 — 북서쪽 내리막길로 타르타로스 경계". 저승 쪽 팻말만 반들반들 닳아 있다.
 
 == SIGNPOST_WEST
 on talk OBJ_SIGNPOST
 if MAP == LOC_WEST
-narr: 라티움 말과 그리스 말이 나란히 적힌 이정표. 같은 지명이 두 번씩 적혀 있다. 이름이 둘인 땅.
-choice (UNLOCK_LOC_DELPHI) 델포이로 간다 -> TRAVEL LOC_DELPHI
-choice (UNLOCK_LOC_OLYMPUS_FOOT) 올림포스 산기슭 · 테살리아로 간다 -> TRAVEL LOC_OLYMPUS_FOOT
-choice (UNLOCK_LOC_ATHENS) 아테네로 간다 -> TRAVEL LOC_ATHENS
-choice (UNLOCK_LOC_AEGEAN) 에게해 군도로 간다 -> TRAVEL LOC_AEGEAN
-choice (UNLOCK_LOC_CYPRUS) 키프로스 · 파포스로 간다 -> TRAVEL LOC_CYPRUS
-choice (UNLOCK_LOC_TAENARON) 타이나론 곶으로 간다 -> TRAVEL LOC_TAENARON
-choice (UNLOCK_LOC_OLYMPUS) 올림포스 정상으로 오른다 -> TRAVEL LOC_OLYMPUS
-choice (UNLOCK_LOC_TARTARUS_RIM) 타르타로스 경계로 내려간다 -> TRAVEL LOC_TARTARUS_RIM
-choice 아직은 머문다
+narr: 라티움 말과 그리스 말이 나란히 적힌 이정표. 북동쪽 둑길: 해협 건너 델포이(DELPHI / 델포이). 같은 지명이 두 번씩 적혀 있다. 이름이 둘인 땅.
 
 == SIGNPOST_OLYMPUS
 on talk OBJ_SIGNPOST
 if MAP == LOC_OLYMPUS
-narr: 구름 위의 이정표. 화살표가 전부 아래를 가리킨다. 신들의 집에서 갈 수 있는 곳은 결국 인간의 땅뿐이다.
-choice (UNLOCK_LOC_DELPHI) 델포이로 내려간다 -> TRAVEL LOC_DELPHI
-choice (UNLOCK_LOC_OLYMPUS_FOOT) 올림포스 산기슭 · 테살리아로 내려간다 -> TRAVEL LOC_OLYMPUS_FOOT
-choice (UNLOCK_LOC_ATHENS) 아테네로 내려간다 -> TRAVEL LOC_ATHENS
-choice (UNLOCK_LOC_AEGEAN) 에게해 군도로 내려간다 -> TRAVEL LOC_AEGEAN
-choice (UNLOCK_LOC_CYPRUS) 키프로스 · 파포스로 내려간다 -> TRAVEL LOC_CYPRUS
-choice (UNLOCK_LOC_TAENARON) 타이나론 곶으로 내려간다 -> TRAVEL LOC_TAENARON
-choice (UNLOCK_LOC_WEST) 서쪽 해안으로 내려간다 -> TRAVEL LOC_WEST
-choice (UNLOCK_LOC_TARTARUS_RIM) 타르타로스 경계로 내려간다 -> TRAVEL LOC_TARTARUS_RIM
-choice 아직은 머문다
+narr: 구름 위의 이정표. 화살표가 하나뿐이다 — 남동쪽 산길 아래로, 올림포스 산기슭. 신들의 집에서 갈 수 있는 곳은 결국 인간의 땅뿐이다.
 
 == SIGNPOST_TARTARUS_RIM
 on talk OBJ_SIGNPOST
 if MAP == LOC_TARTARUS_RIM
-narr: 부러진 이정표. 심연 쪽 팻말은 떨어져 나가고 없다. 남은 팻말들만 지상을 가리킨다.
-choice (UNLOCK_LOC_DELPHI) 델포이로 올라간다 -> TRAVEL LOC_DELPHI
-choice (UNLOCK_LOC_OLYMPUS_FOOT) 올림포스 산기슭 · 테살리아로 올라간다 -> TRAVEL LOC_OLYMPUS_FOOT
-choice (UNLOCK_LOC_ATHENS) 아테네로 올라간다 -> TRAVEL LOC_ATHENS
-choice (UNLOCK_LOC_AEGEAN) 에게해 군도로 올라간다 -> TRAVEL LOC_AEGEAN
-choice (UNLOCK_LOC_CYPRUS) 키프로스 · 파포스로 올라간다 -> TRAVEL LOC_CYPRUS
-choice (UNLOCK_LOC_TAENARON) 타이나론 곶으로 올라간다 -> TRAVEL LOC_TAENARON
-choice (UNLOCK_LOC_WEST) 서쪽 해안으로 올라간다 -> TRAVEL LOC_WEST
-choice (UNLOCK_LOC_OLYMPUS) 올림포스 정상으로 오른다 -> TRAVEL LOC_OLYMPUS
-choice 아직은 머문다
+narr: 부러진 이정표. 심연 쪽 팻말은 떨어져 나가고 없다. 남은 팻말 하나만 남동쪽 오르막길 — 타이나론 곶, 지상을 가리킨다.
 
 == DELPHI_RETURN
 on enter LOC_DELPHI
@@ -4452,3 +4396,15 @@ or
 NPC_ATHENS_CITIZEN: 아크로폴리스엔 요즘 구경꾼만 올라가. 기도하는 사람은 통 못 봤어.
 or
 NPC_ATHENS_CITIZEN: 뒷골목 화덕 말이야? 우리 할머니 땐 저녁마다 거기서 불씨를 얻어 왔대. 무슨 신한테 기도하면서. 이름은… 글쎄.
+
+== THEBES_CITIZEN_TALK
+on talk NPC_THEBES_CITIZEN
+NPC_THEBES_CITIZEN: 테베에 온 걸 환영해! 포도주는 공짜야. 두통은 내일 아침 걸로 달아 둘게.
+or
+NPC_THEBES_CITIZEN: 디오니소스 님은 여기서 태어나셨대. 그래서 우린 축제를 멈추지 않아. 멈추면… 그분이 서운해하시거든. 서운해하시면 큰일 나.
+or
+NPC_THEBES_CITIZEN: 성 밖 숲엔 마이나스들이 돌아다녀. 축제에 너무 깊이 빠져서 돌아오지 못한 사람들이야. 눈 마주치지 마. 노래도 따라 부르지 말고.
+or
+NPC_THEBES_CITIZEN: 카드모스 왕이 이 도시를 세울 때 용의 이빨을 뿌렸대. 그래서 테베 사람들 성질이 좀… 이빨 같아.
+or
+NPC_THEBES_CITIZEN: 델포이에서 왔어? 거긴 축제도 조용히 한다며. 신탁 듣고, 고개 끄덕이고, 집에 가고. …그게 무슨 축제야.

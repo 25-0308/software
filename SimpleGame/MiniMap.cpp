@@ -1,6 +1,7 @@
 #include "stdafx.h"
 #include "MiniMap.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstring>
 
@@ -17,6 +18,7 @@ namespace
 	const float kScreenHeight = 600.f;
 
 	const float kDefaultHalfSize = 64.f; // 기본 미니맵 패널 한 변 128픽셀
+	const float kDefaultWindow = 30.f;   // 기본 미니맵이 보여 주는 플레이어 둘레(반 변, 월드 칸 — 가로세로 60칸)
 	const float kPanelMargin = 12.f;     // 기본 미니맵과 화면 가장자리의 간격
 	const float kMapPadding = 4.f;       // 패널 안쪽 여백
 
@@ -146,23 +148,27 @@ namespace
 }
 
 MiniMap::MiniMap()
-	: MiniMap(kScreenWidth - kPanelMargin - kDefaultHalfSize, kScreenHeight - kPanelMargin - kDefaultHalfSize, kDefaultHalfSize, 1.f)
+	: MiniMap(kScreenWidth - kPanelMargin - kDefaultHalfSize, kScreenHeight - kPanelMargin - kDefaultHalfSize, kDefaultHalfSize, 1.f,
+		kDefaultWindow)
 {
 }
 
-MiniMap::MiniMap(float centerX, float centerY, float halfSize, float markerScale)
+MiniMap::MiniMap(float centerX, float centerY, float halfSize, float markerScale, float windowHalf)
 	: m_PanelCenterX(centerX)
 	, m_PanelCenterY(centerY)
 	, m_PanelHalfSize(halfSize)
 	, m_MarkerScale(markerScale)
+	, m_WindowHalf(windowHalf)
 {
 }
 
 void MiniMap::MapTransform::Apply(float worldX, float worldY, float& screenX, float& screenY) const
 {
-	// 카메라의 지면 회전(yaw)과 같은 회전 → 좌우/상하 반전이 곱해진 배율.
-	float rotatedX = cosYaw * worldX - sinYaw * worldY;
-	float rotatedY = sinYaw * worldX + cosYaw * worldY;
+	// 창 중심을 원점으로 → 카메라의 지면 회전(yaw)과 같은 회전 → 좌우/상하 반전이 곱해진 배율.
+	float localX = worldX - originX;
+	float localY = worldY - originY;
+	float rotatedX = cosYaw * localX - sinYaw * localY;
+	float rotatedY = sinYaw * localX + cosYaw * localY;
 
 	screenX = centerX + scaleX * rotatedX;
 	screenY = centerY + scaleY * rotatedY;
@@ -177,7 +183,46 @@ void MiniMap::MapTransform::ApplyDirection(float worldX, float worldY, float& sc
 	screenY = scaleY * rotatedY;
 }
 
-void MiniMap::RebuildStatic(SceneGraph& scene, const TileMap& tileMap)
+bool MiniMap::InWindow(float x, float y) const
+{
+	if (m_WindowHalf <= 0.f)
+	{
+		return true;
+	}
+
+	return fabsf(x - m_Transform.originX) <= m_WindowHalf && fabsf(y - m_Transform.originY) <= m_WindowHalf;
+}
+
+void MiniMap::CollectStaticActors(SceneGraph& scene)
+{
+	m_TreeSpots.clear();
+	m_BuildingSpots.clear();
+
+	// 나무와 건물(집·신전·기둥·좌판 등)은 움직이지 않으니 자리만 한 번 모아 둔다. 이정표는 매 프레임 따로 눈에 띄게 그린다.
+	scene.ForEach([this](Actor& actor)
+	{
+		if (actor.IsPendingDestroy())
+		{
+			return;
+		}
+
+		if (actor.GetType() == ActorType::Prop)
+		{
+			m_TreeSpots.push_back(actor.GetWorldX());
+			m_TreeSpots.push_back(actor.GetWorldY());
+		}
+		else if (actor.GetType() == ActorType::Building && !IsStoryId(actor, "OBJ_SIGNPOST"))
+		{
+			m_BuildingSpots.push_back(actor.GetWorldX());
+			m_BuildingSpots.push_back(actor.GetWorldY());
+			m_BuildingSpots.push_back(actor.GetSize());
+		}
+	});
+
+	m_ActorsCollected = true;
+}
+
+void MiniMap::BuildTerrain(const TileMap& tileMap, int minGridX, int minGridY, int maxGridX, int maxGridY)
 {
 	m_Grass.clear();
 	m_Water.clear();
@@ -187,24 +232,33 @@ void MiniMap::RebuildStatic(SceneGraph& scene, const TileMap& tileMap)
 	m_Trees.clear();
 	m_Buildings.clear();
 
-	int width = tileMap.GetWidth();
-	int height = tileMap.GetHeight();
-	float halfWidth = width * 0.5f;
-	float halfHeight = height * 0.5f;
+	float halfWidth = tileMap.GetWidth() * 0.5f;
+	float halfHeight = tileMap.GetHeight() * 0.5f;
 
-	// 풀밭: 맵 전체를 덮는 회전된 사각형 하나. 다른 지형은 이 위에 덧그린다.
+	// 풀밭: 보여 줄 범위 전체를 덮는 회전된 사각형 하나. 다른 지형은 이 위에 덧그린다.
+	float left = minGridX - halfWidth;
+	float right = maxGridX + 1 - halfWidth;
+	float bottom = minGridY - halfHeight;
+	float top = maxGridY + 1 - halfHeight;
 	float x0, y0, x1, y1, x2, y2, x3, y3;
-	m_Transform.Apply(-halfWidth, -halfHeight, x0, y0);
-	m_Transform.Apply(halfWidth, -halfHeight, x1, y1);
-	m_Transform.Apply(halfWidth, halfHeight, x2, y2);
-	m_Transform.Apply(-halfWidth, halfHeight, x3, y3);
+	m_Transform.Apply(left, bottom, x0, y0);
+	m_Transform.Apply(right, bottom, x1, y1);
+	m_Transform.Apply(right, top, x2, y2);
+	m_Transform.Apply(left, top, x3, y3);
 	AppendQuad(m_Grass, x0, y0, x1, y1, x2, y2, x3, y3);
 
-	for (int gy = 0; gy < height; ++gy)
+	// 줄마다 같은 종류가 이어진 칸을 사각형 하나로 묶는다(런 길이). 이웃 칸이 같은 정수식에서 같은 꼭짓점을 얻어 틈이 없다.
+	for (int gy = minGridY; gy <= maxGridY; ++gy)
 	{
-		for (int gx = 0; gx < width; ++gx)
+		int gx = minGridX;
+		while (gx <= maxGridX)
 		{
 			TileType tile = tileMap.GetTile(gx, gy);
+			int runEnd = gx;
+			while (runEnd + 1 <= maxGridX && tileMap.GetTile(runEnd + 1, gy) == tile)
+			{
+				++runEnd;
+			}
 
 			std::vector<float>* target = nullptr;
 			if (tile == TileType::Water) target = &m_Water;
@@ -212,57 +266,53 @@ void MiniMap::RebuildStatic(SceneGraph& scene, const TileMap& tileMap)
 			else if (tile == TileType::Path) target = &m_Path;
 			else if (tile == TileType::Rock) target = &m_Rock;
 
-			if (target == nullptr)
+			if (target != nullptr)
 			{
-				continue; // 풀밭은 위에서 한 번에 그렸다.
+				float runLeft = gx - halfWidth;
+				float runRight = runEnd + 1 - halfWidth;
+				float runBottom = gy - halfHeight;
+				float runTop = gy + 1 - halfHeight;
+
+				m_Transform.Apply(runLeft, runBottom, x0, y0);
+				m_Transform.Apply(runRight, runBottom, x1, y1);
+				m_Transform.Apply(runRight, runTop, x2, y2);
+				m_Transform.Apply(runLeft, runTop, x3, y3);
+				AppendQuad(*target, x0, y0, x1, y1, x2, y2, x3, y3);
 			}
 
-			// 타일 (gx, gy)는 월드에서 [gx - halfWidth, gx + 1 - halfWidth] x [...] 구간이다. 이웃 타일이
-			// 같은 정수식에서 같은 꼭짓점을 얻도록 해서 타일 사이에 틈이 생기지 않게 한다.
-			float left = gx - halfWidth;
-			float right = gx + 1 - halfWidth;
-			float bottom = gy - halfHeight;
-			float top = gy + 1 - halfHeight;
-
-			m_Transform.Apply(left, bottom, x0, y0);
-			m_Transform.Apply(right, bottom, x1, y1);
-			m_Transform.Apply(right, top, x2, y2);
-			m_Transform.Apply(left, top, x3, y3);
-			AppendQuad(*target, x0, y0, x1, y1, x2, y2, x3, y3);
+			gx = runEnd + 1;
 		}
 	}
 
-	// 나무와 건물(집·신전·기둥·좌판 등)도 움직이지 않으니 지금 한 번 모아 둔다. 건물은 크기에 비례해서
-	// 그려서 신전처럼 큰 건축물이 지도에서도 크게 보이게 한다. 이정표는 매 프레임 따로 눈에 띄게 그린다.
+	// 나무와 건물. 건물은 크기에 비례해서 그려서 신전처럼 큰 건축물이 지도에서도 크게 보이게 한다.
 	float pixelsPerUnit = fabsf(m_Transform.scaleX);
 	float treeHalf = kTreeHalf * m_MarkerScale;
 	float buildingMinHalf = kBuildingMinHalf * m_MarkerScale;
 
-	scene.ForEach([this, pixelsPerUnit, treeHalf, buildingMinHalf](Actor& actor)
+	for (size_t i = 0; i + 1 < m_TreeSpots.size(); i += 2)
 	{
-		if (actor.IsPendingDestroy())
+		if (!InWindow(m_TreeSpots[i], m_TreeSpots[i + 1]))
 		{
-			return;
+			continue;
 		}
 
 		float screenX, screenY;
-		if (actor.GetType() == ActorType::Prop)
-		{
-			m_Transform.Apply(actor.GetWorldX(), actor.GetWorldY(), screenX, screenY);
-			AppendSquare(m_Trees, screenX, screenY, treeHalf);
-		}
-		else if (actor.GetType() == ActorType::Building && !IsStoryId(actor, "OBJ_SIGNPOST"))
-		{
-			float half = actor.GetSize() * pixelsPerUnit * kBuildingScale;
-			if (half < buildingMinHalf)
-			{
-				half = buildingMinHalf;
-			}
+		m_Transform.Apply(m_TreeSpots[i], m_TreeSpots[i + 1], screenX, screenY);
+		AppendSquare(m_Trees, screenX, screenY, treeHalf);
+	}
 
-			m_Transform.Apply(actor.GetWorldX(), actor.GetWorldY(), screenX, screenY);
-			AppendSquare(m_Buildings, screenX, screenY, half);
+	for (size_t i = 0; i + 2 < m_BuildingSpots.size(); i += 3)
+	{
+		if (!InWindow(m_BuildingSpots[i], m_BuildingSpots[i + 1]))
+		{
+			continue;
 		}
-	});
+
+		float half = (std::max)(m_BuildingSpots[i + 2] * pixelsPerUnit * kBuildingScale, buildingMinHalf);
+		float screenX, screenY;
+		m_Transform.Apply(m_BuildingSpots[i], m_BuildingSpots[i + 1], screenX, screenY);
+		AppendSquare(m_Buildings, screenX, screenY, half);
+	}
 }
 
 void MiniMap::Draw(Renderer& renderer, SceneGraph& scene, const TileMap& tileMap, const Camera& camera,
@@ -271,21 +321,24 @@ void MiniMap::Draw(Renderer& renderer, SceneGraph& scene, const TileMap& tileMap
 	float yaw = camera.GetYawRadians();
 	bool flipH = camera.IsFlippedHorizontally();
 	bool flipV = camera.IsFlippedVertically();
+	float c = cosf(yaw);
+	float s = sinf(yaw);
 
-	// 카메라 방향이 처음이거나 바뀌었을 때(또는 맵이 바뀌어 Invalidate됐을 때)만 정적 지오메트리를 다시 만든다.
-	if (!m_StaticBuilt || yaw != m_BuiltYaw || flipH != m_BuiltFlipH || flipV != m_BuiltFlipV)
+	if (!m_ActorsCollected)
 	{
-		float width = (float)tileMap.GetWidth();
-		float height = (float)tileMap.GetHeight();
-		float c = cosf(yaw);
-		float s = sinf(yaw);
+		CollectStaticActors(scene);
+	}
 
-		// 회전한 지도가 차지하는 반너비/반높이 중 큰 쪽이 패널 안쪽에 딱 맞도록 배율을 정한다.
-		float extentX = 0.5f * (fabsf(c) * width + fabsf(s) * height);
-		float extentY = 0.5f * (fabsf(s) * width + fabsf(c) * height);
-		float extent = (extentX > extentY) ? extentX : extentY;
+	PlayerActor* player = scene.GetPlayer();
+
+	if (m_WindowHalf > 0.f)
+	{
+		// 플레이어 둘레의 창: 창(정사각형)을 돌린 마름모가 패널 안쪽에 딱 맞는 배율로, 매 프레임 창 안의 칸만 만든다.
+		float extent = m_WindowHalf * (fabsf(c) + fabsf(s));
 		float scale = (m_PanelHalfSize - kMapPadding) / extent;
 
+		m_Transform.originX = (player != nullptr) ? player->GetWorldX() : 0.f;
+		m_Transform.originY = (player != nullptr) ? player->GetWorldY() : 0.f;
 		m_Transform.cosYaw = c;
 		m_Transform.sinYaw = s;
 		m_Transform.scaleX = flipH ? -scale : scale;
@@ -293,7 +346,34 @@ void MiniMap::Draw(Renderer& renderer, SceneGraph& scene, const TileMap& tileMap
 		m_Transform.centerX = m_PanelCenterX;
 		m_Transform.centerY = m_PanelCenterY;
 
-		RebuildStatic(scene, tileMap);
+		int minGridX = (std::max)(0, tileMap.GetGridX(m_Transform.originX - m_WindowHalf + 0.5f));
+		int maxGridX = (std::min)(tileMap.GetWidth() - 1, tileMap.GetGridX(m_Transform.originX + m_WindowHalf - 0.5f));
+		int minGridY = (std::max)(0, tileMap.GetGridY(m_Transform.originY - m_WindowHalf + 0.5f));
+		int maxGridY = (std::min)(tileMap.GetHeight() - 1, tileMap.GetGridY(m_Transform.originY + m_WindowHalf - 0.5f));
+		BuildTerrain(tileMap, minGridX, minGridY, maxGridX, maxGridY);
+	}
+	else if (!m_StaticBuilt || yaw != m_BuiltYaw || flipH != m_BuiltFlipH || flipV != m_BuiltFlipV)
+	{
+		// 맵 전체: 카메라 방향이 처음이거나 바뀌었을 때(또는 맵이 바뀌어 Invalidate됐을 때)만 다시 만든다.
+		float width = (float)tileMap.GetWidth();
+		float height = (float)tileMap.GetHeight();
+
+		// 회전한 지도가 차지하는 반너비/반높이 중 큰 쪽이 패널 안쪽에 딱 맞도록 배율을 정한다.
+		float extentX = 0.5f * (fabsf(c) * width + fabsf(s) * height);
+		float extentY = 0.5f * (fabsf(s) * width + fabsf(c) * height);
+		float extent = (extentX > extentY) ? extentX : extentY;
+		float scale = (m_PanelHalfSize - kMapPadding) / extent;
+
+		m_Transform.originX = 0.f;
+		m_Transform.originY = 0.f;
+		m_Transform.cosYaw = c;
+		m_Transform.sinYaw = s;
+		m_Transform.scaleX = flipH ? -scale : scale;
+		m_Transform.scaleY = flipV ? -scale : scale;
+		m_Transform.centerX = m_PanelCenterX;
+		m_Transform.centerY = m_PanelCenterY;
+
+		BuildTerrain(tileMap, 0, 0, tileMap.GetWidth() - 1, tileMap.GetHeight() - 1);
 
 		m_StaticBuilt = true;
 		m_BuiltYaw = yaw;
@@ -340,14 +420,25 @@ void MiniMap::Draw(Renderer& renderer, SceneGraph& scene, const TileMap& tileMap
 	float markerScale = m_MarkerScale;
 	scene.ForEach([this, markerScale](Actor& actor)
 	{
-		// 이야기 진행 조건으로 숨은 인물·괴물·물건은 지도에도 나오지 않는다.
+		// 이야기 진행 조건으로 숨은 인물·괴물·물건은 지도에도 나오지 않는다. 창 밖(플레이어 둘레 밖)도 그리지 않는다.
 		if (actor.IsPendingDestroy() || !actor.IsVisible())
 		{
 			return;
 		}
 
+		ActorType type = actor.GetType();
+		if (type != ActorType::NPC && type != ActorType::Item && type != ActorType::Animal && type != ActorType::Building)
+		{
+			return;
+		}
+
+		if (!InWindow(actor.GetWorldX(), actor.GetWorldY()))
+		{
+			return;
+		}
+
 		float screenX, screenY;
-		switch (actor.GetType())
+		switch (type)
 		{
 		case ActorType::NPC:
 			m_Transform.Apply(actor.GetWorldX(), actor.GetWorldY(), screenX, screenY);
@@ -413,8 +504,24 @@ void MiniMap::Draw(Renderer& renderer, SceneGraph& scene, const TileMap& tileMap
 	float ping = fmodf(time, kPingSeconds) / kPingSeconds; // 0 → 1
 	for (const Spot& spot : objectives)
 	{
+		// 창 밖의 목표는 그쪽 방향의 창 가장자리에 붙여 보여 준다(어느 쪽으로 가야 하는지는 보이게).
+		float spotX = spot.x;
+		float spotY = spot.y;
+		if (m_WindowHalf > 0.f)
+		{
+			float limit = m_WindowHalf - 1.f;
+			float dx = spotX - m_Transform.originX;
+			float dy = spotY - m_Transform.originY;
+			float reach = (std::max)(fabsf(dx), fabsf(dy));
+			if (reach > limit)
+			{
+				spotX = m_Transform.originX + dx * (limit / reach);
+				spotY = m_Transform.originY + dy * (limit / reach);
+			}
+		}
+
 		float screenX, screenY;
-		m_Transform.Apply(spot.x, spot.y, screenX, screenY);
+		m_Transform.Apply(spotX, spotY, screenX, screenY);
 
 		float radius = (kPingStartRadius + (kPingEndRadius - kPingStartRadius) * ping) * m_MarkerScale;
 		AppendRing(m_ObjectivePings, screenX, screenY, radius, radius + kPingThickness * m_MarkerScale, kPingSegments);
@@ -425,7 +532,6 @@ void MiniMap::Draw(Renderer& renderer, SceneGraph& scene, const TileMap& tileMap
 	}
 
 	// 플레이어: 바라보는 쪽(화면에서 걷는 방향)을 가리키는 흰 화살촉.
-	PlayerActor* player = scene.GetPlayer();
 	if (player != nullptr)
 	{
 		float screenX, screenY;

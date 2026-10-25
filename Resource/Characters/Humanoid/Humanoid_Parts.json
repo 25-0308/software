@@ -1,0 +1,1533 @@
+{
+	"rig": "Humanoid_Rig",
+	"height": 1.76,
+	"forward": "-Y(블렌더) / +Z(glTF)",
+	"up": "+Z(블렌더) / +Y(glTF)",
+	"bones": [
+		"root",
+		"pelvis",
+		"spine",
+		"chest",
+		"neck",
+		"head",
+		"clavicle.L",
+		"upperarm.L",
+		"forearm.L",
+		"hand.L",
+		"prop.L",
+		"clavicle.R",
+		"upperarm.R",
+		"forearm.R",
+		"hand.R",
+		"prop.R",
+		"thigh.L",
+		"shin.L",
+		"foot.L",
+		"toe.L",
+		"thigh.R",
+		"shin.R",
+		"foot.R",
+		"toe.R"
+	],
+	"roles": {
+		"Skin": "SkinTan",
+		"Hair": "HairBrown",
+		"Eye": "IrisDark",
+		"Lip": "Lip",
+		"Line": "SkinDark",
+		"ClothA": "Linen",
+		"ClothB": "Terracotta",
+		"Trim": "Ochre",
+		"Metal": "Bronze",
+		"Leather": "Leather",
+		"Accent": "Laurel",
+		"Accent2": "RoseRed",
+		"Fur": "HairBrown",
+		"Crest": "Crest",
+		"Glow": "GlowPurple",
+		"Horn": "Horn",
+		"Feather": "Feather"
+	},
+	"clips": [
+		{
+			"name": "Pose_Base",
+			"frames": 1,
+			"fps": 30,
+			"duration": 0.0333,
+			"loop": false,
+			"markers": {}
+		},
+		{
+			"name": "Idle",
+			"frames": 60,
+			"fps": 30,
+			"duration": 2.0,
+			"loop": true,
+			"markers": {}
+		},
+		{
+			"name": "Walk",
+			"frames": 27,
+			"fps": 30,
+			"duration": 0.9,
+			"loop": true,
+			"markers": {
+				"L_contact": 0.0,
+				"R_contact": 0.45
+			},
+			"speed": 1.057
+		},
+		{
+			"name": "Run",
+			"frames": 20,
+			"fps": 30,
+			"duration": 0.6667,
+			"loop": true,
+			"markers": {
+				"L_contact": 0.0,
+				"R_contact": 0.3333
+			},
+			"speed": 2.75
+		},
+		{
+			"name": "Turn_L90",
+			"frames": 24,
+			"fps": 30,
+			"duration": 0.8,
+			"loop": false,
+			"markers": {
+				"L_step": 0.04,
+				"R_step": 0.336
+			},
+			"rootMotion": {
+				"yawDegrees": 90
+			}
+		},
+		{
+			"name": "Turn_R90",
+			"frames": 24,
+			"fps": 30,
+			"duration": 0.8,
+			"loop": false,
+			"markers": {
+				"R_step": 0.04,
+				"L_step": 0.336
+			},
+			"rootMotion": {
+				"yawDegrees": -90
+			}
+		},
+		{
+			"name": "Attack",
+			"frames": 24,
+			"fps": 30,
+			"duration": 0.8,
+			"loop": false,
+			"markers": {
+				"hit": 0.336,
+				"recover": 0.448
+			}
+		},
+		{
+			"name": "Jump_Start",
+			"frames": 10,
+			"fps": 30,
+			"duration": 0.3333,
+			"loop": false,
+			"markers": {
+				"takeoff": 0.3333
+			}
+		},
+		{
+			"name": "Jump_Air",
+			"frames": 18,
+			"fps": 30,
+			"duration": 0.6,
+			"loop": true,
+			"markers": {}
+		},
+		{
+			"name": "Jump_Land",
+			"frames": 12,
+			"fps": 30,
+			"duration": 0.4,
+			"loop": false,
+			"markers": {
+				"impact": 0.1
+			}
+		},
+		{
+			"name": "Jump",
+			"frames": 33,
+			"fps": 30,
+			"duration": 1.1,
+			"loop": false,
+			"markers": {
+				"takeoff": 0.275,
+				"land": 0.88
+			},
+			"rootMotion": {
+				"heightPeak": 0.45
+			}
+		}
+	],
+	"parts": [
+		{
+			"name": "Head_M",
+			"slot": "Head",
+			"body": "M",
+			"desc": "머리·목·귀(피부). M은 각진 턱, F는 갸름한 턱",
+			"roles": [
+				"Skin"
+			],
+			"verts": 149,
+			"faces": 157
+		},
+		{
+			"name": "Head_F",
+			"slot": "Head",
+			"body": "F",
+			"desc": "머리·목·귀(피부). M은 각진 턱, F는 갸름한 턱",
+			"roles": [
+				"Skin"
+			],
+			"verts": 149,
+			"faces": 157
+		},
+		{
+			"name": "Face_Calm",
+			"slot": "Face",
+			"body": null,
+			"desc": "담담한 얼굴",
+			"roles": [
+				"Hair",
+				"EyeWhite",
+				"Eye",
+				"Skin",
+				"Lip"
+			],
+			"verts": 62,
+			"faces": 47
+		},
+		{
+			"name": "Face_Stern",
+			"slot": "Face",
+			"body": null,
+			"desc": "엄한 얼굴 — 안쪽이 내려간 눈썹",
+			"roles": [
+				"Hair",
+				"EyeWhite",
+				"Eye",
+				"Skin",
+				"Lip"
+			],
+			"verts": 78,
+			"faces": 59
+		},
+		{
+			"name": "Face_Smile",
+			"slot": "Face",
+			"body": null,
+			"desc": "웃는 얼굴",
+			"roles": [
+				"Hair",
+				"EyeWhite",
+				"Eye",
+				"Skin",
+				"Lip"
+			],
+			"verts": 78,
+			"faces": 59
+		},
+		{
+			"name": "Face_Angry",
+			"slot": "Face",
+			"body": null,
+			"desc": "성난 얼굴",
+			"roles": [
+				"Hair",
+				"EyeWhite",
+				"Eye",
+				"Skin",
+				"Lip"
+			],
+			"verts": 94,
+			"faces": 71
+		},
+		{
+			"name": "Face_Weary",
+			"slot": "Face",
+			"body": null,
+			"desc": "피곤한 얼굴 — 반쯤 감긴 눈",
+			"roles": [
+				"Hair",
+				"EyeWhite",
+				"Eye",
+				"Skin",
+				"Lip"
+			],
+			"verts": 78,
+			"faces": 59
+		},
+		{
+			"name": "Face_Old",
+			"slot": "Face",
+			"body": null,
+			"desc": "늙은 얼굴 — 주름",
+			"roles": [
+				"Hair",
+				"EyeWhite",
+				"Eye",
+				"Skin",
+				"Lip",
+				"Line"
+			],
+			"verts": 142,
+			"faces": 107
+		},
+		{
+			"name": "Face_Sly",
+			"slot": "Face",
+			"body": null,
+			"desc": "능청스러운 얼굴 — 한쪽 눈썹이 올라감",
+			"roles": [
+				"Hair",
+				"EyeWhite",
+				"Eye",
+				"Skin",
+				"Lip"
+			],
+			"verts": 86,
+			"faces": 65
+		},
+		{
+			"name": "Face_Fem",
+			"slot": "Face",
+			"body": null,
+			"desc": "부드러운 얼굴(속눈썹·입술)",
+			"roles": [
+				"Hair",
+				"EyeWhite",
+				"Eye",
+				"Line",
+				"Skin",
+				"Lip"
+			],
+			"verts": 86,
+			"faces": 65
+		},
+		{
+			"name": "Face_FemStern",
+			"slot": "Face",
+			"body": null,
+			"desc": "단호한 얼굴(속눈썹)",
+			"roles": [
+				"Hair",
+				"EyeWhite",
+				"Eye",
+				"Skin",
+				"Line",
+				"Lip"
+			],
+			"verts": 102,
+			"faces": 77
+		},
+		{
+			"name": "Face_FemSmile",
+			"slot": "Face",
+			"body": null,
+			"desc": "미소 짓는 얼굴(속눈썹)",
+			"roles": [
+				"Hair",
+				"EyeWhite",
+				"Eye",
+				"Line",
+				"Skin",
+				"Lip"
+			],
+			"verts": 102,
+			"faces": 77
+		},
+		{
+			"name": "Face_Glow",
+			"slot": "Face",
+			"body": null,
+			"desc": "빛나는 눈(그림자·거인·신들린 목소리)",
+			"roles": [
+				"Hair",
+				"Glow",
+				"Skin",
+				"Lip"
+			],
+			"verts": 46,
+			"faces": 35
+		},
+		{
+			"name": "Hair_Short",
+			"slot": "Hair",
+			"body": null,
+			"desc": "짧은 머리",
+			"roles": [
+				"Hair"
+			],
+			"verts": 65,
+			"faces": 61
+		},
+		{
+			"name": "Hair_Curly",
+			"slot": "Hair",
+			"body": null,
+			"desc": "곱슬머리(덩어리 컬)",
+			"roles": [
+				"Hair"
+			],
+			"verts": 433,
+			"faces": 689
+		},
+		{
+			"name": "Hair_Wild",
+			"slot": "Hair",
+			"body": null,
+			"desc": "헝클어진 머리(바닷바람에 뻗친 갈래)",
+			"roles": [
+				"Hair"
+			],
+			"verts": 389,
+			"faces": 287
+		},
+		{
+			"name": "Hair_Bun",
+			"slot": "Hair",
+			"body": null,
+			"desc": "올림머리(뒤쪽 쪽머리 + 머리끈)",
+			"roles": [
+				"Hair",
+				"Trim"
+			],
+			"verts": 99,
+			"faces": 99
+		},
+		{
+			"name": "Hair_Long",
+			"slot": "Hair",
+			"body": null,
+			"desc": "긴 머리(어깨뼈까지)",
+			"roles": [
+				"Hair"
+			],
+			"verts": 99,
+			"faces": 91
+		},
+		{
+			"name": "Hair_LongFem",
+			"slot": "Hair",
+			"body": null,
+			"desc": "긴 머리 + 앞으로 내린 옆머리",
+			"roles": [
+				"Hair"
+			],
+			"verts": 147,
+			"faces": 131
+		},
+		{
+			"name": "Beard_Full",
+			"slot": "Beard",
+			"body": null,
+			"desc": "덥수룩한 수염",
+			"roles": [
+				"Hair"
+			],
+			"verts": 65,
+			"faces": 61
+		},
+		{
+			"name": "Beard_Short",
+			"slot": "Beard",
+			"body": null,
+			"desc": "짧게 다듬은 수염",
+			"roles": [
+				"Hair"
+			],
+			"verts": 53,
+			"faces": 49
+		},
+		{
+			"name": "Beard_Long",
+			"slot": "Beard",
+			"body": null,
+			"desc": "가슴까지 내려오는 긴 수염",
+			"roles": [
+				"Hair"
+			],
+			"verts": 77,
+			"faces": 73
+		},
+		{
+			"name": "Beard_Goatee",
+			"slot": "Beard",
+			"body": null,
+			"desc": "염소수염",
+			"roles": [
+				"Hair"
+			],
+			"verts": 17,
+			"faces": 17
+		},
+		{
+			"name": "Helm_Crested",
+			"slot": "Headwear",
+			"body": null,
+			"desc": "청동 투구 + 붉은 깃털 장식(주인공·병사)",
+			"roles": [
+				"Metal",
+				"Crest"
+			],
+			"verts": 171,
+			"faces": 140
+		},
+		{
+			"name": "Helm_Athena",
+			"slot": "Headwear",
+			"body": null,
+			"desc": "이마 위로 밀어 올린 코린트식 투구(높은 깃털)",
+			"roles": [
+				"Metal",
+				"Shadow",
+				"Crest"
+			],
+			"verts": 195,
+			"faces": 158
+		},
+		{
+			"name": "Helm_Ares",
+			"slot": "Headwear",
+			"body": null,
+			"desc": "볼가리개가 큰 전쟁 투구 + 뒤로 늘어진 깃털",
+			"roles": [
+				"Metal",
+				"Crest"
+			],
+			"verts": 173,
+			"faces": 141
+		},
+		{
+			"name": "Crown_Gold",
+			"slot": "Headwear",
+			"body": null,
+			"desc": "앞이 솟은 금관(스테파네)",
+			"roles": [
+				"Gold",
+				"Accent2"
+			],
+			"verts": 92,
+			"faces": 84
+		},
+		{
+			"name": "Crown_Spiked",
+			"slot": "Headwear",
+			"body": null,
+			"desc": "가시 돋친 관(하데스·크로노스·포세이돈)",
+			"roles": [
+				"Metal"
+			],
+			"verts": 140,
+			"faces": 124
+		},
+		{
+			"name": "Crown_Polos",
+			"slot": "Headwear",
+			"body": null,
+			"desc": "높은 원통관(헤라의 폴로스)",
+			"roles": [
+				"Gold",
+				"Accent2"
+			],
+			"verts": 128,
+			"faces": 126
+		},
+		{
+			"name": "Wreath_Laurel",
+			"slot": "Headwear",
+			"body": null,
+			"desc": "월계관",
+			"roles": [
+				"Accent"
+			],
+			"verts": 360,
+			"faces": 396
+		},
+		{
+			"name": "Wreath_Rose",
+			"slot": "Headwear",
+			"body": null,
+			"desc": "장미 화관",
+			"roles": [
+				"Wood",
+				"Accent",
+				"Accent2"
+			],
+			"verts": 420,
+			"faces": 496
+		},
+		{
+			"name": "Wreath_IvyGrape",
+			"slot": "Headwear",
+			"body": null,
+			"desc": "담쟁이·포도 화관",
+			"roles": [
+				"Wood",
+				"Accent",
+				"Accent2"
+			],
+			"verts": 504,
+			"faces": 636
+		},
+		{
+			"name": "Wreath_Pomegranate",
+			"slot": "Headwear",
+			"body": null,
+			"desc": "석류 화관",
+			"roles": [
+				"Wood",
+				"Accent",
+				"Accent2"
+			],
+			"verts": 459,
+			"faces": 501
+		},
+		{
+			"name": "Hat_PetasosWinged",
+			"slot": "Headwear",
+			"body": null,
+			"desc": "날개 달린 챙 모자(헤르메스의 페타소스)",
+			"roles": [
+				"ClothB",
+				"Trim",
+				"Feather"
+			],
+			"verts": 192,
+			"faces": 216
+		},
+		{
+			"name": "Cap_Pilos",
+			"slot": "Headwear",
+			"body": null,
+			"desc": "원뿔 펠트 모자(필로스 — 장인·양치기·뱃사람)",
+			"roles": [
+				"ClothB"
+			],
+			"verts": 38,
+			"faces": 48
+		},
+		{
+			"name": "Hood",
+			"slot": "Headwear",
+			"body": null,
+			"desc": "얼굴을 드러낸 두건 + 어깨 망토(노파·모이라이·돌아온 자들)",
+			"roles": [
+				"ClothB"
+			],
+			"verts": 208,
+			"faces": 206
+		},
+		{
+			"name": "Veil",
+			"slot": "Headwear",
+			"body": null,
+			"desc": "정수리에서 등까지 늘어진 베일(헤라)",
+			"roles": [
+				"ClothB"
+			],
+			"verts": 208,
+			"faces": 206
+		},
+		{
+			"name": "Horns_Goat",
+			"slot": "Headwear",
+			"body": null,
+			"desc": "뒤로 휜 염소 뿔(판)",
+			"roles": [
+				"Horn"
+			],
+			"verts": 50,
+			"faces": 50
+		},
+		{
+			"name": "Mask_Party",
+			"slot": "Headwear",
+			"body": null,
+			"desc": "가면무도회 반가면(키프로스 연회 손님)",
+			"roles": [
+				"Gold",
+				"Shadow",
+				"Feather"
+			],
+			"verts": 75,
+			"faces": 69
+		},
+		{
+			"name": "Torso_Bare_M",
+			"slot": "Torso",
+			"body": "M",
+			"desc": "맨몸 상체",
+			"roles": [
+				"Skin"
+			],
+			"verts": 148,
+			"faces": 150
+		},
+		{
+			"name": "Torso_Tunic_M",
+			"slot": "Torso",
+			"body": "M",
+			"desc": "키톤 튜닉 상의(목둘레 장식 띠)",
+			"roles": [
+				"ClothA",
+				"Trim"
+			],
+			"verts": 156,
+			"faces": 134
+		},
+		{
+			"name": "Torso_Tunic_F",
+			"slot": "Torso",
+			"body": "F",
+			"desc": "키톤 튜닉 상의(목둘레 장식 띠)",
+			"roles": [
+				"ClothA",
+				"Trim"
+			],
+			"verts": 156,
+			"faces": 134
+		},
+		{
+			"name": "Torso_Robe_M",
+			"slot": "Torso",
+			"body": "M",
+			"desc": "긴 예복 상의(가운데 장식 띠)",
+			"roles": [
+				"ClothA",
+				"Trim"
+			],
+			"verts": 164,
+			"faces": 140
+		},
+		{
+			"name": "Torso_Robe_F",
+			"slot": "Torso",
+			"body": "F",
+			"desc": "긴 예복 상의(가운데 장식 띠)",
+			"roles": [
+				"ClothA",
+				"Trim"
+			],
+			"verts": 164,
+			"faces": 140
+		},
+		{
+			"name": "Torso_Exomis_M",
+			"slot": "Torso",
+			"body": "M",
+			"desc": "한쪽 어깨를 드러낸 노동복(엑소미스)",
+			"roles": [
+				"ClothA",
+				"Skin"
+			],
+			"verts": 116,
+			"faces": 110
+		},
+		{
+			"name": "Torso_Himation_M",
+			"slot": "Torso",
+			"body": "M",
+			"desc": "왼어깨에 두른 히마티온(오른 가슴은 맨살)",
+			"roles": [
+				"Skin",
+				"ClothB"
+			],
+			"verts": 196,
+			"faces": 194
+		},
+		{
+			"name": "Torso_Dress_F",
+			"slot": "Torso",
+			"body": "F",
+			"desc": "여성 키톤(가슴 아래 띠·어깨 금핀)",
+			"roles": [
+				"ClothA",
+				"Trim",
+				"Gold"
+			],
+			"verts": 240,
+			"faces": 222
+		},
+		{
+			"name": "Torso_Cuirass_M",
+			"slot": "Torso",
+			"body": "M",
+			"desc": "청동 근육 흉갑 + 가죽 어깨덮개",
+			"roles": [
+				"Metal",
+				"Leather"
+			],
+			"verts": 272,
+			"faces": 246
+		},
+		{
+			"name": "Torso_Aegis_F",
+			"slot": "Torso",
+			"body": "F",
+			"desc": "황금 아이기스(어깨·가슴을 덮는 비늘 갑옷 + 고르곤 메달)",
+			"roles": [
+				"ClothA",
+				"Gold",
+				"Crest"
+			],
+			"verts": 272,
+			"faces": 242
+		},
+		{
+			"name": "Arms_Bare",
+			"slot": "Arms",
+			"body": null,
+			"desc": "맨팔",
+			"roles": [
+				"Skin"
+			],
+			"verts": 96,
+			"faces": 84
+		},
+		{
+			"name": "Arms_ShortSleeve",
+			"slot": "Arms",
+			"body": null,
+			"desc": "짧은 소매",
+			"roles": [
+				"Skin",
+				"ClothA"
+			],
+			"verts": 144,
+			"faces": 120
+		},
+		{
+			"name": "Arms_LongSleeve",
+			"slot": "Arms",
+			"body": null,
+			"desc": "긴 소매(소맷부리 장식)",
+			"roles": [
+				"ClothA",
+				"Trim",
+				"Skin"
+			],
+			"verts": 160,
+			"faces": 124
+		},
+		{
+			"name": "Arms_Bracers",
+			"slot": "Arms",
+			"body": null,
+			"desc": "가죽 팔뚝 보호대",
+			"roles": [
+				"Skin",
+				"Leather"
+			],
+			"verts": 144,
+			"faces": 120
+		},
+		{
+			"name": "Hands_Bare",
+			"slot": "Hands",
+			"body": null,
+			"desc": "손(엄지 + 모은 네 손가락)",
+			"roles": [
+				"Skin"
+			],
+			"verts": 76,
+			"faces": 64
+		},
+		{
+			"name": "Lower_ShortSkirt_M",
+			"slot": "Lower",
+			"body": "M",
+			"desc": "허벅지 중간까지 오는 튜닉 아랫단 + 가죽 허리띠",
+			"roles": [
+				"ClothA",
+				"Trim",
+				"Leather"
+			],
+			"verts": 192,
+			"faces": 158
+		},
+		{
+			"name": "Lower_ShortSkirt_F",
+			"slot": "Lower",
+			"body": "F",
+			"desc": "허벅지 중간까지 오는 튜닉 아랫단 + 가죽 허리띠",
+			"roles": [
+				"ClothA",
+				"Trim",
+				"Leather"
+			],
+			"verts": 192,
+			"faces": 158
+		},
+		{
+			"name": "Lower_LongRobe_M",
+			"slot": "Lower",
+			"body": "M",
+			"desc": "발목까지 오는 긴 옷",
+			"roles": [
+				"ClothA",
+				"Trim"
+			],
+			"verts": 216,
+			"faces": 182
+		},
+		{
+			"name": "Lower_LongRobe_F",
+			"slot": "Lower",
+			"body": "F",
+			"desc": "발목까지 오는 긴 옷",
+			"roles": [
+				"ClothA",
+				"Trim"
+			],
+			"verts": 216,
+			"faces": 182
+		},
+		{
+			"name": "Lower_Pteruges_M",
+			"slot": "Lower",
+			"body": "M",
+			"desc": "가죽 띠 치마(프테루게스) + 청동 허리띠",
+			"roles": [
+				"ClothA",
+				"Leather",
+				"Metal"
+			],
+			"verts": 268,
+			"faces": 210
+		},
+		{
+			"name": "Lower_Loincloth_M",
+			"slot": "Lower",
+			"body": "M",
+			"desc": "허리에 감은 천(낡은 옷 — 프로메테우스·탄탈로스)",
+			"roles": [
+				"ClothA",
+				"Leather"
+			],
+			"verts": 128,
+			"faces": 104
+		},
+		{
+			"name": "Lower_FurHips_M",
+			"slot": "Lower",
+			"body": "M",
+			"desc": "털 난 허리(판의 염소 하체와 이어짐)",
+			"roles": [
+				"Fur"
+			],
+			"verts": 228,
+			"faces": 330
+		},
+		{
+			"name": "Legs_Bare",
+			"slot": "Legs",
+			"body": null,
+			"desc": "맨다리",
+			"roles": [
+				"Skin"
+			],
+			"verts": 128,
+			"faces": 116
+		},
+		{
+			"name": "Legs_Greaves",
+			"slot": "Legs",
+			"body": null,
+			"desc": "청동 정강이받이",
+			"roles": [
+				"Skin",
+				"Metal"
+			],
+			"verts": 192,
+			"faces": 168
+		},
+		{
+			"name": "Legs_Goat",
+			"slot": "Legs",
+			"body": null,
+			"desc": "털 덮인 염소 다리(판) — 발은 Feet_Hooves",
+			"roles": [
+				"Fur"
+			],
+			"verts": 272,
+			"faces": 356
+		},
+		{
+			"name": "Feet_Bare",
+			"slot": "Feet",
+			"body": null,
+			"desc": "맨발",
+			"roles": [
+				"Skin"
+			],
+			"verts": 48,
+			"faces": 40
+		},
+		{
+			"name": "Feet_Sandals",
+			"slot": "Feet",
+			"body": null,
+			"desc": "가죽 샌들",
+			"roles": [
+				"Skin",
+				"Leather"
+			],
+			"verts": 144,
+			"faces": 108
+		},
+		{
+			"name": "Feet_WingedSandals",
+			"slot": "Feet",
+			"body": null,
+			"desc": "날개 달린 샌들(헤르메스)",
+			"roles": [
+				"Skin",
+				"Leather",
+				"Feather"
+			],
+			"verts": 264,
+			"faces": 252
+		},
+		{
+			"name": "Feet_Boots",
+			"slot": "Feet",
+			"body": null,
+			"desc": "가죽 장화(엔드로미데스)",
+			"roles": [
+				"Leather",
+				"Trim"
+			],
+			"verts": 112,
+			"faces": 80
+		},
+		{
+			"name": "Feet_Hooves",
+			"slot": "Feet",
+			"body": null,
+			"desc": "갈라진 염소 발굽(판)",
+			"roles": [
+				"Fur",
+				"Horn"
+			],
+			"verts": 64,
+			"faces": 44
+		},
+		{
+			"name": "Back_CapeShort",
+			"slot": "Back",
+			"body": null,
+			"desc": "짧은 망토(클라미스 — 오른 어깨 금핀)",
+			"roles": [
+				"ClothB",
+				"Gold"
+			],
+			"verts": 122,
+			"faces": 128
+		},
+		{
+			"name": "Back_CapeLong",
+			"slot": "Back",
+			"body": null,
+			"desc": "발목 가까이 늘어진 긴 망토",
+			"roles": [
+				"ClothB",
+				"Gold"
+			],
+			"verts": 144,
+			"faces": 150
+		},
+		{
+			"name": "Acc_Apron",
+			"slot": "Accessory",
+			"body": null,
+			"desc": "대장장이 가죽 앞치마(헤파이스토스)",
+			"roles": [
+				"Leather"
+			],
+			"verts": 122,
+			"faces": 116
+		},
+		{
+			"name": "Acc_Satchel",
+			"slot": "Accessory",
+			"body": null,
+			"desc": "어깨에 멘 편지 가방(헤르메스·상인)",
+			"roles": [
+				"Leather",
+				"Trim"
+			],
+			"verts": 60,
+			"faces": 50
+		},
+		{
+			"name": "Acc_Shackles",
+			"slot": "Accessory",
+			"body": null,
+			"desc": "쇠고랑과 끊어진 사슬(프로메테우스)",
+			"roles": [
+				"Iron"
+			],
+			"verts": 104,
+			"faces": 68
+		},
+		{
+			"name": "Acc_Wraps",
+			"slot": "Accessory",
+			"body": null,
+			"desc": "몸에 감은 천 띠(죽지 못하는 '돌아온 자들')",
+			"roles": [
+				"Accent"
+			],
+			"verts": 180,
+			"faces": 144
+		},
+		{
+			"name": "Prop_Spear.R",
+			"slot": "PropR",
+			"body": null,
+			"desc": "청동 창(주인공·병사·아테나)",
+			"roles": [
+				"Wood",
+				"Bronze"
+			],
+			"verts": 49,
+			"faces": 37
+		},
+		{
+			"name": "Prop_Trident.R",
+			"slot": "PropR",
+			"body": null,
+			"desc": "황금 삼지창(포세이돈)",
+			"roles": [
+				"Gold"
+			],
+			"verts": 69,
+			"faces": 69
+		},
+		{
+			"name": "Prop_Bident.R",
+			"slot": "PropR",
+			"body": null,
+			"desc": "검은 쇠 두 갈래 창(하데스)",
+			"roles": [
+				"WoodDark",
+				"DarkIron",
+				"Pomegranate"
+			],
+			"verts": 48,
+			"faces": 48
+		},
+		{
+			"name": "Prop_Scepter_Eagle.R",
+			"slot": "PropR",
+			"body": null,
+			"desc": "독수리 홀(제우스)",
+			"roles": [
+				"Gold"
+			],
+			"verts": 77,
+			"faces": 77
+		},
+		{
+			"name": "Prop_Scepter_Lotus.R",
+			"slot": "PropR",
+			"body": null,
+			"desc": "연꽃·뻐꾸기 홀(헤라)",
+			"roles": [
+				"Gold",
+				"Peacock"
+			],
+			"verts": 63,
+			"faces": 69
+		},
+		{
+			"name": "Prop_Thunderbolt.R",
+			"slot": "PropR",
+			"body": null,
+			"desc": "번개 다발(제우스, 빛남)",
+			"roles": [
+				"Lightning",
+				"Gold"
+			],
+			"verts": 88,
+			"faces": 82
+		},
+		{
+			"name": "Prop_Caduceus.R",
+			"slot": "PropR",
+			"body": null,
+			"desc": "뱀 두 마리 감긴 전령 지팡이(헤르메스)",
+			"roles": [
+				"Gold",
+				"Bronze",
+				"Feather"
+			],
+			"verts": 194,
+			"faces": 194
+		},
+		{
+			"name": "Prop_Hammer.R",
+			"slot": "PropR",
+			"body": null,
+			"desc": "대장장이 망치(헤파이스토스)",
+			"roles": [
+				"Wood",
+				"Iron"
+			],
+			"verts": 28,
+			"faces": 20
+		},
+		{
+			"name": "Prop_Staff.R",
+			"slot": "PropR",
+			"body": null,
+			"desc": "나무 지팡이(노파·순례객·양치기)",
+			"roles": [
+				"Wood"
+			],
+			"verts": 48,
+			"faces": 52
+		},
+		{
+			"name": "Prop_Thyrsus.R",
+			"slot": "PropR",
+			"body": null,
+			"desc": "솔방울 지팡이 튀르소스(디오니소스)",
+			"roles": [
+				"WoodLight",
+				"Brown",
+				"Ivy"
+			],
+			"verts": 72,
+			"faces": 83
+		},
+		{
+			"name": "Prop_WineCup.R",
+			"slot": "PropR",
+			"body": null,
+			"desc": "손잡이 둘 달린 금 술잔 칸타로스(디오니소스·아폴론)",
+			"roles": [
+				"Gold",
+				"Wine"
+			],
+			"verts": 114,
+			"faces": 110
+		},
+		{
+			"name": "Prop_Apple_Golden.R",
+			"slot": "PropR",
+			"body": null,
+			"desc": "금빛 사과(에리스, 빛남)",
+			"roles": [
+				"AppleGold",
+				"WoodDark",
+				"Laurel"
+			],
+			"verts": 48,
+			"faces": 54
+		},
+		{
+			"name": "Prop_Mirror.R",
+			"slot": "PropR",
+			"body": null,
+			"desc": "청동 손거울(아프로디테)",
+			"roles": [
+				"Bronze",
+				"Silver"
+			],
+			"verts": 68,
+			"faces": 40
+		},
+		{
+			"name": "Prop_Lyre.R",
+			"slot": "PropR",
+			"body": null,
+			"desc": "리라(아폴론)",
+			"roles": [
+				"WoodDark",
+				"Horn",
+				"Wood",
+				"Gold"
+			],
+			"verts": 116,
+			"faces": 103
+		},
+		{
+			"name": "Prop_Pomegranate.R",
+			"slot": "PropR",
+			"body": null,
+			"desc": "석류(페르세포네)",
+			"roles": [
+				"Pomegranate"
+			],
+			"verts": 46,
+			"faces": 48
+		},
+		{
+			"name": "Prop_Shield_Round.R",
+			"slot": "PropR",
+			"body": null,
+			"desc": "둥근 청동 방패 아스피스 — 왼팔용",
+			"roles": [
+				"Bronze",
+				"BlackFigure",
+				"Crest",
+				"Leather"
+			],
+			"verts": 168,
+			"faces": 202
+		},
+		{
+			"name": "Prop_Sword_Xiphos.R",
+			"slot": "PropR",
+			"body": null,
+			"desc": "잎 모양 칼 크시포스(아레스)",
+			"roles": [
+				"LeatherDark",
+				"Bronze",
+				"Iron"
+			],
+			"verts": 45,
+			"faces": 47
+		},
+		{
+			"name": "Prop_Torch.R",
+			"slot": "PropR",
+			"body": null,
+			"desc": "횃불(프로메테우스, 불꽃 빛남)",
+			"roles": [
+				"Wood",
+				"Bronze",
+				"Fire"
+			],
+			"verts": 53,
+			"faces": 60
+		},
+		{
+			"name": "Prop_Spindle.R",
+			"slot": "PropR",
+			"body": null,
+			"desc": "물렛가락과 금실(클로토)",
+			"roles": [
+				"WoodLight",
+				"WoodDark",
+				"Wool",
+				"GlowGold"
+			],
+			"verts": 58,
+			"faces": 53
+		},
+		{
+			"name": "Prop_MeasuringRod.R",
+			"slot": "PropR",
+			"body": null,
+			"desc": "실 재는 막대(라케시스)",
+			"roles": [
+				"WoodLight",
+				"Gold"
+			],
+			"verts": 120,
+			"faces": 80
+		},
+		{
+			"name": "Prop_Shears.R",
+			"slot": "PropR",
+			"body": null,
+			"desc": "운명의 가위(아트로포스)",
+			"roles": [
+				"Iron",
+				"Gold"
+			],
+			"verts": 68,
+			"faces": 56
+		},
+		{
+			"name": "Prop_Harpe.R",
+			"slot": "PropR",
+			"body": null,
+			"desc": "낫 하르페(크로노스)",
+			"roles": [
+				"LeatherDark",
+				"DarkIron"
+			],
+			"verts": 34,
+			"faces": 21
+		},
+		{
+			"name": "Prop_PanPipes.R",
+			"slot": "PropR",
+			"body": null,
+			"desc": "갈대 피리 시링크스(판)",
+			"roles": [
+				"Reed",
+				"Leather"
+			],
+			"verts": 92,
+			"faces": 62
+		},
+		{
+			"name": "Prop_Scroll.R",
+			"slot": "PropR",
+			"body": null,
+			"desc": "두루마리(하데스의 서류·철학자·기록관)",
+			"roles": [
+				"Parchment",
+				"Wood",
+				"Crest"
+			],
+			"verts": 56,
+			"faces": 36
+		},
+		{
+			"name": "Prop_Laurel_Branch.R",
+			"slot": "PropR",
+			"body": null,
+			"desc": "월계수 가지(피티아)",
+			"roles": [
+				"WoodDark",
+				"Laurel"
+			],
+			"verts": 54,
+			"faces": 66
+		},
+		{
+			"name": "Prop_Ember.R",
+			"slot": "PropR",
+			"body": null,
+			"desc": "손바닥 위 불씨(화로의 신)",
+			"roles": [
+				"Ember",
+				"Fire"
+			],
+			"verts": 26,
+			"faces": 38
+		},
+		{
+			"name": "Prop_Shield_Round.L",
+			"slot": "PropL",
+			"body": null,
+			"desc": "둥근 청동 방패 아스피스 — 왼팔용",
+			"roles": [
+				"Bronze",
+				"BlackFigure",
+				"Crest",
+				"Leather"
+			],
+			"verts": 168,
+			"faces": 202
+		},
+		{
+			"name": "Prop_Apple_Golden.L",
+			"slot": "PropL",
+			"body": null,
+			"desc": "금빛 사과(에리스, 빛남)",
+			"roles": [
+				"AppleGold",
+				"WoodDark",
+				"Laurel"
+			],
+			"verts": 48,
+			"faces": 54
+		},
+		{
+			"name": "Prop_Scepter_Eagle.L",
+			"slot": "PropL",
+			"body": null,
+			"desc": "독수리 홀(제우스)",
+			"roles": [
+				"Gold"
+			],
+			"verts": 77,
+			"faces": 77
+		},
+		{
+			"name": "Prop_Lyre.L",
+			"slot": "PropL",
+			"body": null,
+			"desc": "리라(아폴론)",
+			"roles": [
+				"WoodDark",
+				"Horn",
+				"Wood",
+				"Gold"
+			],
+			"verts": 116,
+			"faces": 103
+		},
+		{
+			"name": "Prop_Thyrsus.L",
+			"slot": "PropL",
+			"body": null,
+			"desc": "솔방울 지팡이 튀르소스(디오니소스)",
+			"roles": [
+				"WoodLight",
+				"Brown",
+				"Ivy"
+			],
+			"verts": 72,
+			"faces": 83
+		},
+		{
+			"name": "Prop_Scroll.L",
+			"slot": "PropL",
+			"body": null,
+			"desc": "두루마리(하데스의 서류·철학자·기록관)",
+			"roles": [
+				"Parchment",
+				"Wood",
+				"Crest"
+			],
+			"verts": 56,
+			"faces": 36
+		},
+		{
+			"name": "Prop_Torch.L",
+			"slot": "PropL",
+			"body": null,
+			"desc": "횃불(프로메테우스, 불꽃 빛남)",
+			"roles": [
+				"Wood",
+				"Bronze",
+				"Fire"
+			],
+			"verts": 53,
+			"faces": 60
+		},
+		{
+			"name": "Prop_WineCup.L",
+			"slot": "PropL",
+			"body": null,
+			"desc": "손잡이 둘 달린 금 술잔 칸타로스(디오니소스·아폴론)",
+			"roles": [
+				"Gold",
+				"Wine"
+			],
+			"verts": 114,
+			"faces": 110
+		},
+		{
+			"name": "Prop_Staff.L",
+			"slot": "PropL",
+			"body": null,
+			"desc": "나무 지팡이(노파·순례객·양치기)",
+			"roles": [
+				"Wood"
+			],
+			"verts": 48,
+			"faces": 52
+		}
+	]
+}

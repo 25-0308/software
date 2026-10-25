@@ -59,6 +59,9 @@ bool IsNearAny(const std::vector<Spot>& spots, float x, float y, float distance)
 std::vector<Spot> ScatterTrees(SceneGraph& scene, const TileMap& tileMap, std::mt19937& rng, int count,
 	const std::vector<Spot>& avoid, float avoidDistance, float cypressRatio);
 
+// 나무 한 그루를 (x, y)에 심는다(cypressRatio 확률로 사이프러스, 아니면 활엽수 — 색은 rng로 조금씩 다르게).
+void SpawnRandomTree(SceneGraph& scene, std::mt19937& rng, float x, float y, float cypressRatio);
+
 // 바위 타일 중 걸을 수 있는 칸과 맞닿은 가장자리를 따라 바위 덩어리를 늘어놓아 산·언덕이 솟아 보이게 한다.
 // snowy면 윗면이 눈으로 덮인다(올림포스).
 void ScatterRocks(SceneGraph& scene, const TileMap& tileMap, std::mt19937& rng, float density, bool snowy);

@@ -1,7 +1,9 @@
 #include "stdafx.h"
 #include "WorldMaps.h"
 
+#include <algorithm>
 #include <cmath>
+#include <cstring>
 #include <memory>
 #include <random>
 #include <vector>
@@ -13,11 +15,16 @@
 #include "SceneGraph.h"
 #include "TileMap.h"
 #include "WorldActors.h"
+#include "WorldLayout.h"
 
 namespace
 {
-	const int kMapSize = 32;
 	const float kPi = 3.14159265f;
+
+	// 지금 짓고 있는 지역과, 그 지역에 지은 살림집(SpawnHouse가 기록 — 주민의 집으로 나눠 준다).
+	// 지역 하나를 다 지으면 비운다.
+	const WorldPlace* g_BuildPlace = nullptr;
+	std::vector<BuildingActor*> g_BuildHouses;
 
 	// 어느 지역에서나 같은 문자열 → 같은 수(지역마다 다른 시드를 만들 때).
 	unsigned int HashString(const std::string& text)
@@ -309,14 +316,21 @@ namespace
 
 	// ---- 공용 배치 ----
 
-	// 집 한 채(+ 카메라 쪽 문 옆 횃불).
-	void SpawnHouse(SceneGraph& scene, float x, float y, float size, bool torch)
+	// 집 한 채(+ 카메라 쪽 문 옆 횃불). residential이면 사람이 사는 살림집이라 마을 주민의 집으로 나눠 준다
+	// (대장간·창고·정자처럼 일하는 건물은 false).
+	BuildingActor* SpawnHouse(SceneGraph& scene, float x, float y, float size, bool torch, bool residential = true)
 	{
 		BuildingActor* building = scene.Spawn<BuildingActor>(x, y, size);
 		if (torch)
 		{
 			building->AddChild(std::unique_ptr<Actor>(new FireActor(size * 0.3f, size * 0.61f, 0.8f, 0.5f)));
 		}
+
+		if (residential)
+		{
+			g_BuildHouses.push_back(building);
+		}
+		return building;
 	}
 
 	// 지역 이동 이정표(+ 조사하면 Data/Story.txt의 OBJ_SIGNPOST 대화).
@@ -404,8 +418,8 @@ namespace
 		return npc;
 	}
 
-	// 지형·지형지물을 다 놓은 뒤 공통으로 마무리: 바위·나무·플레이어·동료·분위기.
-	LevelActors FinishMap(SceneGraph& scene, const TileMap& tileMap, std::mt19937& rng, const std::vector<Spot>& avoid,
+	// 이야기 무대(크로노스의 배 속)를 다 지은 뒤 마무리: 바위·나무·플레이어·동료·분위기. 무대는 월드 밖의 따로 된 맵이다.
+	LevelActors FinishStage(SceneGraph& scene, const TileMap& tileMap, std::mt19937& rng, const std::vector<Spot>& avoid,
 		int treeCount, float cypressRatio, float rockDensity, bool snowyRocks, const Spot& start)
 	{
 		ScatterRocks(scene, tileMap, rng, rockDensity, snowyRocks);
@@ -417,13 +431,320 @@ namespace
 		return actors;
 	}
 
+	// ---- 마을 주민과 집 ----
+
+	// 마을 주민으로 치는(집이 있는) 스토리 ID. 순례객·조난자·줄 선 영혼·가면 쓴 손님·살아남은 양치기처럼 잠깐 머무는
+	// 사람과 신·이야기 인물(CHR_)은 주민이 아니다(집이 없다).
+	bool IsResidentId(const char* storyId)
+	{
+		static const char* const kResidentIds[] =
+		{
+			"NPC_MERCHANT", "NPC_DELPHI_VILLAGER", "NPC_SHEPHERD", "NPC_ATHENS_SKEPTIC", "NPC_ATHENS_CITIZEN", "NPC_PRIEST",
+			"NPC_PHILOSOPHER", "NPC_FISHER", "NPC_PAPHOS_SERVANT", "NPC_RECORD_KEEPER", "NPC_WEST_PRIEST", "NPC_WEST_CITIZEN",
+			"NPC_UNDYING_ELDER", "NPC_UNDYING", "NPC_THEBES_CITIZEN",
+		};
+
+		if (storyId == nullptr)
+		{
+			return false;
+		}
+
+		for (const char* id : kResidentIds)
+		{
+			if (strcmp(id, storyId) == 0)
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
+	float SegmentDistance(float x, float y, float ax, float ay, float bx, float by)
+	{
+		float abX = bx - ax;
+		float abY = by - ay;
+		float lengthSq = abX * abX + abY * abY;
+		float t = (lengthSq > 0.f) ? ((x - ax) * abX + (y - ay) * abY) / lengthSq : 0.f;
+		t = (std::max)(0.f, (std::min)(1.f, t));
+
+		float dx = x - (ax + abX * t);
+		float dy = y - (ay + abY * t);
+		return sqrtf(dx * dx + dy * dy);
+	}
+
+	// (x, y)(지역 로컬)가 지역 밖으로 나가는 길(출구의 안쪽 점 → 가장자리) 위이거나 그 곁인지.
+	bool IsNearExitRoad(const WorldPlace& place, float x, float y, float margin)
+	{
+		for (int i = 0; i < place.exitCount; ++i)
+		{
+			const WorldExit& exit = place.exits[i];
+			if (SegmentDistance(x, y, exit.innerX, exit.innerY, exit.borderX, exit.borderY) < margin)
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
+	// 새 집을 앉힐 수 있는 자리(지역 로컬)인지: 집 둘레까지 걸을 수 있는 땅이고, 흙길 위가 아니고, 밖으로 나가는 길·
+	// 다른 집·이야기 장소·이미 놓인 것들과 넉넉히 떨어져 있어야 한다.
+	bool CanPlaceHouse(SceneGraph& scene, const TileMap& tileMap, const WorldPlace& place, float x, float y,
+		const std::vector<Spot>& houseSpots, const std::vector<Spot>& avoid)
+	{
+		if (!IsOpenGround(tileMap, x, y, 1.6f))
+		{
+			return false;
+		}
+
+		// 흙길 위는 피한다 — 다만 땅 전체가 흙(타이나론 곶의 잿빛 흙)이라 둘레 5x5칸이 모두 흙이면 길이 아니라 맨땅이다.
+		int gridX = tileMap.GetGridX(x);
+		int gridY = tileMap.GetGridY(y);
+		if (tileMap.GetTile(gridX, gridY) == TileType::Path)
+		{
+			int pathTiles = 0;
+			for (int dy = -2; dy <= 2; ++dy)
+			{
+				for (int dx = -2; dx <= 2; ++dx)
+				{
+					pathTiles += (tileMap.GetTile(gridX + dx, gridY + dy) == TileType::Path) ? 1 : 0;
+				}
+			}
+			if (pathTiles < 25)
+			{
+				return false;
+			}
+		}
+
+		if (IsNearExitRoad(place, x, y, 3.f) || IsNearAny(houseSpots, x, y, 3.6f) || IsNearAny(avoid, x, y, 3.f))
+		{
+			return false;
+		}
+
+		Actor* nearby = scene.FindNearest(x + scene.GetSpawnOffsetX(), y + scene.GetSpawnOffsetY(), 2.8f, [](const Actor& actor)
+		{
+			ActorType type = actor.GetType();
+			return type != ActorType::Group && type != ActorType::TileBatch && type != ActorType::Effect;
+		});
+		return nearby == nullptr;
+	}
+
+	// 마을 주민의 겉모습: 대개 보통 사람(머리 색·긴 옷을 번호로 돌려 가며), 타이나론은 천을 감은 "돌아온 자들".
+	HumanLook ResidentLook(const WorldPlace& place, int index, bool robe)
+	{
+		if (strcmp(place.locId, "LOC_TAENARON") == 0)
+		{
+			return UndyingLook(index);
+		}
+
+		HumanLook look = CommonLook(index, robe);
+		if (strcmp(place.locId, "LOC_THEBES") == 0 && index % 3 == 0)
+		{
+			look.wreath = true; look.wreathR = 0.28f; look.wreathG = 0.52f; look.wreathB = 0.22f; // 축제의 담쟁이관
+		}
+		else if (strcmp(place.locId, "LOC_CYPRUS") == 0 && index % 3 == 1)
+		{
+			look.wreath = true; look.wreathR = 1.f; look.wreathG = 0.55f; look.wreathB = 0.66f; // 장미 화관
+		}
+		return look;
+	}
+
+	// 마을을 주민 15명(WorldLayout::kResidentsPerVillage)으로 채운다. 지금 있는 살림집(SpawnHouse로 지은 것)이 8채가
+	// 안 되면 마을 둘레의 빈 땅에 집을 더 짓고, 집마다 식구 수(1~3명, 합쳐서 15명)를 정한 뒤, 이미 있는 주민(이야기에
+	// 나오는 상인·어부·시민 등)을 가까운 집에 들이고, 남은 자리를 새 주민으로 채운다. 새 주민은 자기 집 문 앞에서
+	// 시작해 그 둘레를 거닐고, 대부분 마을이 숭배하는 신을, 일부는 그 마을의 다른 신을 믿으며, 성미(다혈질 비율·
+	// 거니는 반경·어울리는 정도)는 마을 분위기를 따른다. presence는 새 주민의 존재 조건(델포이의 축제 군중처럼).
+	void FillVillage(SceneGraph& scene, const TileMap& tileMap, std::mt19937& rng, std::vector<Spot>& avoid, const char* presence)
+	{
+		const WorldPlace& place = *g_BuildPlace;
+		const VillageMood& mood = place.mood;
+		float offsetX = scene.GetSpawnOffsetX();
+		float offsetY = scene.GetSpawnOffsetY();
+		std::uniform_real_distribution<float> unit(0.f, 1.f);
+
+		// 1) 이미 있는 주민.
+		std::vector<NpcActor*> residents;
+		scene.ForEach([&residents, &place](Actor& actor)
+		{
+			if (actor.GetType() == ActorType::NPC && actor.GetHomeRegion() != nullptr && strcmp(actor.GetHomeRegion(), place.locId) == 0
+				&& IsResidentId(actor.GetStoryId()))
+			{
+				residents.push_back(static_cast<NpcActor*>(&actor));
+			}
+		});
+
+		// 2) 집이 모자라면 마을 둘레(중심에서 11~19칸)에 더 짓는다.
+		const int kTargetHouses = 8;
+		std::vector<Spot> houseSpots;
+		for (BuildingActor* house : g_BuildHouses)
+		{
+			houseSpots.push_back(Spot{ house->GetX() - offsetX, house->GetY() - offsetY });
+		}
+
+		// 마을 둘레(11~19칸)를 먼저 찾고, 바다·바위가 많아 자리가 모자라면(섬 마을 등) 안쪽부터 가장자리 가까이까지 넓혀 찾는다.
+		for (int attempt = 0; attempt < 1600 && (int)g_BuildHouses.size() < kTargetHouses; ++attempt)
+		{
+			float angle = unit(rng) * 2.f * kPi;
+			float radius = (attempt < 800) ? 11.f + unit(rng) * 8.f : 3.f + unit(rng) * 16.5f;
+			float x = floorf(cosf(angle) * radius * 2.f) * 0.5f;
+			float y = floorf(sinf(angle) * radius * 2.f) * 0.5f;
+
+			if (!CanPlaceHouse(scene, tileMap, place, x, y, houseSpots, avoid))
+			{
+				continue;
+			}
+
+			SpawnHouse(scene, x, y, 1.2f + unit(rng) * 0.25f, g_BuildHouses.size() % 2 == 0);
+			houseSpots.push_back(Spot{ x, y });
+			avoid.push_back(Spot{ x, y });
+		}
+
+		// 3) 집마다 식구 수: 모두 한 명씩에서 시작해, 15명이 될 때까지 아무 집에나 한 명씩 더한다(한 집에 최대 3명).
+		int houseCount = (int)g_BuildHouses.size();
+		if (houseCount == 0)
+		{
+			return;
+		}
+
+		std::vector<int> capacity(houseCount, 0);
+		int total = 0;
+		for (int h = 0; h < houseCount && total < WorldLayout::kResidentsPerVillage; ++h)
+		{
+			capacity[h] = 1;
+			++total;
+		}
+		while (total < WorldLayout::kResidentsPerVillage && total < houseCount * WorldLayout::kMaxResidentsPerHouse)
+		{
+			int h = (int)(unit(rng) * (float)houseCount) % houseCount;
+			if (capacity[h] < WorldLayout::kMaxResidentsPerHouse)
+			{
+				++capacity[h];
+				++total;
+			}
+		}
+
+		// 집 문 앞(살림집은 +y면에 문이 있다 — 화면 오른쪽의 밝은 면).
+		std::vector<Spot> doors;
+		for (BuildingActor* house : g_BuildHouses)
+		{
+			float localX = house->GetX() - offsetX;
+			float localY = house->GetY() - offsetY + house->GetSize() * 0.5f + 0.6f;
+			doors.push_back(FindOpenGround(tileMap, localX, localY, 0.3f));
+		}
+
+		std::vector<int> occupied(houseCount, 0);
+
+		// 4) 이미 있는 주민은 빈자리가 있는 가장 가까운 집에 든다(자기 자리 — 좌판·광장 — 는 그대로 지킨다).
+		for (NpcActor* npc : residents)
+		{
+			int best = -1;
+			float bestSq = 0.f;
+			for (int h = 0; h < houseCount; ++h)
+			{
+				if (occupied[h] >= capacity[h])
+				{
+					continue;
+				}
+
+				float dx = g_BuildHouses[h]->GetX() - npc->GetX();
+				float dy = g_BuildHouses[h]->GetY() - npc->GetY();
+				if (best < 0 || dx * dx + dy * dy < bestSq)
+				{
+					best = h;
+					bestSq = dx * dx + dy * dy;
+				}
+			}
+
+			NpcTraits traits = npc->GetTraits();
+			traits.sociability = mood.sociability;
+			npc->SetTraits(traits);
+
+			if (best >= 0)
+			{
+				npc->SetHome(best + 1, doors[best].x + offsetX, doors[best].y + offsetY);
+				++occupied[best];
+			}
+		}
+
+		// 5) 남은 자리를 새 주민으로 채운다.
+		int index = (int)residents.size();
+		for (int h = 0; h < houseCount; ++h)
+		{
+			for (; occupied[h] < capacity[h]; ++occupied[h], ++index)
+			{
+				float x = doors[h].x + (unit(rng) - 0.5f) * 0.8f;
+				float y = doors[h].y + (unit(rng) - 0.5f) * 0.8f;
+				if (!tileMap.IsWorldPositionWalkable(x, y))
+				{
+					x = doors[h].x;
+					y = doors[h].y;
+				}
+
+				float r = 0.3f + unit(rng) * 0.55f;
+				float g = 0.3f + unit(rng) * 0.5f;
+				float b = 0.28f + unit(rng) * 0.5f;
+				HumanLook look = ResidentLook(place, index, unit(rng) < 0.4f);
+				NpcActor* npc = SpawnStoryNpc(scene, x, y, 0.88f + unit(rng) * 0.06f, r, g, b, look, place.residentId, place.residentTag, presence);
+
+				NpcTraits traits;
+				traits.faith = place.worship;
+				if (place.minorityCount > 0 && unit(rng) < 0.3f)
+				{
+					traits.faith = place.minorities[(int)(unit(rng) * (float)place.minorityCount) % place.minorityCount];
+				}
+				traits.wanderRadius = mood.wanderRadius;
+				traits.hotheaded = unit(rng) < mood.hotheadedRatio;
+				traits.social = true;
+				traits.sociability = mood.sociability;
+				npc->SetTraits(traits);
+				npc->SetHome(h + 1, doors[h].x + offsetX, doors[h].y + offsetY);
+				npc->SetFacing(unit(rng) * 2.f * kPi);
+
+				avoid.push_back(Spot{ x, y });
+			}
+
+			g_BuildHouses[h]->SetHouse(h + 1, occupied[h]);
+			avoid.push_back(doors[h]);
+		}
+	}
+
+	// 지역 하나(월드에 앉힐 마을·성역)를 다 지은 뒤 마무리: 마을이면 집과 주민을 15명까지 채우고, 밖으로 나가는 길을
+	// 비워 둔 채 바위와 나무를 놓는다. 플레이어·동료·바닥·분위기는 월드를 다 지은 뒤 한 번에 한다(BuildOverworld).
+	// 나무 수는 32칸 맵 기준이라 지역 넓이에 맞춰 늘린다. residentPresence는 새 주민의 존재 조건.
+	void FinishRegion(SceneGraph& scene, const TileMap& tileMap, std::mt19937& rng, std::vector<Spot>& avoid,
+		int treeCount, float cypressRatio, float rockDensity, bool snowyRocks, const char* residentPresence = nullptr)
+	{
+		const WorldPlace& place = *g_BuildPlace;
+
+		// 밖으로 나가는 길 위엔 아무것도 놓지 않는다(나중에 월드가 그 위로 흙길을 깐다).
+		for (int i = 0; i < place.exitCount; ++i)
+		{
+			const WorldExit& exit = place.exits[i];
+			float dx = exit.borderX - exit.innerX;
+			float dy = exit.borderY - exit.innerY;
+			float length = sqrtf(dx * dx + dy * dy);
+			for (float t = 0.f; t <= length; t += 1.2f)
+			{
+				avoid.push_back(Spot{ exit.innerX + dx / length * t, exit.innerY + dy / length * t });
+			}
+		}
+
+		if (place.kind == PlaceKind::Village)
+		{
+			FillVillage(scene, tileMap, rng, avoid, residentPresence);
+		}
+
+		float area = (float)(place.size * place.size) / 1024.f;
+		ScatterRocks(scene, tileMap, rng, rockDensity, snowyRocks);
+		ScatterTrees(scene, tileMap, rng, (int)((float)treeCount * area), avoid, 2.2f, cypressRatio);
+	}
+
 	// =====================================================================================
 	// LOC_DELPHI — 델포이 · 파르나소스 산기슭 (시작 지역: MQ_00 프롤로그, MQ_01 수호신의 선택)
 	// 화면 위쪽(월드 x+y가 작은 쪽)에 파르나소스 산, 그 아래 산을 깎은 테라스에 아폴론 신전과 신탁 제단,
 	// 제단 앞 광장에서 내려가는 성스러운 길을 따라 시장과 마을, 화면 오른쪽에 카스탈리아 샘과 월계수 숲,
 	// 화면 왼쪽에 동굴이 난 바위 언덕과 노파의 모닥불, 맨 아래 길 끝에 이정표.
 	// =====================================================================================
-	LevelActors BuildDelphi(SceneGraph& scene, TileMap& tileMap, Renderer& renderer, std::mt19937& rng, int seed, bool arrivedByTravel)
+	void BuildDelphi(SceneGraph& scene, TileMap& tileMap, std::mt19937& rng, int seed)
 	{
 		const Spot kStart = { 2.6f, 5.0f };      // 새 게임 시작: 광장 아래 시장 길
 		const Spot kArrival = { 10.6f, 9.3f };   // 이정표로 도착
@@ -463,9 +784,7 @@ namespace
 		// 카스탈리아 샘(작은 연못).
 		Terrain::PaintDisk(tileMap, kSpring.x, kSpring.y, 1.7f, TileType::Water);
 
-		Spot start = arrivedByTravel ? kArrival : kStart;
-		Terrain::EnsureFullyConnected(tileMap, start.x, start.y);
-		SpawnTileActors(scene, renderer, tileMap, seed);
+		Terrain::EnsureFullyConnected(tileMap, kStart.x, kStart.y);
 
 		// ---- 신전·제단·균열 ----
 		scene.Spawn<TempleActor>(kTemple.x, kTemple.y, 6.f, 4.2f, 1.8f, false);
@@ -572,12 +891,7 @@ namespace
 		SpawnAnimal(scene, tileMap, AnimalKind::ShadowWolf, kAltar.x + 3.0f, kAltar.y + 0.8f, 1.7f)->SetPresence(kShadows);
 		SpawnAnimal(scene, tileMap, AnimalKind::ShadowWolf, kAltar.x - 0.6f, kAltar.y + 3.6f, 2.9f)->SetPresence(kShadows);
 
-		// ---- 들짐승과 약초 ----
-		SpawnAnimal(scene, tileMap, AnimalKind::Wolf, 11.5f, -9.5f, 4.2f);
-		SpawnAnimal(scene, tileMap, AnimalKind::Wolf, -12.5f, 11.0f, 5.6f);
-		SpawnAnimal(scene, tileMap, AnimalKind::Deer, 9.0f, -3.0f, 0.f);
-		SpawnAnimal(scene, tileMap, AnimalKind::Deer, -9.0f, 9.5f, 2.1f);
-		SpawnAnimal(scene, tileMap, AnimalKind::Deer, 13.0f, 2.5f, 1.3f);
+		// ---- 약초(들짐승·몬스터는 마을 밖 황야에 산다 — Wilderness.h) ----
 		SpawnHerb(scene, tileMap, 9.5f, -6.5f);
 		SpawnHerb(scene, tileMap, -12.5f, 7.0f);
 		SpawnHerb(scene, tileMap, 7.5f, 10.0f);
@@ -592,7 +906,7 @@ namespace
 		};
 		avoid.insert(avoid.end(), std::begin(kKeep), std::end(kKeep));
 
-		return FinishMap(scene, tileMap, rng, avoid, 30, 0.35f, 0.55f, false, start);
+		FinishRegion(scene, tileMap, rng, avoid, 30, 0.35f, 0.55f, false, kCrowd);
 	}
 
 	// =====================================================================================
@@ -600,7 +914,7 @@ namespace
 	// 화면 위쪽에 눈 덮인 올림포스, 그 아래 언덕 위에 기둥이 둥글게 선 회의장과 크로노스 벽화, 화면 왼쪽에
 	// 헤파이스토스의 대장간, 평원을 가로지르는 강(길이 지나는 곳은 여울), 강 건너 아래쪽 끝에 이정표.
 	// =====================================================================================
-	LevelActors BuildOlympusFoot(SceneGraph& scene, TileMap& tileMap, Renderer& renderer, std::mt19937& rng, int seed)
+	void BuildOlympusFoot(SceneGraph& scene, TileMap& tileMap, std::mt19937& rng, int seed)
 	{
 		const Spot kArrival = { 10.4f, 9.0f };
 		const Spot kSignpost = { 11.6f, 10.0f };
@@ -642,7 +956,6 @@ namespace
 		Terrain::PaintDisk(tileMap, kHall.x, kHall.y, 4.3f, TileType::Stone);
 
 		Terrain::EnsureFullyConnected(tileMap, kArrival.x, kArrival.y);
-		SpawnTileActors(scene, renderer, tileMap, seed);
 
 		// ---- 신들의 회의장: 바닥 원판 + 둥글게 선 기둥들(입구 쪽은 비우고 둘은 부러짐) + 대리석 식탁 ----
 		scene.Spawn<FloorDiscActor>(kHall.x, kHall.y, 3.7f, 0.74f, 0.71f, 0.65f);
@@ -682,7 +995,7 @@ namespace
 		mural->SetInteractId(kInteractStory);
 
 		// ---- 헤파이스토스의 대장간 ----
-		SpawnHouse(scene, kForge.x, kForge.y, 1.5f, false);
+		SpawnHouse(scene, kForge.x, kForge.y, 1.5f, false, false);
 		scene.Spawn<FireActor>(kForge.x + 0.6f, kForge.y + 1.6f, 0.f, 0.6f, true);
 		scene.Spawn<TableActor>(kForge.x - 0.6f, kForge.y + 1.7f, 0.55f, 0.35f, 0.5f, 0.3f, 0.29f, 0.29f);
 		SpawnStoryNpc(scene, kForge.x - 1.1f, kForge.y + 2.3f, 1.15f, 0.42f, 0.29f, 0.18f, HephaestusLook(), "CHR_HEPHAESTUS", "Hephaestus", nullptr);
@@ -719,12 +1032,7 @@ namespace
 		SpawnStoryNpc(scene, kHamlet.x - 1.0f, kHamlet.y + 1.2f, 0.9f, 0.4f, 0.36f, 0.3f, CommonLook(4, false), "NPC_SURVIVOR", "Survivor",
 			"STORY_STEP >= MQ_04.FRONT2 && STORY_STEP <= MQ_04.FRONT2_HELP");
 
-		// ---- 들짐승과 약초 ----
-		SpawnAnimal(scene, tileMap, AnimalKind::Wolf, 13.0f, -6.5f, 1.1f);
-		SpawnAnimal(scene, tileMap, AnimalKind::Wolf, -3.0f, 12.5f, 3.3f);
-		SpawnAnimal(scene, tileMap, AnimalKind::Deer, 6.0f, 10.0f, 0.4f);
-		SpawnAnimal(scene, tileMap, AnimalKind::Deer, -6.0f, 11.0f, 2.6f);
-		SpawnAnimal(scene, tileMap, AnimalKind::Deer, -12.0f, 7.5f, 4.8f);
+		// ---- 약초(들짐승·몬스터는 마을 밖 황야에 산다 — Wilderness.h) ----
 		SpawnHerb(scene, tileMap, 12.0f, 2.0f);
 		SpawnHerb(scene, tileMap, -12.5f, 10.5f);
 		SpawnHerb(scene, tileMap, 4.0f, 12.5f);
@@ -737,7 +1045,7 @@ namespace
 			{ kHamlet.x + 0.4f, kHamlet.y - 2.2f }, { kPass.x + 1.1f, kPass.y - 0.9f },
 		};
 
-		return FinishMap(scene, tileMap, rng, avoid, 26, 0.45f, 0.6f, true, kArrival);
+		FinishRegion(scene, tileMap, rng, avoid, 26, 0.45f, 0.6f, true);
 	}
 
 	// =====================================================================================
@@ -746,7 +1054,7 @@ namespace
 	// 광장 오른쪽에 새로 세운 로마식 유피테르 신전과 사제단 창고, 화면 왼쪽에 집들 사이로 난 뒷골목(막다른 곳에
 	// 식은 화덕), 아래쪽 모서리에 항구로 이어지는 바다, 그 곁에 이정표.
 	// =====================================================================================
-	LevelActors BuildAthens(SceneGraph& scene, TileMap& tileMap, Renderer& renderer, std::mt19937& rng, int seed)
+	void BuildAthens(SceneGraph& scene, TileMap& tileMap, std::mt19937& rng, int seed)
 	{
 		const Spot kArrival = { 11.0f, 3.4f };
 		const Spot kSignpost = { 12.2f, 4.2f };
@@ -782,7 +1090,6 @@ namespace
 		Terrain::PaintDisk(tileMap, kJupiter.x, kJupiter.y, 3.0f, TileType::Stone);
 
 		Terrain::EnsureFullyConnected(tileMap, kArrival.x, kArrival.y);
-		SpawnTileActors(scene, renderer, tileMap, seed);
 
 		// ---- 신전과 신상 ----
 		scene.Spawn<TempleActor>(kAcropolis.x - 0.4f, kAcropolis.y - 0.4f, 5.f, 3.2f, 1.6f, false);
@@ -793,7 +1100,7 @@ namespace
 		statue->SetInteractId(kInteractStory);
 
 		// ---- 사제단 창고와 장부 ----
-		SpawnHouse(scene, kStorehouse.x, kStorehouse.y, 1.6f, true);
+		SpawnHouse(scene, kStorehouse.x, kStorehouse.y, 1.6f, true, false);
 		Spot ledgerSpot = FindOpenGround(tileMap, kStorehouse.x + 0.4f, kStorehouse.y + 1.5f, 0.3f);
 		ItemActor* ledger = scene.Spawn<ItemActor>(ledgerSpot.x, ledgerSpot.y, 0.55f, 0.95f, 0.86f, 0.66f, ItemKind::Scroll, kInteractStory);
 		ledger->SetStoryId("OBJ_PRIEST_LEDGER");
@@ -867,7 +1174,7 @@ namespace
 			{ 10.2f, -0.2f }, { 7.6f, 3.8f },
 		};
 
-		return FinishMap(scene, tileMap, rng, avoid, 14, 0.25f, 0.6f, false, kArrival);
+		FinishRegion(scene, tileMap, rng, avoid, 14, 0.25f, 0.6f, false);
 	}
 
 	// =====================================================================================
@@ -875,7 +1182,7 @@ namespace
 	// 바다 위에 섬 셋: 화면 아래쪽 큰 섬(어부 마을과 항구, 위쪽 해변에 난파선), 왼쪽 바위섬(해저 동굴),
 	// 위쪽 작은 섬(하얀 암소). 섬끼리는 썰물에 드러나는 모래톱 길로 이어진다.
 	// =====================================================================================
-	LevelActors BuildAegean(SceneGraph& scene, TileMap& tileMap, Renderer& renderer, std::mt19937& rng, int seed)
+	void BuildAegean(SceneGraph& scene, TileMap& tileMap, std::mt19937& rng, int seed)
 	{
 		const Spot kArrival = { 9.6f, 9.4f };
 		const Spot kSignpost = { 10.6f, 10.4f };
@@ -905,7 +1212,6 @@ namespace
 		Terrain::PaintLine(tileMap, 8.4f, 8.8f, 4.0f, 5.0f, 0.6f, TileType::Path);
 
 		Terrain::EnsureFullyConnected(tileMap, kArrival.x, kArrival.y);
-		SpawnTileActors(scene, renderer, tileMap, seed);
 
 		// ---- 어부 마을과 항구 ----
 		SpawnHouse(scene, 6.4f, 9.6f, 1.3f, true);
@@ -964,7 +1270,7 @@ namespace
 		};
 		avoid.insert(avoid.end(), std::begin(kKeep), std::end(kKeep));
 
-		return FinishMap(scene, tileMap, rng, avoid, 12, 0.6f, 0.7f, false, kArrival);
+		FinishRegion(scene, tileMap, rng, avoid, 12, 0.6f, 0.7f, false);
 	}
 
 	// =====================================================================================
@@ -972,7 +1278,7 @@ namespace
 	// 화면 위쪽 언덕 위 아프로디테의 저택, 가운데 기둥이 둥글게 선 연회장(가면 쓴 손님들), 오른쪽에 기록 관리인이
 	// 지키는 정자, 왼쪽 장미 정원 끝에 거울의 방, 화면 아래 모서리 바다와 항구, 그 곁의 이정표.
 	// =====================================================================================
-	LevelActors BuildCyprus(SceneGraph& scene, TileMap& tileMap, Renderer& renderer, std::mt19937& rng, int seed)
+	void BuildCyprus(SceneGraph& scene, TileMap& tileMap, std::mt19937& rng, int seed)
 	{
 		const Spot kArrival = { 10.0f, 3.2f };
 		const Spot kSignpost = { 11.0f, 4.0f };
@@ -1000,7 +1306,6 @@ namespace
 		Terrain::PaintLine(tileMap, kHall.x - 3.4f, kHall.y + 2.0f, kMirrorRoom.x + 1.2f, kMirrorRoom.y + 1.4f, 0.55f, TileType::Path);
 
 		Terrain::EnsureFullyConnected(tileMap, kArrival.x, kArrival.y);
-		SpawnTileActors(scene, renderer, tileMap, seed);
 
 		// ---- 연회장: 바닥 원판 + 둥글게 선 기둥(입구는 비움) + 식탁 둘, 한 기둥엔 황금사과 문양 ----
 		scene.Spawn<FloorDiscActor>(kHall.x, kHall.y, 3.8f, 0.86f, 0.78f, 0.74f);
@@ -1043,7 +1348,7 @@ namespace
 			"PATRON == APHRODITE && STORY_STEP >= RQ_APHRODITE_01.MASK && STORY_STEP <= RQ_APHRODITE_03.TRACE");
 
 		// ---- 기록 관리인이 지키는 정자(헤라·아레스의 비밀 회동 기록, RQ_APHRODITE_02) ----
-		SpawnHouse(scene, kPavilion.x, kPavilion.y, 1.5f, true);
+		SpawnHouse(scene, kPavilion.x, kPavilion.y, 1.5f, true, false);
 		SpawnStoryNpc(scene, kPavilion.x - 0.6f, kPavilion.y + 1.6f, 0.95f, 0.36f, 0.34f, 0.4f, CommonLook(1, true), "NPC_RECORD_KEEPER", "Keeper", nullptr);
 
 		// ---- 장미 정원 끝의 거울의 방(RQ_APHRODITE_03: 늙어 가는 얼굴) ----
@@ -1063,7 +1368,6 @@ namespace
 		SpawnStoryNpc(scene, 7.0f, 4.6f, 0.9f, 0.4f, 0.5f, 0.62f, CommonLook(2, false), "NPC_FISHER", "Fisher", nullptr);
 		SpawnHerb(scene, tileMap, 9.0f, -9.0f);
 		SpawnHerb(scene, tileMap, -12.0f, 8.0f);
-		SpawnAnimal(scene, tileMap, AnimalKind::Deer, 2.0f, -10.0f, 0.6f);
 
 		std::vector<Spot> avoid =
 		{
@@ -1072,7 +1376,7 @@ namespace
 		};
 		avoid.insert(avoid.end(), std::begin(kRoses), std::end(kRoses));
 
-		return FinishMap(scene, tileMap, rng, avoid, 16, 0.55f, 0.6f, false, kArrival);
+		FinishRegion(scene, tileMap, rng, avoid, 16, 0.55f, 0.6f, false);
 	}
 
 	// =====================================================================================
@@ -1080,7 +1384,7 @@ namespace
 	// 화면 위쪽 절벽 아래 저승으로 내려가는 동굴 문, 그 앞 잿빛 광장의 접수 창구와 줄 선 영혼들, 오른쪽의
 	// 석류 정원(페르세포네), 곶 끝(왼쪽)의 "돌아온 자들"의 마을, 아래쪽 탄탈로스의 웅덩이, 오른쪽 아래 이정표.
 	// =====================================================================================
-	LevelActors BuildTaenaron(SceneGraph& scene, TileMap& tileMap, Renderer& renderer, std::mt19937& rng, int seed)
+	void BuildTaenaron(SceneGraph& scene, TileMap& tileMap, std::mt19937& rng, int seed)
 	{
 		const Spot kArrival = { 10.0f, 8.6f };
 		const Spot kSignpost = { 11.0f, 9.6f };
@@ -1106,7 +1410,6 @@ namespace
 		Terrain::PaintDisk(tileMap, kPool.x, kPool.y, 1.3f, TileType::Water);
 
 		Terrain::EnsureFullyConnected(tileMap, kArrival.x, kArrival.y);
-		SpawnTileActors(scene, renderer, tileMap, seed);
 
 		// ---- 저승 문과 접수 창구(+ 루트 동안 창구 뒤의 하데스) ----
 		scene.Spawn<CaveEntranceActor>(kGate.x, kGate.y, 2.0f);
@@ -1167,7 +1470,7 @@ namespace
 		};
 		avoid.insert(avoid.end(), std::begin(kPomegranates), std::end(kPomegranates));
 
-		return FinishMap(scene, tileMap, rng, avoid, 6, 0.8f, 0.6f, false, kArrival);
+		FinishRegion(scene, tileMap, rng, avoid, 6, 0.8f, 0.6f, false);
 	}
 
 	// =====================================================================================
@@ -1176,7 +1479,7 @@ namespace
 	// 화면 위쪽에 높은 단 위의 로마식 대신전(유피테르·유노), 그 앞 광장, 신전 뒤 바위 언덕의 비밀 통로, 오른쪽 위
 	// 길가의 경계석과 하급 신, 아래쪽 로마식 시장과 항구, 오른쪽 아래 이정표.
 	// =====================================================================================
-	LevelActors BuildWest(SceneGraph& scene, TileMap& tileMap, Renderer& renderer, std::mt19937& rng, int seed)
+	void BuildWest(SceneGraph& scene, TileMap& tileMap, std::mt19937& rng, int seed)
 	{
 		const Spot kArrival = { 10.0f, 9.0f };
 		const Spot kSignpost = { 11.0f, 10.0f };
@@ -1202,7 +1505,6 @@ namespace
 		Terrain::PaintLine(tileMap, kForum.x - 4.0f, kForum.y - 2.4f, kPassage.x + 1.0f, kPassage.y + 1.6f, 0.5f, TileType::Path);
 
 		Terrain::EnsureFullyConnected(tileMap, kArrival.x, kArrival.y);
-		SpawnTileActors(scene, renderer, tileMap, seed);
 
 		// ---- 로마식 대신전 + 정면의 금빛 비문(유피테르와 그의 아내 유노) ----
 		scene.Spawn<TempleActor>(kTemple.x, kTemple.y, 5.2f, 4.0f, 2.0f, true);
@@ -1235,7 +1537,6 @@ namespace
 
 		SpawnHerb(scene, tileMap, -12.0f, 2.0f);
 		SpawnHerb(scene, tileMap, 11.0f, -10.0f);
-		SpawnAnimal(scene, tileMap, AnimalKind::Wolf, -10.0f, 10.0f, 2.2f);
 
 		std::vector<Spot> avoid =
 		{
@@ -1243,7 +1544,7 @@ namespace
 			{ 7.4f, 4.6f }, { 0.6f, 9.0f }, { 6.4f, 1.0f }, { -5.0f, 6.0f }, { 8.6f, 7.6f },
 		};
 
-		return FinishMap(scene, tileMap, rng, avoid, 18, 0.7f, 0.6f, false, kArrival);
+		FinishRegion(scene, tileMap, rng, avoid, 18, 0.7f, 0.6f, false);
 	}
 
 	// =====================================================================================
@@ -1252,7 +1553,7 @@ namespace
 	// 오른쪽 아래 정상 끝의 균열(피티아의 희생), 왼쪽 위 눈 덮인 바위 속에 숨은 지하 베틀실(바위로 막힌 좁은 길 너머 —
 	// 피티아가 길을 연 뒤에야 지나갈 수 있다), 오른쪽 아래 이정표.
 	// =====================================================================================
-	LevelActors BuildOlympus(SceneGraph& scene, TileMap& tileMap, Renderer& renderer, std::mt19937& rng, int seed)
+	void BuildOlympus(SceneGraph& scene, TileMap& tileMap, std::mt19937& rng, int seed)
 	{
 		const Spot kArrival = { 9.6f, 9.6f };
 		const Spot kSignpost = { 10.6f, 10.6f };
@@ -1272,7 +1573,6 @@ namespace
 		Terrain::PaintLine(tileMap, -5.0f, -5.0f, kLoomRoom.x + 1.8f, kLoomRoom.y + 1.8f, 0.75f, TileType::Stone);
 
 		Terrain::EnsureFullyConnected(tileMap, kArrival.x, kArrival.y);
-		SpawnTileActors(scene, renderer, tileMap, seed);
 
 		// ---- 왕좌의 홀 ----
 		scene.Spawn<TempleActor>(kHall.x, kHall.y, 6.4f, 4.6f, 2.6f, false);
@@ -1330,7 +1630,7 @@ namespace
 			kArrival, kSignpost, kHall, kCrack, kLoomRoom, kGate, { 5.2f, -5.6f }, { 7.4f, -3.4f }, { -6.0f, 5.6f }, { -3.6f, 7.4f },
 		};
 
-		return FinishMap(scene, tileMap, rng, avoid, 8, 0.9f, 0.7f, true, kArrival);
+		FinishRegion(scene, tileMap, rng, avoid, 8, 0.9f, 0.7f, true);
 	}
 
 	// =====================================================================================
@@ -1338,7 +1638,7 @@ namespace
 	// 잿빛 흙의 벌판, 화면 위쪽을 가득 채운 심연(바위 낭떠러지)과 그 가장자리의 보랏빛 균열들, 가운데 돌바닥에
 	// 모인 신들, 오른쪽 위 바위에 사슬로 묶인 프로메테우스, 오른쪽 아래 이정표.
 	// =====================================================================================
-	LevelActors BuildTartarusRim(SceneGraph& scene, TileMap& tileMap, Renderer& renderer, std::mt19937& rng, int seed)
+	void BuildTartarusRim(SceneGraph& scene, TileMap& tileMap, std::mt19937& rng, int seed)
 	{
 		const Spot kArrival = { 9.6f, 9.6f };
 		const Spot kSignpost = { 10.6f, 10.6f };
@@ -1355,7 +1655,6 @@ namespace
 		Terrain::PaintDisk(tileMap, kPrometheus.x - 1.2f, kPrometheus.y - 1.2f, 1.4f, TileType::Rock);
 
 		Terrain::EnsureFullyConnected(tileMap, kArrival.x, kArrival.y);
-		SpawnTileActors(scene, renderer, tileMap, seed);
 
 		// 심연 가장자리의 균열들(늘 보랏빛으로 숨 쉼).
 		scene.Spawn<CrackActor>(-2.6f, -0.2f, 2.6f);
@@ -1399,7 +1698,81 @@ namespace
 		SpawnSignpost(scene, kSignpost.x, kSignpost.y);
 
 		std::vector<Spot> avoid = { kArrival, kSignpost, kFront, kPrometheus };
-		return FinishMap(scene, tileMap, rng, avoid, 0, 0.f, 0.8f, false, kArrival);
+		FinishRegion(scene, tileMap, rng, avoid, 0, 0.f, 0.8f, false);
+	}
+
+	// =====================================================================================
+	// LOC_THEBES — 테베 (새 마을: 델포이·올림포스 산기슭·아테네 사이의 갈림길, 디오니소스를 숭배하는 축제의 도시)
+	// STORY.md 12장의 SQ_THEBES_01(포도덩굴의 밤)이 "아테네 인근 신규 구역"으로 적어 둔 곳. 그 퀘스트는 아직 없다(TODO).
+	// 가운데 네거리 광장(디오니소스 신상·포도주 좌판·축제의 모닥불), 화면 위쪽에 디오니소스 신전, 화면 오른쪽 위에
+	// 둥글게 기둥을 두른 노천극장, 화면 왼쪽 아래에 포도밭, 오른쪽 아래 구석에 카드모스의 바위 언덕.
+	// 길: 위(북서)로 델포이, 왼쪽(북동)으로 올림포스 산기슭, 아래(남동)로 아테네.
+	// =====================================================================================
+	void BuildThebes(SceneGraph& scene, TileMap& tileMap, std::mt19937& rng, int seed)
+	{
+		const Spot kPlaza = { 0.f, 0.f };
+		const Spot kSignpost = { 3.6f, 3.6f };
+		const Spot kTemple = { -9.5f, -9.5f };
+		const Spot kTheater = { 9.5f, -8.5f };
+		const Spot kVineyard = { -9.f, 9.f };
+
+		// ---- 지형 ----
+		Terrain::Fill(tileMap, TileType::Grass);
+		Terrain::PaintDisk(tileMap, 15.5f, 15.5f, 3.6f, TileType::Rock); // 카드모스의 바위 언덕
+		Terrain::PaintDisk(tileMap, kPlaza.x, kPlaza.y, 5.6f, TileType::Stone);
+		Terrain::PaintDisk(tileMap, kTemple.x, kTemple.y, 4.2f, TileType::Stone);
+		Terrain::PaintLine(tileMap, kPlaza.x - 3.4f, kPlaza.y - 3.4f, kTemple.x + 2.4f, kTemple.y + 2.4f, 0.65f, TileType::Path);
+		Terrain::PaintLine(tileMap, kPlaza.x + 4.2f, kPlaza.y - 2.6f, kTheater.x - 2.2f, kTheater.y + 2.2f, 0.6f, TileType::Path);
+		Terrain::PaintLine(tileMap, kPlaza.x - 3.0f, kPlaza.y + 3.6f, kVineyard.x + 2.6f, kVineyard.y - 2.6f, 0.55f, TileType::Path);
+		Terrain::PaintDisk(tileMap, -6.5f, -14.5f, 1.4f, TileType::Water); // 디르케의 샘
+
+		Terrain::EnsureFullyConnected(tileMap, kPlaza.x + 2.6f, kPlaza.y + 2.6f);
+
+		// ---- 광장: 디오니소스 신상, 축제의 모닥불, 포도주 좌판 ----
+		scene.Spawn<StatueActor>(kPlaza.x - 0.8f, kPlaza.y - 0.8f, 1.2f, false);
+		scene.Spawn<FireActor>(kPlaza.x + 2.4f, kPlaza.y - 2.6f, 0.f, 0.55f, true);
+		scene.Spawn<FireActor>(kPlaza.x - 2.8f, kPlaza.y + 2.2f, 0.f, 0.55f, true);
+		scene.Spawn<StallActor>(kPlaza.x + 3.2f, kPlaza.y + 0.6f, 0.5f, 0.12f, 0.36f);
+		scene.Spawn<StallActor>(kPlaza.x - 1.2f, kPlaza.y + 3.6f, 0.62f, 0.18f, 0.4f);
+		SpawnSignpost(scene, kSignpost.x, kSignpost.y);
+
+		// ---- 디오니소스 신전 ----
+		scene.Spawn<TempleActor>(kTemple.x, kTemple.y, 5.f, 3.4f, 1.6f, false);
+		scene.Spawn<FireActor>(kTemple.x + 3.4f, kTemple.y + 1.0f, 0.f, 0.5f, true);
+
+		// ---- 노천극장: 둥근 무대 + 반달 모양으로 늘어선 기둥(관객석 쪽) ----
+		scene.Spawn<FloorDiscActor>(kTheater.x, kTheater.y, 3.0f, 0.78f, 0.74f, 0.68f);
+		for (int i = 0; i < 7; ++i)
+		{
+			float angle = kPi * (1.05f + 0.15f * (float)i);
+			scene.Spawn<ColumnActor>(kTheater.x + cosf(angle) * 3.6f, kTheater.y + sinf(angle) * 3.6f, 2.0f, i == 2);
+		}
+
+		// ---- 포도밭: 낮은 덩굴 줄(보랏빛 열매가 섞인 짙은 잎) ----
+		std::vector<Spot> avoid = { kPlaza, kSignpost, kTemple, kTheater, kVineyard, { kTemple.x + 3.4f, kTemple.y + 1.0f } };
+		for (int row = 0; row < 3; ++row)
+		{
+			for (int column = 0; column < 4; ++column)
+			{
+				float x = kVineyard.x - 3.f + (float)column * 2.f;
+				float y = kVineyard.y - 2.f + (float)row * 2.f;
+				scene.Spawn<TreeActor>(x, y, 0.7f, 0.3f, 0.2f, 0.32f, TreeKind::Broadleaf);
+				avoid.push_back(Spot{ x, y });
+			}
+		}
+
+		// ---- 처음부터 있는 살림집 셋(나머지는 FinishRegion이 마을 둘레에 더 짓는다) ----
+		SpawnHouse(scene, 6.5f, 4.5f, 1.35f, true);
+		SpawnHouse(scene, -4.5f, 6.5f, 1.3f, false);
+		SpawnHouse(scene, 6.0f, -4.5f, 1.3f, true);
+		avoid.push_back(Spot{ 6.5f, 4.5f });
+		avoid.push_back(Spot{ -4.5f, 6.5f });
+		avoid.push_back(Spot{ 6.0f, -4.5f });
+
+		SpawnHerb(scene, tileMap, -14.f, 3.f);
+		SpawnHerb(scene, tileMap, 12.f, -14.f);
+
+		FinishRegion(scene, tileMap, rng, avoid, 20, 0.5f, 0.55f, false);
 	}
 
 	// =====================================================================================
@@ -1438,7 +1811,7 @@ namespace
 		SpawnTrigger(scene, kLight.x, kLight.y, 1.4f, "TRIGGER_BELLY_LIGHT");
 
 		std::vector<Spot> avoid = { kStart, kLight };
-		LevelActors actors = FinishMap(scene, tileMap, rng, avoid, 0, 0.f, 0.9f, false, kStart);
+		LevelActors actors = FinishStage(scene, tileMap, rng, avoid, 0, 0.f, 0.9f, false, kStart);
 
 		// 함께 삼켜진 수호신이 곁에서 걷는다(PATRON에 맞는 하나만 보인다).
 		const PatronPresence kCompanion =
@@ -1452,62 +1825,501 @@ namespace
 		SpawnPatrons(scene, kStart.x + 1.0f, kStart.y - 1.0f, kCompanion, actors.player);
 		return actors;
 	}
+
+	// =====================================================================================
+	// 하나로 이어진 월드: 지역을 월드 위에 앉히고, 그 사이를 황야와 길로 채운다(WorldLayout.h의 배치표).
+	// =====================================================================================
+
+	// 새 게임을 시작하는 자리(델포이 로컬 좌표: 광장 아래 시장 길).
+	const float kNewGameStartX = 2.6f;
+	const float kNewGameStartY = 5.0f;
+
+	// 움직이지 않는 액터를 묶는 칸(그룹 노드)의 한 변.
+	const float kCellSize = 24.f;
+
+	// 길의 반폭(흙길 — 바다 위에선 둑길·모래톱 길).
+	const float kRoadHalfWidth = 0.85f;
+
+	// 마을 정사각형의 가장자리 이만큼(칸)은 둘레 황야와 섞는다(바다·바위가 자로 그은 듯 끊기지 않게).
+	const float kBlendBand = 4.f;
+
+	// 성역을 두르는 바위 띠의 두께(칸). 길이 난 곳만 뚫린다.
+	const float kSanctuaryRing = 4.f;
+
+	bool IsPlace(const WorldPlace* place, const char* locId)
+	{
+		return place != nullptr && strcmp(place->locId, locId) == 0;
+	}
+
+	// 지역 하나를 지역 크기의 로컬 타일맵에 짓는다(지형·건축물·인물 — 바닥 배치는 월드를 다 지은 뒤 한 번에).
+	void BuildPlace(const WorldPlace& place, SceneGraph& scene, TileMap& tileMap, std::mt19937& rng, int seed)
+	{
+		if (IsPlace(&place, "LOC_DELPHI"))
+		{
+			BuildDelphi(scene, tileMap, rng, seed);
+		}
+		else if (IsPlace(&place, "LOC_THEBES"))
+		{
+			BuildThebes(scene, tileMap, rng, seed);
+		}
+		else if (IsPlace(&place, "LOC_OLYMPUS_FOOT"))
+		{
+			BuildOlympusFoot(scene, tileMap, rng, seed);
+		}
+		else if (IsPlace(&place, "LOC_ATHENS"))
+		{
+			BuildAthens(scene, tileMap, rng, seed);
+		}
+		else if (IsPlace(&place, "LOC_AEGEAN"))
+		{
+			BuildAegean(scene, tileMap, rng, seed);
+		}
+		else if (IsPlace(&place, "LOC_CYPRUS"))
+		{
+			BuildCyprus(scene, tileMap, rng, seed);
+		}
+		else if (IsPlace(&place, "LOC_TAENARON"))
+		{
+			BuildTaenaron(scene, tileMap, rng, seed);
+		}
+		else if (IsPlace(&place, "LOC_WEST"))
+		{
+			BuildWest(scene, tileMap, rng, seed);
+		}
+		else if (IsPlace(&place, "LOC_OLYMPUS"))
+		{
+			BuildOlympus(scene, tileMap, rng, seed);
+		}
+		else if (IsPlace(&place, "LOC_TARTARUS_RIM"))
+		{
+			BuildTartarusRim(scene, tileMap, rng, seed);
+		}
+	}
+
+	// 월드에 놓이는 지역(무대 제외) 중 중심이 가장 가까운 것 — 황야의 땅 모양(바다·산줄기·잿빛 벌판·들판)을 정한다.
+	const WorldPlace* NearestPlace(float x, float y)
+	{
+		const WorldPlace* nearest = nullptr;
+		float nearestSq = 0.f;
+
+		for (int i = 0; i < WorldLayout::GetPlaceCount(); ++i)
+		{
+			const WorldPlace& place = WorldLayout::GetPlace(i);
+			if (place.kind == PlaceKind::Stage)
+			{
+				continue;
+			}
+
+			float dx = x - place.centerX;
+			float dy = y - place.centerY;
+			if (nearest == nullptr || dx * dx + dy * dy < nearestSq)
+			{
+				nearest = &place;
+				nearestSq = dx * dx + dy * dy;
+			}
+		}
+		return nearest;
+	}
+
+	float DistanceToRoads(float x, float y)
+	{
+		float best = 1.0e9f;
+		for (const WorldRoad& road : WorldLayout::GetRoads())
+		{
+			for (int i = 0; i + 1 < 5; ++i)
+			{
+				float distance = SegmentDistance(x, y, road.points[i].x, road.points[i].y, road.points[i + 1].x, road.points[i + 1].y);
+				best = (std::min)(best, distance);
+			}
+		}
+		return best;
+	}
+
+	// 황야의 땅: 가장 가까운 지역에 따라
+	//  - 에게해·키프로스 쪽, 남동쪽 끝, 델포이와 서쪽 해안 사이의 해협: 바다(길을 따라 이어진 모래톱·작은 섬만 땅)
+	//  - 올림포스 정상 쪽: 거의 바위인 산줄기
+	//  - 타이나론·타르타로스 쪽: 잿빛 흙의 벌판과 바위
+	//  - 그 밖: 풀밭(군데군데 바위 언덕과 연못)
+	// 월드 가장자리는 바다라서 맵 밖의 먼바다로 이어진다. 지역 정사각형 안도 일단 칠해 두고, 지역을 앉힐 때 덮는다.
+	void PaintWilderness(TileMap& world, int seed)
+	{
+		float halfWidth = world.GetWidth() * 0.5f;
+		float halfHeight = world.GetHeight() * 0.5f;
+
+		for (int gy = 0; gy < world.GetHeight(); ++gy)
+		{
+			for (int gx = 0; gx < world.GetWidth(); ++gx)
+			{
+				float x = world.GetWorldX(gx);
+				float y = world.GetWorldY(gy);
+				const WorldPlace* nearest = NearestPlace(x, y);
+				float detail = Terrain::Noise(x * 0.08f, y * 0.08f, seed + 31);
+				TileType type = TileType::Grass;
+
+				bool sea = IsPlace(nearest, "LOC_AEGEAN") || IsPlace(nearest, "LOC_CYPRUS") || (y > 95.f && x > -40.f)
+					|| (x > 36.f && x < 54.f && y < -95.f);
+				if (sea)
+				{
+					float shore = 3.f + 6.f * Terrain::Noise(x * 0.11f, y * 0.11f, seed + 21);
+					type = (DistanceToRoads(x, y) < shore) ? TileType::Grass : TileType::Water;
+				}
+				else if (IsPlace(nearest, "LOC_OLYMPUS"))
+				{
+					type = (detail > 0.2f) ? TileType::Rock : TileType::Grass;
+				}
+				else if (IsPlace(nearest, "LOC_TAENARON") || IsPlace(nearest, "LOC_TARTARUS_RIM"))
+				{
+					type = (detail > 0.74f) ? TileType::Rock : TileType::Path;
+				}
+				else if (detail > 0.78f)
+				{
+					type = TileType::Rock;
+				}
+				else if (Terrain::Noise(x * 0.1f + 50.f, y * 0.1f, seed + 41) > 0.84f)
+				{
+					type = TileType::Water;
+				}
+
+				float edge = (std::min)(halfWidth - fabsf(x), halfHeight - fabsf(y));
+				if (edge < 5.f + 4.f * Terrain::Noise(x * 0.15f, y * 0.15f, seed + 61))
+				{
+					type = TileType::Water;
+				}
+
+				world.SetTile(gx, gy, type);
+			}
+		}
+	}
+
+	// 지역의 로컬 타일맵을 월드의 그 자리에 옮겨 칠한다. 마을 가장자리 띠에선 지역의 바다·바위가 둘레 황야의 땅과
+	// 들쭉날쭉 섞이게 한다(지역 안의 걸을 수 있는 땅은 늘 그대로 — 그 위에 놓인 것들이 물에 빠지지 않게).
+	void PlaceRegionTiles(TileMap& world, const TileMap& local, const WorldPlace& place, int seed)
+	{
+		float half = place.size * 0.5f;
+
+		for (int gy = 0; gy < local.GetHeight(); ++gy)
+		{
+			for (int gx = 0; gx < local.GetWidth(); ++gx)
+			{
+				float localX = local.GetWorldX(gx);
+				float localY = local.GetWorldY(gy);
+				float x = localX + place.centerX;
+				float y = localY + place.centerY;
+				int worldX = world.GetGridX(x);
+				int worldY = world.GetGridY(y);
+				if (worldX < 0 || worldX >= world.GetWidth() || worldY < 0 || worldY >= world.GetHeight())
+				{
+					continue;
+				}
+
+				TileType tile = local.GetTile(gx, gy);
+				float border = half - (std::max)(fabsf(localX), fabsf(localY));
+				bool blocked = (tile == TileType::Water || tile == TileType::Rock);
+
+				if (place.kind == PlaceKind::Village && blocked && border < kBlendBand && world.IsWalkable(worldX, worldY))
+				{
+					float keep = border / kBlendBand;
+					if (Terrain::Noise(x * 0.35f, y * 0.35f, seed + 77) > keep)
+					{
+						continue; // 둘레 황야의 땅을 남긴다
+					}
+				}
+
+				world.SetTile(worldX, worldY, tile);
+			}
+		}
+	}
+
+	// 성역(올림포스 정상·타르타로스 경계)을 바위 띠로 두른다 — 길이 난 곳만 나중에 뚫린다(PaintRoads).
+	void PaintSanctuaryRing(TileMap& world, const WorldPlace& place)
+	{
+		float half = place.size * 0.5f;
+		Terrain::PaintWhere(world, [&place, half](float x, float y)
+		{
+			float reach = (std::max)(fabsf(x - place.centerX), fabsf(y - place.centerY));
+			return reach > half && reach <= half + kSanctuaryRing;
+		}, TileType::Rock);
+	}
+
+	// 이웃 지역 사이에 길을 깐다(지역 안 출구 → 황야 → 이웃의 출구). 물 위로는 둑길, 바위는 깎아 낸 산길이 된다.
+	void PaintRoads(TileMap& world)
+	{
+		for (const WorldRoad& road : WorldLayout::GetRoads())
+		{
+			for (int i = 0; i + 1 < 5; ++i)
+			{
+				Terrain::PaintLine(world, road.points[i].x, road.points[i].y, road.points[i + 1].x, road.points[i + 1].y,
+					kRoadHalfWidth, TileType::Path);
+			}
+		}
+	}
+
+	// 시작 자리에서 걸어서 닿지 않는 땅(황야의 노이즈가 만든 외딴 섬·바위에 갇힌 풀밭)을 둘레에 맞춰 바위나 물로 메운다.
+	// 지역은 저마다 안쪽이 이어져 있고 길로 서로 이어져 있으므로, 남는 건 아무도 갈 수 없는 황야 조각뿐이다.
+	void RemoveIsolatedPockets(TileMap& world, float startX, float startY)
+	{
+		int width = world.GetWidth();
+		int height = world.GetHeight();
+		int startGridX = world.GetGridX(startX);
+		int startGridY = world.GetGridY(startY);
+		if (!world.IsWalkable(startGridX, startGridY))
+		{
+			return;
+		}
+
+		std::vector<char> reached((size_t)(width * height), 0);
+		std::vector<int> queue;
+		queue.push_back(startGridY * width + startGridX);
+		reached[(size_t)(startGridY * width + startGridX)] = 1;
+
+		const int kSteps[4][2] = { { 1, 0 }, { -1, 0 }, { 0, 1 }, { 0, -1 } };
+		for (size_t head = 0; head < queue.size(); ++head)
+		{
+			int gx = queue[head] % width;
+			int gy = queue[head] / width;
+
+			for (const int* step : kSteps)
+			{
+				int nx = gx + step[0];
+				int ny = gy + step[1];
+				if (world.IsWalkable(nx, ny) && !reached[(size_t)(ny * width + nx)])
+				{
+					reached[(size_t)(ny * width + nx)] = 1;
+					queue.push_back(ny * width + nx);
+				}
+			}
+		}
+
+		for (int gy = 0; gy < height; ++gy)
+		{
+			for (int gx = 0; gx < width; ++gx)
+			{
+				if (!world.IsWalkable(gx, gy) || reached[(size_t)(gy * width + gx)])
+				{
+					continue;
+				}
+
+				bool nearRock = world.GetTile(gx + 1, gy) == TileType::Rock || world.GetTile(gx - 1, gy) == TileType::Rock
+					|| world.GetTile(gx, gy + 1) == TileType::Rock || world.GetTile(gx, gy - 1) == TileType::Rock;
+				world.SetTile(gx, gy, nearRock ? TileType::Rock : TileType::Water);
+			}
+		}
+	}
+
+	// 황야의 바위(산줄기·바위 언덕 가장자리에 촘촘히, 안쪽엔 드문드문 — 올림포스 쪽은 눈 덮인 바위)와 숲(노이즈로 정한
+	// 숲 짙은 곳에 많이, 들판엔 드문드문 — 길 바로 곁과 물가는 비운다).
+	void DecorateWilderness(SceneGraph& scene, const TileMap& world, std::mt19937& rng, int seed)
+	{
+		std::uniform_real_distribution<float> unit(0.f, 1.f);
+
+		for (int gy = 0; gy < world.GetHeight(); ++gy)
+		{
+			for (int gx = 0; gx < world.GetWidth(); ++gx)
+			{
+				if (world.GetTile(gx, gy) != TileType::Rock)
+				{
+					continue;
+				}
+
+				float x = world.GetWorldX(gx);
+				float y = world.GetWorldY(gy);
+				if (WorldLayout::Containing(x, y) != nullptr)
+				{
+					continue; // 지역 안의 바위는 지역을 지을 때 놓았다
+				}
+
+				bool edge = world.IsWalkable(gx + 1, gy) || world.IsWalkable(gx - 1, gy) || world.IsWalkable(gx, gy + 1) || world.IsWalkable(gx, gy - 1);
+				if (unit(rng) >= (edge ? 0.42f : 0.025f))
+				{
+					continue;
+				}
+
+				bool snowy = IsPlace(NearestPlace(x, y), "LOC_OLYMPUS");
+				scene.Spawn<RockActor>(x + (unit(rng) - 0.5f) * 0.5f, y + (unit(rng) - 0.5f) * 0.5f, 0.9f + unit(rng) * 0.6f,
+					gx * 131 + gy * 17, snowy);
+			}
+		}
+
+		const float kStep = 1.8f;
+		float halfWidth = world.GetWidth() * 0.5f - 1.f;
+		float halfHeight = world.GetHeight() * 0.5f - 1.f;
+		for (float baseY = -halfHeight; baseY < halfHeight; baseY += kStep)
+		{
+			for (float baseX = -halfWidth; baseX < halfWidth; baseX += kStep)
+			{
+				float x = baseX + (unit(rng) - 0.5f) * 1.2f;
+				float y = baseY + (unit(rng) - 0.5f) * 1.2f;
+				int gx = world.GetGridX(x);
+				int gy = world.GetGridY(y);
+				if (world.GetTile(gx, gy) != TileType::Grass || WorldLayout::Containing(x, y) != nullptr)
+				{
+					continue;
+				}
+
+				float forest = Terrain::Noise(x * 0.045f, y * 0.045f, seed + 51);
+				float chance = (std::max)(0.02f, (std::min)(0.8f, (forest - 0.42f) * 2.4f));
+				if (unit(rng) >= chance || !IsOpenGround(world, x, y, 0.8f))
+				{
+					continue;
+				}
+
+				bool nearPath = world.GetTile(world.GetGridX(x + 1.2f), gy) == TileType::Path || world.GetTile(world.GetGridX(x - 1.2f), gy) == TileType::Path
+					|| world.GetTile(gx, world.GetGridY(y + 1.2f)) == TileType::Path || world.GetTile(gx, world.GetGridY(y - 1.2f)) == TileType::Path;
+				if (nearPath)
+				{
+					continue;
+				}
+
+				SpawnRandomTree(scene, rng, x, y, 0.35f);
+			}
+		}
+	}
+
+	// 지역 경계의 안개 장벽(아직 이야기가 열지 않은 성역, 프롤로그 동안의 델포이)과 마을마다 그 신의 빛깔로 떠도는 빛 알갱이.
+	void SpawnGatesAndMotes(SceneGraph& scene)
+	{
+		for (int i = 0; i < WorldLayout::GetPlaceCount(); ++i)
+		{
+			const WorldPlace& place = WorldLayout::GetPlace(i);
+			if (place.kind == PlaceKind::Stage)
+			{
+				continue;
+			}
+
+			float half = place.size * 0.5f;
+			RegionGateActor* gate = nullptr;
+			if (IsPlace(&place, "LOC_OLYMPUS"))
+			{
+				gate = scene.Spawn<RegionGateActor>(place.centerX, place.centerY, half,
+					"[길이 막혔다] 산길을 구름이 막고 있다 — 올림포스 정상은 아직 오를 때가 아니다(이야기가 진행되면 길이 열린다).");
+				gate->SetPresence("!UNLOCK_LOC_OLYMPUS");
+			}
+			else if (IsPlace(&place, "LOC_TARTARUS_RIM"))
+			{
+				gate = scene.Spawn<RegionGateActor>(place.centerX, place.centerY, half,
+					"[길이 막혔다] 심연에서 올라오는 보랏빛 안개가 내리막길을 막는다 — 아직 내려갈 때가 아니다.");
+				gate->SetPresence("!UNLOCK_LOC_TARTARUS_RIM");
+			}
+			else if (IsPlace(&place, "LOC_DELPHI"))
+			{
+				gate = scene.Spawn<RegionGateActor>(place.centerX, place.centerY, half,
+					"[아직 떠날 수 없다] 오늘은 신탁 축제 날이다 — 델포이를 떠나기 전에 할 일이 남았다.");
+				gate->SetPresence("STORY_STEP < MQ_01.INTERVIEW");
+			}
+
+			const VillageMood& mood = place.mood;
+			int count = (place.kind == PlaceKind::Village) ? 32 : 22;
+			scene.Spawn<AmbientMotesActor>(place.centerX, place.centerY, half - 2.f, half - 2.f, count, mood.moteR, mood.moteG, mood.moteB);
+		}
+	}
+
+	// 움직이지 않는 액터(바닥 청크·나무·건물·바위·물건·불·바닥 표시·불씨)인지 — 월드를 다 지은 뒤 칸으로 묶는다.
+	// 캐릭터, 조준 링, 지역 경계의 안개 장벽(지역 전체를 덮어 칸에 넣으면 칸의 경계가 부풀어 오름), 빛 알갱이, 섬 둘레
+	// 바다(맵 전체를 덮음)는 루트에 그대로 둔다.
+	bool IsStaticActor(const Actor& actor)
+	{
+		switch (actor.GetType())
+		{
+		case ActorType::TileBatch:
+			return actor.GetWorldBounds().radius < kCellSize;
+		case ActorType::Prop:
+		case ActorType::Building:
+		case ActorType::Rock:
+		case ActorType::Item:
+		case ActorType::Fire:
+			return true;
+		case ActorType::Marker:
+			return dynamic_cast<const RingActor*>(&actor) == nullptr && dynamic_cast<const RegionGateActor*>(&actor) == nullptr;
+		case ActorType::Effect:
+			return dynamic_cast<const GlowActor*>(&actor) != nullptr;
+		default:
+			return false;
+		}
+	}
 }
 
-LoadedMap WorldMaps::Build(const std::string& locId, Renderer& renderer, unsigned int sessionSeed, bool arrivedByTravel)
+LoadedMap WorldMaps::BuildOverworld(Renderer& renderer, unsigned int sessionSeed)
 {
 	LoadedMap result;
-	result.locId = IsKnownLocation(locId) ? locId : std::string("LOC_DELPHI");
-	result.tileMap = new TileMap(kMapSize, kMapSize);
+	result.locId = "LOC_DELPHI";
+	result.tileMap = new TileMap(WorldLayout::kWorldWidth, WorldLayout::kWorldHeight);
 	result.scene = new SceneGraph();
 
-	// 실행마다 다른 세계, 같은 실행 안에선 같은 지역은 늘 같은 모습(다시 와도 같은 마을·숲).
+	TileMap& world = *result.tileMap;
+	SceneGraph& scene = *result.scene;
+
+	unsigned int worldSeed = sessionSeed ^ HashString("LOC_WORLD");
+	std::mt19937 worldRng(worldSeed);
+	int seed = (int)(worldSeed & 0x7FFFFFFFu);
+
+	PaintWilderness(world, seed);
+
+	// 지역을 하나씩 지어 월드에 앉힌다. 지역을 짓는 코드는 예전처럼 지역 가운데를 원점으로 한 좌표를 쓰고, 씬의 생성
+	// 문맥이 액터를 월드 자리로 옮기며 그 지역 소속으로 표시한다. 실행마다 다른 세계, 같은 실행 안에선 지역마다 같은 시드.
+	for (int i = 0; i < WorldLayout::GetPlaceCount(); ++i)
+	{
+		const WorldPlace& place = WorldLayout::GetPlace(i);
+		if (place.kind == PlaceKind::Stage)
+		{
+			continue;
+		}
+
+		unsigned int placeSeed = sessionSeed ^ HashString(place.locId);
+		std::mt19937 rng(placeSeed);
+		TileMap local(place.size, place.size);
+
+		g_BuildPlace = &place;
+		g_BuildHouses.clear();
+		scene.SetSpawnContext(place.locId, place.centerX, place.centerY);
+		BuildPlace(place, scene, local, rng, (int)(placeSeed & 0x7FFFFFFFu));
+		scene.ClearSpawnContext();
+		g_BuildPlace = nullptr;
+		g_BuildHouses.clear();
+
+		PlaceRegionTiles(world, local, place, seed);
+		if (place.kind == PlaceKind::Sanctuary)
+		{
+			PaintSanctuaryRing(world, place);
+		}
+	}
+
+	PaintRoads(world);
+
+	WorldPoint start = WorldLayout::ToWorld(*WorldLayout::Find("LOC_DELPHI"), kNewGameStartX, kNewGameStartY);
+	RemoveIsolatedPockets(world, start.x, start.y);
+
+	SpawnTileActors(scene, renderer, world, seed);
+	DecorateWilderness(scene, world, worldRng, seed);
+	SpawnGatesAndMotes(scene);
+
+	// 플레이어(델포이 시장 길)와 동료 피티아(존재 조건이 참일 때만 나타나 따라다닌다).
+	LevelActors actors = SpawnPlayerAndMarkers(scene, start.x, start.y);
+	SpawnCompanions(scene, *actors.player);
+
+	// 움직이지 않는 것들을 칸으로 묶는다 — 충돌·검색·컬링이 멀리 있는 칸을 통째로 건너뛰게.
+	scene.GroupIntoCells(kCellSize, IsStaticActor);
+
+	result.player = actors.player;
+	result.attackRing = actors.attackRing;
+	result.interactRing = actors.interactRing;
+	return result;
+}
+
+LoadedMap WorldMaps::BuildStage(const std::string& locId, Renderer& renderer, unsigned int sessionSeed)
+{
+	// 무대는 지금 크로노스의 배 속 하나뿐이다.
+	LoadedMap result;
+	result.locId = "LOC_KRONOS_BELLY";
+	const WorldPlace* place = WorldLayout::Find(result.locId);
+	int size = (place != nullptr) ? place->size : 32;
+	result.tileMap = new TileMap(size, size);
+	result.scene = new SceneGraph();
+
 	unsigned int mapSeed = sessionSeed ^ HashString(result.locId);
 	std::mt19937 rng(mapSeed);
 	int seed = (int)(mapSeed & 0x7FFFFFFFu);
 
-	LevelActors actors;
-	if (result.locId == "LOC_OLYMPUS_FOOT")
-	{
-		actors = BuildOlympusFoot(*result.scene, *result.tileMap, renderer, rng, seed);
-	}
-	else if (result.locId == "LOC_ATHENS")
-	{
-		actors = BuildAthens(*result.scene, *result.tileMap, renderer, rng, seed);
-	}
-	else if (result.locId == "LOC_AEGEAN")
-	{
-		actors = BuildAegean(*result.scene, *result.tileMap, renderer, rng, seed);
-	}
-	else if (result.locId == "LOC_CYPRUS")
-	{
-		actors = BuildCyprus(*result.scene, *result.tileMap, renderer, rng, seed);
-	}
-	else if (result.locId == "LOC_TAENARON")
-	{
-		actors = BuildTaenaron(*result.scene, *result.tileMap, renderer, rng, seed);
-	}
-	else if (result.locId == "LOC_WEST")
-	{
-		actors = BuildWest(*result.scene, *result.tileMap, renderer, rng, seed);
-	}
-	else if (result.locId == "LOC_OLYMPUS")
-	{
-		actors = BuildOlympus(*result.scene, *result.tileMap, renderer, rng, seed);
-	}
-	else if (result.locId == "LOC_TARTARUS_RIM")
-	{
-		actors = BuildTartarusRim(*result.scene, *result.tileMap, renderer, rng, seed);
-	}
-	else if (result.locId == "LOC_KRONOS_BELLY")
-	{
-		actors = BuildKronosBelly(*result.scene, *result.tileMap, renderer, rng, seed);
-	}
-	else
-	{
-		actors = BuildDelphi(*result.scene, *result.tileMap, renderer, rng, seed, arrivedByTravel);
-	}
-
+	LevelActors actors = BuildKronosBelly(*result.scene, *result.tileMap, renderer, rng, seed);
 	result.player = actors.player;
 	result.attackRing = actors.attackRing;
 	result.interactRing = actors.interactRing;
@@ -1516,7 +2328,5 @@ LoadedMap WorldMaps::Build(const std::string& locId, Renderer& renderer, unsigne
 
 bool WorldMaps::IsKnownLocation(const std::string& locId)
 {
-	return locId == "LOC_DELPHI" || locId == "LOC_OLYMPUS_FOOT" || locId == "LOC_ATHENS" || locId == "LOC_AEGEAN"
-		|| locId == "LOC_CYPRUS" || locId == "LOC_TAENARON" || locId == "LOC_WEST" || locId == "LOC_OLYMPUS"
-		|| locId == "LOC_TARTARUS_RIM" || locId == "LOC_KRONOS_BELLY";
+	return WorldLayout::Find(locId) != nullptr;
 }

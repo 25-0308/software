@@ -144,6 +144,12 @@
     <ClInclude Include="WorldMaps.h">
       <Filter>헤더 파일</Filter>
     </ClInclude>
+    <ClInclude Include="WorldLayout.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="Wilderness.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Actor.cpp">
@@ -258,6 +264,12 @@
       <Filter>소스 파일</Filter>
     </ClCompile>
     <ClCompile Include="WorldMaps.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="WorldLayout.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="Wilderness.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
   </ItemGroup>

@@ -6,67 +6,29 @@
 #include "Renderer.h"
 #include "StoryDirector.h"
 #include "UiDraw.h"
+#include "WorldLayout.h"
 
 namespace
 {
-	// 큰 지도(화면 왼쪽): 미니맵과 같은 코드를 크게 놓는다. 점·마름모 같은 표시는 지도만큼 키우지 않고 조금만 키운다.
+	// 큰 지도(화면 왼쪽): 미니맵과 같은 코드를 크게 놓아 월드 전체를 보여 준다. 점·마름모 같은 표시는 지도만큼 키우지
+	// 않고 조금만 키운다.
 	const float kMapCenterX = 292.f;
 	const float kMapCenterY = 290.f;
 	const float kMapHalfSize = 248.f;
-	const float kMapMarkerScale = 1.9f;
+	const float kMapMarkerScale = 1.4f;
 
-	// 지역 이름(큰 지도 위).
+	// 제목(큰 지도 위).
 	const float kTitleLeft = 44.f;
 	const float kTitleTop = 594.f;
 
-	// 오른쪽 칸(현재 목표·지역 약도·범례).
+	// 오른쪽 칸(현재 목표·마을 목록·범례).
 	const float kSidebarLeft = 560.f;
 	const float kSidebarTop = 594.f;
 	const float kSidebarWidth = 228.f;
 	const int kSidebarWrapWidth = 228;
-	const float kSectionGap = 14.f;
-	const float kAtlasHeight = 200.f;
+	const float kSectionGap = 12.f;
 	const float kLegendColumnWidth = 114.f;
 	const float kLegendRowHeight = 19.f;
-
-	// 지역 약도에서 각 지역의 자리(0~1, 왼쪽 아래가 (0,0), 위가 북쪽). 실제 그리스 지리를 대충 따른다.
-	// 데이터 파일에 선언된(region 줄) 지역 중 여기에 자리가 있는 것만 그린다 — 지역을 새로 지으면 여기에 자리를 더한다.
-	// labelRight면 이름을 점의 오른쪽에(위쪽 끝이라 아래에 두면 다른 점과 겹치는 곳), 아니면 점 아래 가운데에 쓴다.
-	// 크로노스의 배 속(LOC_KRONOS_BELLY)은 지역이 아니라 이야기 속 무대라 약도에 두지 않는다.
-	struct AtlasPlace
-	{
-		const char* locId;
-		float x, y;
-		bool labelRight;
-	};
-
-	const AtlasPlace kAtlasPlaces[] =
-	{
-		{ "LOC_OLYMPUS", 0.3f, 0.93f, true },        // 올림포스 정상
-		{ "LOC_OLYMPUS_FOOT", 0.5f, 0.78f, false },  // 테살리아(북쪽)
-		{ "LOC_WEST", 0.08f, 0.66f, false },         // 바다 건너 서쪽(라티움 방면)
-		{ "LOC_DELPHI", 0.34f, 0.56f, false },       // 그리스 중부 서쪽, 파르나소스 산기슭
-		{ "LOC_AEGEAN", 0.84f, 0.6f, false },        // 동쪽 바다의 섬들
-		{ "LOC_ATHENS", 0.6f, 0.42f, false },        // 남동쪽 아티카
-		{ "LOC_TARTARUS_RIM", 0.14f, 0.24f, false }, // 땅 밑 경계(약도에선 남서쪽 구석)
-		{ "LOC_TAENARON", 0.4f, 0.14f, false },      // 펠로폰네소스 남쪽 끝의 곶
-		{ "LOC_CYPRUS", 0.92f, 0.14f, false },       // 남동쪽 먼바다
-	};
-
-	bool FindAtlasPlace(const std::string& locId, float& outX, float& outY, bool& outLabelRight)
-	{
-		for (const AtlasPlace& place : kAtlasPlaces)
-		{
-			if (locId == place.locId)
-			{
-				outX = place.x;
-				outY = place.y;
-				outLabelRight = place.labelRight;
-				return true;
-			}
-		}
-		return false;
-	}
 
 	// 범례 한 칸: 미니맵·큰 지도와 같은 색·모양의 표시 + 이름.
 	enum class LegendShape
@@ -92,8 +54,8 @@ namespace
 		{ "이정표", MapColors::kSignpost, LegendShape::Diamond },
 		{ "이야기 물건", MapColors::kStoryItem, LegendShape::Square },
 		{ "약초", MapColors::kHerb, LegendShape::Square },
-		{ "사슴", MapColors::kDeer, LegendShape::Square },
-		{ "늑대", MapColors::kWolf, LegendShape::Square },
+		{ "온순한 짐승", MapColors::kDeer, LegendShape::Square },
+		{ "몬스터", MapColors::kWolf, LegendShape::Square },
 		{ "그림자 괴물", MapColors::kShadow, LegendShape::Square },
 	};
 
@@ -129,37 +91,10 @@ namespace
 			break;
 		}
 	}
-
-	// 점선: kDash만큼 긋고 kGap만큼 비우기를 되풀이한다.
-	void DrawDashedLine(Renderer& renderer, const Mat4& ui, float x0, float y0, float x1, float y1,
-		float r, float g, float b, float a)
-	{
-		const float kDash = 6.f;
-		const float kGap = 4.f;
-		const float kThickness = 2.f;
-
-		float dx = x1 - x0;
-		float dy = y1 - y0;
-		float length = sqrtf(dx * dx + dy * dy);
-		if (length <= 0.f)
-		{
-			return;
-		}
-
-		float dirX = dx / length;
-		float dirY = dy / length;
-
-		for (float start = 0.f; start < length; start += kDash + kGap)
-		{
-			float end = (start + kDash < length) ? start + kDash : length;
-			UiDraw::Line(renderer, ui, x0 + dirX * start, y0 + dirY * start, x0 + dirX * end, y0 + dirY * end, kThickness,
-				r, g, b, a);
-		}
-	}
 }
 
 MapScreen::MapScreen()
-	: m_Map(kMapCenterX, kMapCenterY, kMapHalfSize, kMapMarkerScale)
+	: m_Map(kMapCenterX, kMapCenterY, kMapHalfSize, kMapMarkerScale, 0.f)
 	, m_TitleText(21, true)
 	, m_HeaderText(14, true)
 	, m_BodyText(15)
@@ -192,7 +127,7 @@ void MapScreen::CreateStaticTexts()
 	m_StaticTextsCreated = true;
 
 	m_ObjectiveHeader = m_HeaderText.Create("현재 목표", kSidebarWrapWidth);
-	m_AtlasHeader = m_HeaderText.Create("지역", kSidebarWrapWidth);
+	m_AtlasHeader = m_HeaderText.Create("마을 · 숭배하는 신 · 분위기", kSidebarWrapWidth);
 	m_LegendHeader = m_HeaderText.Create("범례", kSidebarWrapWidth);
 	m_CloseHint = m_SmallText.Create("M · Esc  닫기", 200);
 	m_MiniMapHint = m_SmallText.Create("M 지도", 100);
@@ -209,11 +144,12 @@ void MapScreen::ReleaseDynamicTexts()
 	TextRasterizer::Destroy(m_Objective);
 	TextRasterizer::Destroy(m_ObjectiveHint);
 
-	for (AtlasNode& node : m_AtlasNodes)
+	for (RegionEntry& entry : m_Regions)
 	{
-		TextRasterizer::Destroy(node.label);
+		TextRasterizer::Destroy(entry.mapLabel);
+		TextRasterizer::Destroy(entry.listLine);
 	}
-	m_AtlasNodes.clear();
+	m_Regions.clear();
 }
 
 void MapScreen::Open(const StoryDirector& director)
@@ -222,9 +158,11 @@ void MapScreen::Open(const StoryDirector& director)
 	ReleaseDynamicTexts();
 
 	const StoryState& story = director.GetStory();
-	const std::string& here = story.Get("MAP");
+	const std::string& current = director.GetCurrentRegion();
+	bool inStage = WorldLayout::IsStage(current);
 
-	m_Title = m_TitleText.Create(director.GetRegionName(here), 500);
+	std::string place = current.empty() ? std::string("황야 — 마을과 마을 사이") : director.GetRegionName(current);
+	m_Title = m_TitleText.Create(inStage ? place : "그리스 세계 — " + place, 500);
 
 	const std::string& objective = director.GetObjectiveText();
 	m_Objective = m_BodyText.Create(objective.empty() ? std::string("지금은 따로 할 일이 없다.") : objective, kSidebarWrapWidth);
@@ -232,37 +170,41 @@ void MapScreen::Open(const StoryDirector& director)
 	std::string travelRegion = director.GetTravelRegion();
 	if (!travelRegion.empty())
 	{
-		m_ObjectiveHint = m_SmallText.Create("▶ 목적지: " + director.GetRegionShortName(travelRegion) + " (이정표로 이동)",
+		m_ObjectiveHint = m_SmallText.Create("▶ 목적지: " + director.GetRegionShortName(travelRegion) + " — 길을 따라 걸어가자",
 			kSidebarWrapWidth);
 	}
 
-	// 지역 약도: 데이터 파일에 선언된 지역 중 약도 자리가 있는 것. 잠긴 지역도 이름은 보여준다(이정표에도 길이 적혀 있다).
+	// 마을 목록과 지도 위 이름표: 데이터 파일에 선언된 지역 중 월드에 놓인 것(무대 안에선 지도가 무대뿐이라 이름표는 없다).
 	std::string objectiveRegion = director.GetObjectiveRegion();
 	for (const StoryRegion& region : director.GetRegions())
 	{
-		AtlasNode node;
-		if (!FindAtlasPlace(region.id, node.x, node.y, node.labelRight))
+		const WorldPlace* worldPlace = WorldLayout::Find(region.id);
+		if (worldPlace == nullptr || worldPlace->kind == PlaceKind::Stage)
 		{
 			continue;
 		}
 
-		node.locId = region.id;
-		node.current = (region.id == here);
-		node.unlocked = node.current || story.IsTrue("UNLOCK_" + region.id);
-		node.objective = (region.id == objectiveRegion);
+		RegionEntry entry;
+		entry.locId = region.id;
+		entry.worldX = worldPlace->centerX;
+		entry.worldY = worldPlace->centerY;
+		entry.current = (region.id == current);
+		entry.locked = (worldPlace->kind == PlaceKind::Sanctuary) && !story.IsTrue("UNLOCK_" + region.id);
+		entry.objective = (region.id == objectiveRegion);
 
-		std::string label = director.GetRegionShortName(region.id);
-		if (!node.unlocked)
+		std::string shortName = director.GetRegionShortName(region.id);
+		if (!inStage)
 		{
-			label += " (잠김)";
-		}
-		if (node.objective)
-		{
-			label += " ◆ 목표";
+			entry.mapLabel = m_SmallText.Create(shortName, 160);
 		}
 
-		node.label = m_SmallText.Create(label, (int)kSidebarWidth);
-		m_AtlasNodes.push_back(node);
+		std::string line = (entry.objective ? "◆ " : "") + shortName + " · " + worldPlace->worshipLabel + " · " + worldPlace->mood.label;
+		if (entry.locked)
+		{
+			line += " (막힘)";
+		}
+		entry.listLine = m_SmallText.Create(line, kSidebarWrapWidth);
+		m_Regions.push_back(entry);
 	}
 
 	m_Open = true;
@@ -287,9 +229,10 @@ void MapScreen::Draw(Renderer& renderer, SceneGraph& scene, const TileMap& tileM
 	// 화면 전체를 어둡게 덮어 멈춘 게임 화면과 구분한다.
 	UiDraw::Rect(renderer, ui, 0.f, 0.f, UiDraw::kScreenWidth, UiDraw::kScreenHeight, 0.f, 0.01f, 0.03f, 0.66f);
 
-	// 왼쪽: 지역 이름 + 큰 지도.
+	// 왼쪽: 제목 + 큰 지도 + 지역 이름표.
 	UiDraw::TextTopLeft(renderer, ui, m_Title, kTitleLeft, kTitleTop, 1.f, 0.86f, 0.5f, 1.f);
 	m_Map.Draw(renderer, scene, tileMap, camera, director.GetObjectiveSpots(), time);
+	DrawRegionLabels(renderer, ui, time);
 
 	// 오른쪽 칸: 현재 목표(+ 목표가 다른 지역이면 목적지).
 	float top = DrawHeader(renderer, ui, m_ObjectiveHeader, kSidebarLeft, kSidebarTop);
@@ -298,11 +241,10 @@ void MapScreen::Draw(Renderer& renderer, SceneGraph& scene, const TileMap& tileM
 	UiDraw::TextTopLeft(renderer, ui, m_ObjectiveHint, kSidebarLeft, top, 0.62f, 0.86f, 1.f, 1.f);
 	top -= (float)m_ObjectiveHint.height;
 
-	// 지역 약도.
+	// 마을 목록.
 	top -= kSectionGap;
 	top = DrawHeader(renderer, ui, m_AtlasHeader, kSidebarLeft, top);
-	DrawAtlas(renderer, ui, kSidebarLeft, top - kAtlasHeight, kSidebarWidth, kAtlasHeight, time);
-	top -= kAtlasHeight;
+	top = DrawRegionList(renderer, ui, kSidebarLeft, top);
 
 	// 범례.
 	top -= kSectionGap;
@@ -337,101 +279,78 @@ float MapScreen::DrawHeader(Renderer& renderer, const Mat4& ui, const TextTextur
 	return bottom - 4.f;
 }
 
-void MapScreen::DrawAtlas(Renderer& renderer, const Mat4& ui, float left, float bottom, float width, float height, float time)
+void MapScreen::DrawRegionLabels(Renderer& renderer, const Mat4& ui, float time)
 {
-	// 바탕: 금빛 테두리 + 짙은 바다색 판.
-	UiDraw::Rect(renderer, ui, left - 1.f, bottom - 1.f, width + 2.f, height + 2.f, 0.62f, 0.5f, 0.28f, 0.85f);
-	UiDraw::Rect(renderer, ui, left, bottom, width, height, 0.05f, 0.13f, 0.23f, 0.96f);
-
-	// 지금 있는 지역에서 이정표로 갈 수 있는 지역마다 길(점선)을 잇는다(목표가 있는 지역으로 가는 길은 금빛).
-	const AtlasNode* here = nullptr;
-	for (const AtlasNode& node : m_AtlasNodes)
-	{
-		if (node.current)
-		{
-			here = &node;
-		}
-	}
-
-	if (here != nullptr)
-	{
-		for (const AtlasNode& to : m_AtlasNodes)
-		{
-			if (&to == here || !to.unlocked)
-			{
-				continue;
-			}
-
-			float r = to.objective ? 1.f : 0.8f;
-			float g = to.objective ? 0.8f : 0.75f;
-			float b = to.objective ? 0.35f : 0.6f;
-			DrawDashedLine(renderer, ui, left + here->x * width, bottom + here->y * height, left + to.x * width,
-				bottom + to.y * height, r, g, b, to.objective ? 0.95f : 0.6f);
-		}
-	}
-
 	float pulse = 0.5f + 0.5f * sinf(time * 4.f);
-	for (const AtlasNode& node : m_AtlasNodes)
+
+	for (const RegionEntry& entry : m_Regions)
 	{
-		float x = floorf(left + node.x * width);
-		float y = floorf(bottom + node.y * height);
+		if (entry.mapLabel.id == 0)
+		{
+			continue;
+		}
+
+		float x, y;
+		m_Map.WorldToPanel(entry.worldX, entry.worldY, x, y);
+		x = floorf(x);
+		y = floorf(y);
 
 		// 목표가 있는 지역: 뒤에서 숨 쉬는 금빛 마름모.
-		if (node.objective)
+		if (entry.objective)
 		{
 			const MapColors::Rgb& gold = MapColors::kObjective;
-			UiDraw::Diamond(renderer, ui, x, y, 9.f + 2.5f * pulse, gold.r, gold.g, gold.b, 0.35f + 0.25f * pulse);
+			UiDraw::Diamond(renderer, ui, x, y, 9.f + 2.5f * pulse, gold.r, gold.g, gold.b, 0.3f + 0.25f * pulse);
 		}
 
-		// 지역 점: 목표가 있으면 금빛, 갈 수 있으면 하늘색, 잠겼으면 회색.
-		MapColors::Rgb color = { 0.45f, 0.45f, 0.47f };
-		if (node.objective)
-		{
-			color = MapColors::kObjective;
-		}
-		else if (node.unlocked)
-		{
-			color = MapColors::kSignpost;
-		}
-		UiDraw::Diamond(renderer, ui, x, y, 6.5f, 0.05f, 0.04f, 0.02f, 1.f);
-		UiDraw::Diamond(renderer, ui, x, y, 5.f, color.r, color.g, color.b, 1.f);
+		// 이름표: 어두운 띠 위에, 지금 있는 곳은 흰색·목표는 금빛·막힌 성역은 회색.
+		float width = (float)entry.mapLabel.width;
+		float height = (float)entry.mapLabel.height;
+		float left = floorf(x - width * 0.5f);
+		float top = floorf(y + height * 0.5f);
+		UiDraw::Rect(renderer, ui, left + 3.f, top - height + 2.f, width - 6.f, height - 4.f, 0.02f, 0.03f, 0.05f, 0.55f);
 
-		// 지금 있는 지역: 위에서 내려 가리키는 흰 화살촉(범례의 "나"와 같은 모양).
-		if (node.current)
-		{
-			const MapColors::Rgb& white = MapColors::kPlayer;
-			DrawArrow(renderer, ui, x, y + 14.f, -1.f, 4.6f, 0.05f, 0.05f, 0.07f, 1.f);
-			DrawArrow(renderer, ui, x, y + 14.f, -1.f, 3.6f, white.r, white.g, white.b, 1.f);
-		}
-
-		// 이름: 점 아래 가운데, 또는 점 오른쪽(약도 밖으로 나가지 않게 좌우를 맞춘다).
-		float labelWidth = (float)node.label.width;
-		float labelLeft = node.labelRight ? x + 9.f : x - labelWidth * 0.5f;
-		float labelTop = node.labelRight ? floorf(y + (float)node.label.height * 0.5f) : y - 8.f;
-		if (labelLeft + labelWidth > left + width - 2.f)
-		{
-			labelLeft = left + width - 2.f - labelWidth;
-		}
-		if (labelLeft < left + 2.f)
-		{
-			labelLeft = left + 2.f;
-		}
-
-		float r = 0.78f, g = 0.84f, b = 0.9f;
-		if (node.objective)
-		{
-			r = 1.f; g = 0.86f; b = 0.45f;
-		}
-		else if (node.current)
+		float r = 0.86f, g = 0.9f, b = 0.95f;
+		if (entry.current)
 		{
 			r = 1.f; g = 1.f; b = 1.f;
 		}
-		else if (!node.unlocked)
+		else if (entry.objective)
+		{
+			r = 1.f; g = 0.86f; b = 0.45f;
+		}
+		else if (entry.locked)
+		{
+			r = 0.6f; g = 0.6f; b = 0.64f;
+		}
+		UiDraw::TextTopLeft(renderer, ui, entry.mapLabel, left, top, r, g, b, 1.f);
+	}
+}
+
+float MapScreen::DrawRegionList(Renderer& renderer, const Mat4& ui, float left, float top)
+{
+	for (const RegionEntry& entry : m_Regions)
+	{
+		float r = 0.82f, g = 0.86f, b = 0.9f;
+		if (entry.current)
+		{
+			r = 1.f; g = 1.f; b = 1.f;
+
+			// 지금 있는 곳: 줄 앞의 흰 화살촉(범례의 "나"와 같은 모양, 옆을 가리키게 눕히지 않고 아래로).
+			DrawArrow(renderer, ui, left - 7.f, top - (float)entry.listLine.height * 0.5f, -1.f, 3.2f, 1.f, 1.f, 1.f, 1.f);
+		}
+		else if (entry.objective)
+		{
+			r = 1.f; g = 0.86f; b = 0.45f;
+		}
+		else if (entry.locked)
 		{
 			r = 0.55f; g = 0.55f; b = 0.58f;
 		}
-		UiDraw::TextTopLeft(renderer, ui, node.label, floorf(labelLeft), labelTop, r, g, b, 1.f);
+
+		UiDraw::TextTopLeft(renderer, ui, entry.listLine, left, top, r, g, b, 1.f);
+		top -= (float)entry.listLine.height;
 	}
+	return top;
 }
 
 void MapScreen::DrawLegend(Renderer& renderer, const Mat4& ui, float left, float top)

@@ -188,6 +188,8 @@
     <ClInclude Include="UiDraw.h" />
     <ClInclude Include="WorldActors.h" />
     <ClInclude Include="WorldMaps.h" />
+    <ClInclude Include="WorldLayout.h" />
+    <ClInclude Include="Wilderness.h" />
     <ClInclude Include="Math3D.h" />
     <ClInclude Include="Profiler.h" />
     <ClInclude Include="Mesh.h" />
@@ -229,6 +231,8 @@
     <ClCompile Include="UiDraw.cpp" />
     <ClCompile Include="WorldActors.cpp" />
     <ClCompile Include="WorldMaps.cpp" />
+    <ClCompile Include="WorldLayout.cpp" />
+    <ClCompile Include="Wilderness.cpp" />
     <ClCompile Include="Mesh.cpp" />
     <ClCompile Include="MeshCache.cpp" />
     <ClCompile Include="Profiler.cpp" />

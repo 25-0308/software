@@ -109,6 +109,11 @@ namespace
 		{ "Bronze Warrior", BodyShape::Human, 1.0f, 0.55f, 0.36f, 0.17f, 34, true, false, 6.f, 11.f, 10.f, 2.2f, 1.2f, 6, 1.3f, 40 },
 		{ "Kronos", BodyShape::Human, 2.1f, 0.17f, 0.13f, 0.22f, 150, true, true, 12.f, 40.f, 40.f, 1.6f, 2.2f, 9, 1.7f, 150 },
 		{ "White Cow", BodyShape::Cow, 1.05f, 0.95f, 0.94f, 0.9f, 50, false, false, 0.f, 0.f, 0.f, 0.f, 0.f, 0, 0.f, 0 },
+		// 황야의 몬스터(Wilderness.h). 멧돼지는 소 체형을 낮고 검게(짧은 뿔이 엄니처럼 보인다).
+		{ "Boar", BodyShape::Cow, 0.78f, 0.30f, 0.22f, 0.16f, 32, true, false, 4.5f, 7.5f, 8.f, 2.5f, 1.1f, 7, 1.3f, 35 },
+		{ "Bandit", BodyShape::Human, 0.95f, 0.42f, 0.32f, 0.24f, 36, true, false, 5.5f, 9.f, 9.f, 2.5f, 1.2f, 7, 1.4f, 40 },
+		{ "Sea Serpent", BodyShape::Serpent, 0.85f, 0.16f, 0.48f, 0.46f, 30, true, false, 5.f, 8.f, 8.f, 2.2f, 1.3f, 6, 1.3f, 35 },
+		{ "Maenad", BodyShape::Human, 0.9f, 0.50f, 0.15f, 0.40f, 28, true, false, 6.f, 9.f, 9.f, 2.7f, 1.1f, 5, 1.0f, 30 },
 	};
 
 	const AnimalSpec& GetSpec(AnimalKind kind)
@@ -1563,6 +1568,28 @@ AnimalActor::AnimalActor(AnimalKind kind, float anchorX, float anchorY, float ph
 		SetLook(look);
 		SetOpacity(0.82f);
 	}
+	else if (kind == AnimalKind::Bandit)
+	{
+		// 산적: 얼굴까지 가린 흙빛 두건 + 창. 개체마다 두건 색이 조금씩 다르다.
+		HumanLook look;
+		look.hairR = 0.12f; look.hairG = 0.09f; look.hairB = 0.06f;
+		look.hood = true;
+		look.hoodR = 0.26f * tint; look.hoodG = 0.2f * tint; look.hoodB = 0.15f;
+		look.spear = true;
+		SetLook(look);
+	}
+	else if (kind == AnimalKind::Maenad)
+	{
+		// 광란의 마이나스: 풀어헤친 긴 머리 + 담쟁이관 + 긴 옷 + 솔방울 지팡이(튀르소스)와 술잔.
+		HumanLook look;
+		look.hairR = 0.24f; look.hairG = 0.1f; look.hairB = 0.08f;
+		look.longHair = true;
+		look.robe = true;
+		look.wreath = true; look.wreathR = 0.28f; look.wreathG = 0.52f; look.wreathB = 0.22f;
+		look.staff = true;
+		look.wineCup = true;
+		SetLook(look);
+	}
 
 	FitBoundsToSize();
 }
@@ -1593,6 +1620,10 @@ AnimalNames GetAnimalNames(AnimalKind kind)
 	case AnimalKind::BronzeWarrior: return { "청동 전사", "청동 전사를" };
 	case AnimalKind::KronosEcho: return { "크로노스의 잔향", "크로노스의 잔향을" };
 	case AnimalKind::WhiteCow: return { "하얀 암소", "하얀 암소를" };
+	case AnimalKind::Boar: return { "멧돼지", "멧돼지를" };
+	case AnimalKind::Bandit: return { "산적", "산적을" };
+	case AnimalKind::SeaSerpent: return { "바다뱀", "바다뱀을" };
+	case AnimalKind::Maenad: return { "광란의 마이나스", "광란의 마이나스를" };
 	}
 	return { "짐승", "짐승을" };
 }

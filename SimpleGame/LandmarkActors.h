@@ -239,6 +239,29 @@ private:
 	bool m_Highlighted = false;
 };
 
+// 지역 경계의 안개 장벽: 아직 이야기가 열지 않은 지역(올림포스 정상·타르타로스 경계)이나 떠나면 안 되는 때(프롤로그
+// 동안의 델포이)에 그 지역 정사각형의 테두리를 막는다. 테두리를 따라 보랏빛 안개가 숨 쉬고, 플레이어가 테두리에
+// 다가오면 notice를 채팅창에 띄운다(몇 초에 한 번). 열리는 조건은 존재 조건(SetPresence)으로 준다 — 조건이 거짓이
+// 되면 숨어서 막지도 그리지도 않는다. 캐릭터 모두를 막는다(몬스터가 성역에 들어가거나 주민이 빠져나오지 않게).
+class RegionGateActor : public Actor
+{
+public:
+	// (centerX, centerY)를 가운데로 한 반 변 halfSize의 정사각형 테두리. notice는 정적 문자열.
+	RegionGateActor(float centerX, float centerY, float halfSize, const char* notice);
+
+	void OnUpdate(const UpdateContext& ctx) override;
+	void OnRender(const RenderContext& ctx) override;
+	bool BlocksCircle(float x, float y, float moverRadius) const override;
+
+private:
+	// (x, y)에서 테두리까지의 거리.
+	float DistanceToBorder(float x, float y) const;
+
+	float m_HalfSize;
+	const char* m_Notice;
+	float m_NoticeCooldown = 0.f;
+};
+
 // 목표 표시: 지금 해야 할 일의 대상(인물·물건·장소) 머리 위에서 위아래로 흔들리는 금빛 마름모. Overlay 레이어.
 // StoryDirector가 매 프레임 대상 위치를 넘겨준다(대상이 여럿이면 전부).
 class ObjectiveMarkerActor : public Actor

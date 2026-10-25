@@ -22,8 +22,10 @@ class StoryDirector;
 //    읽기 전용이다(게임을 바꾸는 요청은 없음). 다른 출처에서 열어도(파일로 직접 연 index.html 등) 받을 수 있게 CORS를 연다.
 //  - 소켓은 전부 논블로킹이고, 게임 루프가 매 프레임 Update에서 한 번씩 돌아본다. 스레드가 없으므로 씬·이야기 상태를
 //    잠금 없이 그대로 읽는다(브라우저가 1초에 1~4번 묻는 정도라 비용은 작다 — 프로파일러 "모니터" 구간).
-//  - 실제로 살아 있는 건 지금 지역 하나뿐이라(다른 지역은 떠날 때 지워진다), 지금 지역은 실시간, 가 본 다른 지역은
-//    떠나기 직전의 기록, 안 가 본 지역은 "미방문"으로 보낸다.
+//  - 지역은 모두 하나로 이어진 월드 위에 함께 살아 있으므로 모든 마을을 실시간으로 집계한다(인물·몬스터·물건은 지은
+//    지역 소속(Actor::GetHomeRegion), 황야의 몬스터는 가장 가까운 마을 소속). 이야기 무대(크로노스의 배 속)에 들어가
+//    있는 동안엔 무대가 실시간이고 월드의 마을들은 들어가기 직전의 기록이다.
+//  - 마을마다 숭배하는 신·분위기(WorldLayout.h), 주민 수(집이 있는 NPC)·집 수, 둘레 황야의 몬스터 수(주민과 1:1)를 함께 보낸다.
 //
 // JSON 형식(schema "world-monitor/1"). 나중에 다른 사람의 게임 월드와 합칠 때도 같은 형식으로 주고받을 수 있게,
 // 월드 식별(world.id/instance)과 기계용 값(state 등 영문 키) + 사람용 값(stateLabel 등 한글)을 함께 담는다.
@@ -34,19 +36,22 @@ class StoryDirector;
 //                passive, defense, critChance, lifeOnKill, cooldownScale, speedScale, buffRemaining, awakened,
 //                skills: [ { slot(basic|ultimate), key(Q|R), name, summary, cooldown, remaining, unlocked } ] },
 //   "story":   { step, objective, objectiveRegion, travelRegion, dialogueActive, variables{이름: 값} },
-//   "villages": [ { id, name, shortName, live, visited, unlocked, objectiveHere, capturedAt, age,
+//   "villages": [ { id, name, shortName, kind(village|sanctuary|stage), live, visited, unlocked, objectiveHere, here, capturedAt, age,
+//                   worship(신앙 키 — 성역은 NONE), worshipName, mood, moodLabel, moodText, x, y(월드 중심),
 //                   status(calm|alert|danger|unvisited), statusLabel,
 //                   npcCount, npcPresent, mobCount, mobPresent, mobHostile, mobChasing, mobsByKind{종류: 수},
+//                   residents, residentQuota, houses, wildMonsters, wildQuota(주민과 1:1),
 //                   kills, herbs, storyItems,
 //                   npcs: [ { id, name, tag, x, y, distance(실시간만, 아니면 null), present, companion, faded, flaring,
 //                             objective, talkable, state(idle|following|away|faded|flaring|hidden), stateLabel,
 //                             faith(ZEUS…JUPITER|NONE), faithName, attitude(same|ally|friendly|neutral|wary|hostile|unknown — 플레이어의
 //                             수호신을 대하는 태도), attitudeLabel, activity(idle|stroll|chat|argue|scuffle|brawl|follow),
-//                             activityLabel, hotheaded, social, humbled } ],
-//                   mobs: [ { id, kind(deer|wolf|shadowWolf|shadowPython|bronzeWarrior|kronosEcho|whiteCow), name, hp, maxHp, x, y,
+//                             activityLabel, hotheaded, social, humbled, resident, house(집 번호, 없으면 0) } ],
+//                   mobs: [ { id, kind(deer|wolf|shadowWolf|shadowPython|bronzeWarrior|kronosEcho|whiteCow|boar|bandit|seaSerpent|maenad),
+//                             name, hp, maxHp, x, y, wild(황야의 몬스터인지),
 //                             distance, present, hostile, chasing, returning, stunned, charmed, frightened, objective,
 //                             state(roaming|chasing|returning|stunned|charmed|frightened|hidden), stateLabel } ] } ],
-//   "totals":  { villages, visited, npcs, npcsPresent, mobs, mobsPresent, mobsHostile, mobsChasing, kills },
+//   "totals":  { villages, visited, npcs, npcsPresent, mobs, mobsPresent, mobsHostile, mobsChasing, kills, residents, houses, wildMonsters },
 //   "faiths":  { playerFaith, list: [ { key, name, patron(수호신으로 고를 수 있는지), npcs(기록된 신도 수) } ], noFaithNpcs,
 //                relations: [ { a, b, value(-2~+2), key, label } ] (0이 아닌 관계만) },
 //   "events":  [ { seq, time, type(log.dialogue|log.info|log.combat|log.damage|log.reward|story.step|world.travel|monitor.start),
@@ -68,12 +73,13 @@ public:
 	bool IsRunning() const { return m_Running; }
 	std::string GetUrl() const;
 
-	// 매 프레임 게임 갱신 뒤에: FPS 집계, 지금 지역 집계(0.5초마다), 진행 단계·지역 변화 이벤트, 브라우저 요청 처리.
-	void Update(float deltaSeconds, SceneGraph& scene, const StoryDirector& director);
+	// 매 프레임 게임 갱신 뒤에: FPS 집계, 마을 집계(0.5초마다), 진행 단계·지역 변화 이벤트, 브라우저 요청 처리.
+	// world는 하나로 이어진 월드, stage는 지금 들어가 있는 이야기 무대(없으면 nullptr — 그동안 월드는 멈춰 있다).
+	void Update(float deltaSeconds, SceneGraph& world, SceneGraph* stage, const StoryDirector& director);
 
-	// 지금 지역의 상태를 바로 집계한다. 지역을 옮기기 직전(LoadMap이 씬을 지우기 전)에 불러서 떠나는 지역의
-	// 마지막 모습을 남긴다.
-	void Capture(SceneGraph& scene, const StoryDirector& director);
+	// 월드의 모든 마을(무대에 들어가 있으면 무대도)을 바로 집계한다. 무대로 들어가기 직전에도 불러서 월드의 마지막
+	// 모습을 남긴다.
+	void Capture(SceneGraph& world, const StoryDirector& director);
 
 	// 수호신 스킬(Q·R)의 남은 쿨타임과 그 쿨타임의 전체 길이(초, SkillSlot 순서). 매 프레임 Update 전에 넘긴다.
 	void SetSkillCooldowns(const float remaining[], const float total[]);
@@ -108,6 +114,7 @@ private:
 		bool hotheaded = false;
 		bool social = false;
 		bool humbled = false; // 플레이어와의 주먹다짐에서 졌다
+		int house = 0;        // 사는 집 번호(마을 주민), 0이면 집 없음
 	};
 
 	// 집계한 짐승·괴물 하나.
@@ -127,6 +134,7 @@ private:
 		bool stunned = false;
 		bool charmed = false;
 		bool frightened = false;
+		bool wild = false; // 황야의 몬스터(마을 주민과 1:1)
 	};
 
 	// 마을(지역) 하나의 마지막 집계.
@@ -138,8 +146,12 @@ private:
 		std::vector<MobStatus> mobs;
 		int herbs = 0;      // 남은 약초
 		int storyItems = 0; // 지금 주울 수 있는 이야기 물건
-		int kills = 0;      // 이번 실행에서 이 지역에서 쓰러뜨린 몹 수
+		int kills = 0;      // 이번 실행에서 이 지역(황야 포함)에서 쓰러뜨린 몹 수
+		int houses = 0;     // 사람이 사는 집 수
 	};
+
+	// 한 씬(월드 또는 무대)의 액터를 지역별로 나눠 담는다. stageId가 비어 있지 않으면 모두 그 무대 소속.
+	void CaptureScene(SceneGraph& scene, const std::string& stageId, const StoryDirector& director);
 
 	struct Event
 	{
@@ -188,6 +200,7 @@ private:
 
 	float m_Time = 0.f;
 	float m_CaptureTimer = 0.f;
+	SceneGraph* m_Stage = nullptr; // 지금 들어가 있는 이야기 무대(Update가 넘겨받음)
 
 	// 시작할 때 자동으로 열기(RequestAutoOpen).
 	bool m_AutoOpenPending = false;

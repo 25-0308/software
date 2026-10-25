@@ -429,13 +429,17 @@ void RingActor::OnRender(const RenderContext& ctx)
 
 // -------------------------------------------------------- AmbientMotesActor
 
-AmbientMotesActor::AmbientMotesActor(float halfWidth, float halfHeight, int count)
+AmbientMotesActor::AmbientMotesActor(float centerX, float centerY, float halfWidth, float halfHeight, int count, float r, float g, float b)
 	: Actor(ActorType::Effect, RenderLayer::Overlay)
 	, m_HalfWidth(halfWidth)
 	, m_HalfHeight(halfHeight)
 	, m_Count(count)
 {
-	// 경계를 지정하지 않는다(맵 전체에 흩어져 있어 항상 그린다).
+	SetPosition(centerX, centerY, 0.f);
+	SetColor(r, g, b);
+
+	// 흩뿌린 범위(+ 맴도는 폭)를 감싸는 경계 — 마을이 화면 밖이면 통째로 건너뛴다.
+	SetBoundingSphere(sqrtf(halfWidth * halfWidth + halfHeight * halfHeight) + 1.5f, 1.f);
 }
 
 void AmbientMotesActor::OnRender(const RenderContext& ctx)
@@ -457,13 +461,13 @@ void AmbientMotesActor::OnRender(const RenderContext& ctx)
 		}
 
 		// 고정 기준점 주변을 천천히 맴돌며 위아래로 살짝 오르내린다.
-		float x = (IndexRandom(i, 1.f) * 2.f - 1.f) * m_HalfWidth + sinf(time * 0.21f + fi * 1.7f) * 0.8f;
-		float y = (IndexRandom(i, 2.f) * 2.f - 1.f) * m_HalfHeight + cosf(time * 0.17f + fi * 2.3f) * 0.8f;
+		float x = GetWorldX() + (IndexRandom(i, 1.f) * 2.f - 1.f) * m_HalfWidth + sinf(time * 0.21f + fi * 1.7f) * 0.8f;
+		float y = GetWorldY() + (IndexRandom(i, 2.f) * 2.f - 1.f) * m_HalfHeight + cosf(time * 0.17f + fi * 2.3f) * 0.8f;
 		float z = 0.35f + speed * 1.1f + sinf(time * 0.8f + fi) * 0.15f;
 
 		// 카메라를 향해 세운 부드러운 원. 밝기가 1을 넘어서 블룸으로 빛난다.
 		Mat4 model = Mat4::Translate(x, y, z) * Mat4::RotateZ(-kQuarterPi) * Mat4::RotateX(kHalfPi)
 			* Mat4::Scale(kMoteSize, kMoteSize, 1.f);
-		ctx.renderer.DrawSoftDisc(ctx.viewProjection * model, 1.8f, 1.5f, 0.7f, alpha);
+		ctx.renderer.DrawSoftDisc(ctx.viewProjection * model, GetR(), GetG(), GetB(), alpha);
 	}
 }

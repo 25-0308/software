@@ -366,7 +366,7 @@
 			<div class="panel-head"><h2>NPC</h2><span class="count" id="npcCount"></span></div>
 			<div class="table-wrap">
 				<table>
-					<thead><tr><th>이름</th><th>마을</th><th>상태</th><th>신앙 · 나를 대하는 태도</th><th>행동</th><th>표시</th><th class="num">위치</th><th class="num">거리</th></tr></thead>
+					<thead><tr><th>이름</th><th>마을</th><th>상태</th><th>신앙 · 나를 대하는 태도</th><th>행동</th><th>집</th><th>표시</th><th class="num">위치</th><th class="num">거리</th></tr></thead>
 					<tbody id="npcRows"></tbody>
 				</table>
 			</div>
@@ -583,6 +583,7 @@
 	// [지역 ID, 이름, 연관 신, 설명] — STORY.md 4장(스포일러 없이).
 	const REGIONS = [
 		['LOC_DELPHI', '델포이 · 파르나소스 산기슭', '아폴론', '시작 지역이자 고향. 세상의 배꼽이라 불리는 신탁의 도시 — 그리고 그 신탁에 금이 간 곳.'],
+		['LOC_THEBES', '테베 · 카드모스의 도시', '디오니소스', '델포이·올림포스 산기슭·아테네 사이의 갈림길. 포도주와 북소리가 끊이지 않는 축제의 도시 — 성 밖 숲엔 축제에서 돌아오지 못한 마이나스들이 떠돈다.'],
 		['LOC_OLYMPUS_FOOT', '올림포스 산기슭 · 테살리아', '제우스', '신들의 대회의가 열리는 언덕, 구불구불한 강과 목동 마을, 헤파이스토스의 대장간.'],
 		['LOC_ATHENS', '아테네 · 폴리스 연합', '아테나', '말 많은 도시. 아고라의 쓰러진 신상과 식어 가는 신앙 — 인간 정치의 무대.'],
 		['LOC_AEGEAN', '에게해 군도', '포세이돈', '모래톱으로 이어진 섬들과 난파선. 바다의 왕이 형을 원망하는 곳.'],
@@ -788,7 +789,7 @@
 
 	function renderStory(data) {
 		const s = data.story || {};
-		const travel = s.travelRegion ? `<span class="badge goal">▶ 목적지 ${esc(villageName(s.travelRegion))} (이정표로 이동)</span>` : '';
+		const travel = s.travelRegion ? `<span class="badge goal">▶ 목적지 ${esc(villageName(s.travelRegion))} (길을 따라 걸어서)</span>` : '';
 		const dialogue = s.dialogueActive ? ' <span class="badge talk">대화 중</span>' : '';
 
 		setHtml($('story'), `
@@ -798,7 +799,7 @@
 	}
 
 	function renderVillages(data) {
-		const kindNames = { deer: '사슴', wolf: '늑대', shadowWolf: '그림자 늑대', shadowPython: '그림자 퓌톤', bronzeWarrior: '청동 전사', kronosEcho: '크로노스의 잔향', whiteCow: '하얀 암소' };
+		const kindNames = { deer: '사슴', wolf: '늑대', shadowWolf: '그림자 늑대', shadowPython: '그림자 퓌톤', bronzeWarrior: '청동 전사', kronosEcho: '크로노스의 잔향', whiteCow: '하얀 암소', boar: '멧돼지', bandit: '산적', seaSerpent: '바다뱀', maenad: '광란의 마이나스' };
 
 		setHtml($('villages'), (data.villages || []).map((v) => {
 			const badges = [];
@@ -817,6 +818,8 @@
 			const kinds = Object.entries(v.mobsByKind || {}).map(([kind, count]) => `<span class="badge">${esc(kindNames[kind] || kind)} ${esc(count)}</span>`).join('');
 			const selected = ui.village === v.id ? ' selected' : '';
 
+			const worship = v.worshipName ? `<div class="small">숭배: <b>${esc(v.worshipName)}</b> · 분위기: <b>${esc(v.moodLabel)}</b> — ${esc(v.moodText)}</div>` : '';
+			const quota = v.residentQuota ? `<div class="small">주민 ${esc(v.residents)}/${esc(v.residentQuota)}명 · 집 ${esc(v.houses)}채 · 황야 몬스터 ${esc(v.wildMonsters)}/${esc(v.wildQuota)}마리(1:1)</div>` : '';
 			const stats = v.visited ? `
 				<div class="stats">
 					<div><b>${esc(v.npcPresent)}<span class="small">/${esc(v.npcCount)}</span></b><span>NPC 등장/전체</span></div>
@@ -832,6 +835,7 @@
 				<button type="button" class="village ${esc(v.status)}${selected}" data-village="${esc(v.id)}">
 					<div class="title"><strong>${esc(v.shortName || v.name)}</strong><span class="full">${esc(v.name)}</span></div>
 					<div class="badges"><span class="pill ${esc(v.status)}">${esc(v.statusLabel)}</span>${badges.join('')}</div>
+					${worship}${quota}
 					${stats}
 				</button>`;
 		}).join(''));
@@ -885,7 +889,7 @@
 		$('npcCount').textContent = `${rows.length}명`;
 
 		setHtml($('npcRows'), rows.length === 0
-			? '<tr><td colspan="8" class="empty">조건에 맞는 NPC가 없다.</td></tr>'
+			? '<tr><td colspan="9" class="empty">조건에 맞는 NPC가 없다.</td></tr>'
 			: rows.map(({ item, village }) => {
 				const marks = [];
 				if (item.objective) marks.push('<span class="badge goal">◆ 목표</span>');
@@ -898,6 +902,7 @@
 						<td><span class="pill ${esc(item.state)}">${esc(item.stateLabel)}</span></td>
 						<td><div>${esc(item.faithName || '—')}${item.hotheaded ? ' <span class="small">다혈질</span>' : ''}</div><div class="badges"><span class="pill ${esc(item.attitude || 'unknown')}">${esc(item.attitudeLabel || '—')}</span>${item.humbled ? '<span class="badge">한 번 졌음</span>' : ''}</div></td>
 						<td><span class="pill ${esc(item.activity || 'idle')}">${esc(item.activityLabel || '—')}</span></td>
+						<td>${item.house ? `${esc(item.house)}번 집` : '<span class="small">없음(방문객·이야기 인물)</span>'}</td>
 						<td><div class="badges">${marks.join('')}</div></td>
 						<td class="num">${formatPos(item.x, item.y)}</td>
 						<td class="num">${item.distance == null ? '—' : Number(item.distance).toFixed(1)}</td>
@@ -1247,6 +1252,7 @@
 				<div class="lore-card${id === here ? ' here' : ''}${locked ? ' locked' : ''}">
 					<div class="name"><strong>${esc(name)}</strong><span class="domain">${esc(god)}</span></div>
 					<div>${esc(text)}</div>
+					${village && village.moodLabel ? `<div class="small">분위기: <b>${esc(village.moodLabel)}</b> — ${esc(village.moodText)}${village.residentQuota ? ` · 주민 ${esc(village.residents)}명 · 황야 몬스터 ${esc(village.wildMonsters)}마리` : ''}</div>` : ''}
 					${badges.length ? `<div class="badges">${badges.join('')}</div>` : ''}
 				</div>`;
 		}).join('')}</div>`;

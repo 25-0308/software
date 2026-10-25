@@ -215,6 +215,20 @@ public:
 	NpcMemory& Memory() { return m_Memory; }
 	const NpcMemory& Memory() const { return m_Memory; }
 
+	// ---- 집(마을 주민) ----
+	// 이 사람이 사는 집: 마을 안의 집 번호(1부터)와 그 집 문 앞(월드 좌표). 한 집에 최대 세 명이 산다(가족이거나 혼자).
+	// 0이면 집이 없다 — 신·이야기 인물·방문객(순례객·조난자·영혼 등).
+	void SetHome(int houseNumber, float doorX, float doorY)
+	{
+		m_HouseNumber = houseNumber;
+		m_HomeX = doorX;
+		m_HomeY = doorY;
+	}
+	int GetHouseNumber() const { return m_HouseNumber; }
+	bool IsResident() const { return m_HouseNumber > 0; }
+	float GetHomeX() const { return m_HomeX; }
+	float GetHomeY() const { return m_HomeY; }
+
 	void OnUpdate(const UpdateContext& ctx) override;
 
 private:
@@ -243,6 +257,9 @@ private:
 	BrawlOutcome m_BrawlOutcome = BrawlOutcome::None;
 	unsigned int m_RandomState = 1u;
 	NpcMemory m_Memory;
+	int m_HouseNumber = 0;
+	float m_HomeX = 0.f;
+	float m_HomeY = 0.f;
 };
 
 // 플레이어: 입력에 따른 이동/충돌, 공격 모션, 능력치(경험치/레벨업/체력)를 가진다.
@@ -339,6 +356,11 @@ enum class AnimalKind
 	BronzeWarrior, // 청동 전사: 헤파이스토스가 내전 양쪽 진영에 팔아넘긴 청동 자동인형 병사(MQ_04)
 	KronosEcho,    // 크로노스의 잔향: 타르타로스에서 깨어난 옛 왕의 거대한 메아리(MQ_05 최종 보스)
 	WhiteCow,      // 하얀 암소: 헤라의 저주로 암소가 된 이오(SQ_AEGEAN_02). 공격하지 않고, 말을 걸 수 있다
+	// 아래는 마을과 마을 사이 황야의 몬스터(Wilderness.h — 마을마다 주민 수만큼).
+	Boar,          // 멧돼지: 굵고 낮은 검갈색 몸에 엄니. 들판과 숲에서 돌진해 온다
+	Bandit,        // 산적: 두건을 쓰고 창을 든 길목의 도적(사람 모양 괴물)
+	SeaSerpent,    // 바다뱀: 물가와 둑길을 기어 다니는 청록빛 뱀
+	Maenad,        // 광란의 마이나스: 디오니소스의 축제에 취해 이성을 잃은 여신도(테베 둘레)
 };
 
 // 짐승·괴물의 한글 이름(채팅창 로그·모니터용). object는 목적격 조사("을/를")까지 붙인 꼴.
@@ -357,6 +379,18 @@ class AnimalActor : public CharacterActor
 {
 public:
 	AnimalActor(AnimalKind kind, float anchorX, float anchorY, float phase);
+
+	// 지금 자리를 배회 기준점(anchor)으로 다시 잡는다(지역을 월드에 앉히며 생성 뒤에 옮겨진 경우).
+	void ResetAnchor()
+	{
+		m_AnchorX = GetX();
+		m_AnchorY = GetY();
+	}
+
+	// 마을과 마을 사이 황야에 사는 몬스터인지(Wilderness가 만든 것 — 소속 마을은 GetHomeRegion). 이야기 속 괴물(균열의
+	// 그림자, 청동 전사, 크로노스 등)은 아니다. 마을 주민 수와 1:1로 맞추고, 쓰러지면 얼마 뒤 다시 나타난다.
+	void SetWild(bool wild) { m_Wild = wild; }
+	bool IsWild() const { return m_Wild; }
 
 	void OnUpdate(const UpdateContext& ctx) override;
 	void OnRender(const RenderContext& ctx) override;
@@ -413,4 +447,5 @@ private:
 	float m_StunTimer = 0.f;
 	float m_CharmTimer = 0.f;
 	float m_FearTimer = 0.f;
+	bool m_Wild = false;
 };

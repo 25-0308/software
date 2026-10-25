@@ -1,0 +1,838 @@
+{
+	"frames": {
+		"Canid": {
+			"rig": "Canid_Rig",
+			"bones": [
+				"root",
+				"pelvis",
+				"spine",
+				"chest",
+				"neck",
+				"head",
+				"jaw",
+				"ear.L",
+				"ear.R",
+				"scapula.L",
+				"upperarm.L",
+				"forearm.L",
+				"frontfoot.L",
+				"fronttoe.L",
+				"scapula.R",
+				"upperarm.R",
+				"forearm.R",
+				"frontfoot.R",
+				"fronttoe.R",
+				"tail1",
+				"tail2",
+				"tail3",
+				"thigh.L",
+				"shin.L",
+				"hindfoot.L",
+				"hindtoe.L",
+				"thigh.R",
+				"shin.R",
+				"hindfoot.R",
+				"hindtoe.R"
+			],
+			"clips": [
+				{
+					"name": "Pose_Base",
+					"frames": 1,
+					"fps": 30,
+					"duration": 0.0333,
+					"loop": false,
+					"markers": {}
+				},
+				{
+					"name": "Idle",
+					"frames": 75,
+					"fps": 30,
+					"duration": 2.5,
+					"loop": true,
+					"markers": {}
+				},
+				{
+					"name": "Walk",
+					"frames": 24,
+					"fps": 30,
+					"duration": 0.8,
+					"loop": true,
+					"markers": {
+						"HL_contact": 0.0,
+						"FL_contact": 0.2,
+						"HR_contact": 0.4,
+						"FR_contact": 0.6
+					},
+					"speed": 0.645
+				},
+				{
+					"name": "Run",
+					"frames": 14,
+					"fps": 30,
+					"duration": 0.4667,
+					"loop": true,
+					"markers": {
+						"HL_contact": 0.0,
+						"FL_contact": 0.2567,
+						"HR_contact": 0.0467,
+						"FR_contact": 0.21
+					},
+					"speed": 3.08
+				},
+				{
+					"name": "Turn_L90",
+					"frames": 30,
+					"fps": 30,
+					"duration": 1.0,
+					"loop": false,
+					"markers": {},
+					"rootMotion": {
+						"yawDegrees": 90
+					}
+				},
+				{
+					"name": "Turn_R90",
+					"frames": 30,
+					"fps": 30,
+					"duration": 1.0,
+					"loop": false,
+					"markers": {},
+					"rootMotion": {
+						"yawDegrees": -90
+					}
+				},
+				{
+					"name": "Attack",
+					"frames": 24,
+					"fps": 30,
+					"duration": 0.8,
+					"loop": false,
+					"markers": {
+						"hit": 0.376,
+						"recover": 0.496
+					}
+				},
+				{
+					"name": "Jump_Start",
+					"frames": 10,
+					"fps": 30,
+					"duration": 0.3333,
+					"loop": false,
+					"markers": {
+						"takeoff": 0.3333
+					}
+				},
+				{
+					"name": "Jump_Air",
+					"frames": 16,
+					"fps": 30,
+					"duration": 0.5333,
+					"loop": true,
+					"markers": {}
+				},
+				{
+					"name": "Jump_Land",
+					"frames": 12,
+					"fps": 30,
+					"duration": 0.4,
+					"loop": false,
+					"markers": {
+						"impact": 0.12
+					}
+				},
+				{
+					"name": "Jump",
+					"frames": 30,
+					"fps": 30,
+					"duration": 1.0,
+					"loop": false,
+					"markers": {
+						"takeoff": 0.25,
+						"land": 0.75
+					},
+					"rootMotion": {
+						"heightPeak": 0.5
+					}
+				}
+			],
+			"attackStyle": "bite",
+			"parts": [
+				{
+					"name": "Canid_Legs",
+					"slot": "Legs",
+					"desc": "발가락으로 디디는 네 다리 + 발바닥 패드",
+					"roles": [
+						"Fur",
+						"Nose"
+					],
+					"verts": 394,
+					"faces": 422
+				},
+				{
+					"name": "Canid_Body_Lean",
+					"slot": "Body",
+					"desc": "날렵한 늑대 몸통(밝은 배·어두운 등)",
+					"roles": [
+						"Fur",
+						"FurLight",
+						"FurDark"
+					],
+					"verts": 100,
+					"faces": 92
+				},
+				{
+					"name": "Canid_Body_Muscular",
+					"slot": "Body",
+					"desc": "굵은 포식자 몸통(사자)",
+					"roles": [
+						"Fur",
+						"FurLight"
+					],
+					"verts": 100,
+					"faces": 92
+				},
+				{
+					"name": "Canid_Head_Wolf",
+					"slot": "Head",
+					"desc": "늑대 머리(길쭉한 주둥이)",
+					"roles": [
+						"Fur",
+						"FurLight",
+						"Nose",
+						"Eye",
+						"Teeth",
+						"Tongue"
+					],
+					"verts": 132,
+					"faces": 128
+				},
+				{
+					"name": "Canid_Head_Lion",
+					"slot": "Head",
+					"desc": "사자 머리(짧고 넓은 주둥이)",
+					"roles": [
+						"Fur",
+						"FurLight",
+						"Nose",
+						"Eye",
+						"Teeth",
+						"Tongue"
+					],
+					"verts": 132,
+					"faces": 128
+				},
+				{
+					"name": "Canid_Ears_Pointed",
+					"slot": "Ears",
+					"desc": "쫑긋 선 세모 귀",
+					"roles": [
+						"Fur"
+					],
+					"verts": 18,
+					"faces": 18
+				},
+				{
+					"name": "Canid_Ears_Round",
+					"slot": "Ears",
+					"desc": "둥근 귀(사자)",
+					"roles": [
+						"Fur"
+					],
+					"verts": 46,
+					"faces": 56
+				},
+				{
+					"name": "Canid_Tail_Bushy",
+					"slot": "Tail",
+					"desc": "덥수룩한 꼬리",
+					"roles": [
+						"Fur"
+					],
+					"verts": 29,
+					"faces": 29
+				},
+				{
+					"name": "Canid_Tail_Tuft",
+					"slot": "Tail",
+					"desc": "끝에 털 술이 달린 가는 꼬리(사자·소)",
+					"roles": [
+						"Fur",
+						"Mane"
+					],
+					"verts": 36,
+					"faces": 40
+				},
+				{
+					"name": "Canid_Mane",
+					"slot": "Mane",
+					"desc": "사자 갈기",
+					"roles": [
+						"Mane"
+					],
+					"verts": 528,
+					"faces": 880
+				}
+			]
+		},
+		"Cervid": {
+			"rig": "Cervid_Rig",
+			"bones": [
+				"root",
+				"pelvis",
+				"spine",
+				"chest",
+				"neck",
+				"head",
+				"jaw",
+				"ear.L",
+				"ear.R",
+				"scapula.L",
+				"upperarm.L",
+				"forearm.L",
+				"frontfoot.L",
+				"fronttoe.L",
+				"scapula.R",
+				"upperarm.R",
+				"forearm.R",
+				"frontfoot.R",
+				"fronttoe.R",
+				"tail1",
+				"tail2",
+				"tail3",
+				"thigh.L",
+				"shin.L",
+				"hindfoot.L",
+				"hindtoe.L",
+				"thigh.R",
+				"shin.R",
+				"hindfoot.R",
+				"hindtoe.R"
+			],
+			"clips": [
+				{
+					"name": "Pose_Base",
+					"frames": 1,
+					"fps": 30,
+					"duration": 0.0333,
+					"loop": false,
+					"markers": {}
+				},
+				{
+					"name": "Idle",
+					"frames": 75,
+					"fps": 30,
+					"duration": 2.5,
+					"loop": true,
+					"markers": {}
+				},
+				{
+					"name": "Walk",
+					"frames": 28,
+					"fps": 30,
+					"duration": 0.9333,
+					"loop": true,
+					"markers": {
+						"HL_contact": 0.0,
+						"FL_contact": 0.2333,
+						"HR_contact": 0.4667,
+						"FR_contact": 0.7
+					},
+					"speed": 0.603
+				},
+				{
+					"name": "Run",
+					"frames": 16,
+					"fps": 30,
+					"duration": 0.5333,
+					"loop": true,
+					"markers": {
+						"HL_contact": 0.0,
+						"FL_contact": 0.2667,
+						"HR_contact": 0.0213,
+						"FR_contact": 0.288
+					},
+					"speed": 3.5
+				},
+				{
+					"name": "Turn_L90",
+					"frames": 30,
+					"fps": 30,
+					"duration": 1.0,
+					"loop": false,
+					"markers": {},
+					"rootMotion": {
+						"yawDegrees": 90
+					}
+				},
+				{
+					"name": "Turn_R90",
+					"frames": 30,
+					"fps": 30,
+					"duration": 1.0,
+					"loop": false,
+					"markers": {},
+					"rootMotion": {
+						"yawDegrees": -90
+					}
+				},
+				{
+					"name": "Attack",
+					"frames": 24,
+					"fps": 30,
+					"duration": 0.8,
+					"loop": false,
+					"markers": {
+						"hit": 0.416,
+						"recover": 0.496
+					}
+				},
+				{
+					"name": "Jump_Start",
+					"frames": 10,
+					"fps": 30,
+					"duration": 0.3333,
+					"loop": false,
+					"markers": {
+						"takeoff": 0.3333
+					}
+				},
+				{
+					"name": "Jump_Air",
+					"frames": 16,
+					"fps": 30,
+					"duration": 0.5333,
+					"loop": true,
+					"markers": {}
+				},
+				{
+					"name": "Jump_Land",
+					"frames": 12,
+					"fps": 30,
+					"duration": 0.4,
+					"loop": false,
+					"markers": {
+						"impact": 0.12
+					}
+				},
+				{
+					"name": "Jump",
+					"frames": 30,
+					"fps": 30,
+					"duration": 1.0,
+					"loop": false,
+					"markers": {
+						"takeoff": 0.25,
+						"land": 0.75
+					},
+					"rootMotion": {
+						"heightPeak": 0.5
+					}
+				}
+			],
+			"attackStyle": "butt",
+			"parts": [
+				{
+					"name": "Cervid_Legs",
+					"slot": "Legs",
+					"desc": "가는 네 다리 + 갈라진 발굽",
+					"roles": [
+						"Fur",
+						"Hoof"
+					],
+					"verts": 282,
+					"faces": 266
+				},
+				{
+					"name": "Cervid_Body_Sleek",
+					"slot": "Body",
+					"desc": "사슴 몸통(흰 배)",
+					"roles": [
+						"Fur",
+						"FurLight",
+						"FurDark"
+					],
+					"verts": 110,
+					"faces": 102
+				},
+				{
+					"name": "Cervid_Body_Wool",
+					"slot": "Body",
+					"desc": "양털 몸통(덩어리 털)",
+					"roles": [
+						"Fur"
+					],
+					"verts": 636,
+					"faces": 962
+				},
+				{
+					"name": "Cervid_Head_Deer",
+					"slot": "Head",
+					"desc": "사슴 머리(큰 눈·가는 주둥이)",
+					"roles": [
+						"Fur",
+						"FurLight",
+						"Nose",
+						"Eye"
+					],
+					"verts": 104,
+					"faces": 102
+				},
+				{
+					"name": "Cervid_Head_Sheep",
+					"slot": "Head",
+					"desc": "양 머리(검은 얼굴·이마 털뭉치)",
+					"roles": [
+						"FurDark",
+						"Fur",
+						"Nose",
+						"Eye"
+					],
+					"verts": 108,
+					"faces": 114
+				},
+				{
+					"name": "Cervid_Ears_Long",
+					"slot": "Ears",
+					"desc": "옆으로 펼친 큰 귀(사슴)",
+					"roles": [
+						"Fur"
+					],
+					"verts": 38,
+					"faces": 38
+				},
+				{
+					"name": "Cervid_Ears_Droopy",
+					"slot": "Ears",
+					"desc": "축 처진 귀(양)",
+					"roles": [
+						"FurDark"
+					],
+					"verts": 46,
+					"faces": 56
+				},
+				{
+					"name": "Cervid_Horns_Antlers",
+					"slot": "Horns",
+					"desc": "가지 친 수사슴 뿔",
+					"roles": [
+						"Horn"
+					],
+					"verts": 96,
+					"faces": 96
+				},
+				{
+					"name": "Cervid_Horns_Ram",
+					"slot": "Horns",
+					"desc": "말린 숫양 뿔",
+					"roles": [
+						"Horn"
+					],
+					"verts": 168,
+					"faces": 160
+				},
+				{
+					"name": "Cervid_Tail_Short",
+					"slot": "Tail",
+					"desc": "짧은 꼬리(밑이 흰)",
+					"roles": [
+						"Fur",
+						"FurLight"
+					],
+					"verts": 32,
+					"faces": 32
+				}
+			]
+		},
+		"Heavy": {
+			"rig": "Heavy_Rig",
+			"bones": [
+				"root",
+				"pelvis",
+				"spine",
+				"chest",
+				"neck",
+				"head",
+				"jaw",
+				"ear.L",
+				"ear.R",
+				"scapula.L",
+				"upperarm.L",
+				"forearm.L",
+				"frontfoot.L",
+				"fronttoe.L",
+				"scapula.R",
+				"upperarm.R",
+				"forearm.R",
+				"frontfoot.R",
+				"fronttoe.R",
+				"tail1",
+				"tail2",
+				"tail3",
+				"thigh.L",
+				"shin.L",
+				"hindfoot.L",
+				"hindtoe.L",
+				"thigh.R",
+				"shin.R",
+				"hindfoot.R",
+				"hindtoe.R"
+			],
+			"clips": [
+				{
+					"name": "Pose_Base",
+					"frames": 1,
+					"fps": 30,
+					"duration": 0.0333,
+					"loop": false,
+					"markers": {}
+				},
+				{
+					"name": "Idle",
+					"frames": 75,
+					"fps": 30,
+					"duration": 2.5,
+					"loop": true,
+					"markers": {}
+				},
+				{
+					"name": "Walk",
+					"frames": 32,
+					"fps": 30,
+					"duration": 1.0667,
+					"loop": true,
+					"markers": {
+						"HL_contact": 0.0,
+						"FL_contact": 0.2667,
+						"HR_contact": 0.5333,
+						"FR_contact": 0.8
+					},
+					"speed": 0.54
+				},
+				{
+					"name": "Run",
+					"frames": 18,
+					"fps": 30,
+					"duration": 0.6,
+					"loop": true,
+					"markers": {
+						"HL_contact": 0.0,
+						"FL_contact": 0.3,
+						"HR_contact": 0.072,
+						"FR_contact": 0.372
+					},
+					"speed": 2.5
+				},
+				{
+					"name": "Turn_L90",
+					"frames": 30,
+					"fps": 30,
+					"duration": 1.0,
+					"loop": false,
+					"markers": {},
+					"rootMotion": {
+						"yawDegrees": 90
+					}
+				},
+				{
+					"name": "Turn_R90",
+					"frames": 30,
+					"fps": 30,
+					"duration": 1.0,
+					"loop": false,
+					"markers": {},
+					"rootMotion": {
+						"yawDegrees": -90
+					}
+				},
+				{
+					"name": "Attack",
+					"frames": 24,
+					"fps": 30,
+					"duration": 0.8,
+					"loop": false,
+					"markers": {
+						"hit": 0.4,
+						"recover": 0.496
+					}
+				},
+				{
+					"name": "Jump_Start",
+					"frames": 10,
+					"fps": 30,
+					"duration": 0.3333,
+					"loop": false,
+					"markers": {
+						"takeoff": 0.3333
+					}
+				},
+				{
+					"name": "Jump_Air",
+					"frames": 16,
+					"fps": 30,
+					"duration": 0.5333,
+					"loop": true,
+					"markers": {}
+				},
+				{
+					"name": "Jump_Land",
+					"frames": 12,
+					"fps": 30,
+					"duration": 0.4,
+					"loop": false,
+					"markers": {
+						"impact": 0.12
+					}
+				},
+				{
+					"name": "Jump",
+					"frames": 30,
+					"fps": 30,
+					"duration": 1.0,
+					"loop": false,
+					"markers": {
+						"takeoff": 0.25,
+						"land": 0.75
+					},
+					"rootMotion": {
+						"heightPeak": 0.5
+					}
+				}
+			],
+			"attackStyle": "gore",
+			"parts": [
+				{
+					"name": "Heavy_Legs",
+					"slot": "Legs",
+					"desc": "굵은 네 다리 + 넓은 발굽",
+					"roles": [
+						"Fur",
+						"Hoof"
+					],
+					"verts": 282,
+					"faces": 266
+				},
+				{
+					"name": "Heavy_Body_Boar",
+					"slot": "Body",
+					"desc": "멧돼지 몸통(등의 뻣뻣한 갈기)",
+					"roles": [
+						"Fur",
+						"FurDark"
+					],
+					"verts": 132,
+					"faces": 117
+				},
+				{
+					"name": "Heavy_Body_Bovine",
+					"slot": "Body",
+					"desc": "소 몸통(어깨 혹과 목 밑 군살)",
+					"roles": [
+						"Fur"
+					],
+					"verts": 124,
+					"faces": 120
+				},
+				{
+					"name": "Heavy_Head_Boar",
+					"slot": "Head",
+					"desc": "멧돼지 머리(원반 코·엄니)",
+					"roles": [
+						"Fur",
+						"FurLight",
+						"Nose",
+						"Teeth",
+						"Eye"
+					],
+					"verts": 154,
+					"faces": 152
+				},
+				{
+					"name": "Heavy_Head_Bull",
+					"slot": "Head",
+					"desc": "소 머리(넓은 얼굴·밝은 주둥이)",
+					"roles": [
+						"Fur",
+						"FurLight",
+						"Nose",
+						"Eye",
+						"FurDark"
+					],
+					"verts": 132,
+					"faces": 146
+				},
+				{
+					"name": "Heavy_Ears_Small",
+					"slot": "Ears",
+					"desc": "뾰족한 작은 귀(멧돼지)",
+					"roles": [
+						"FurDark"
+					],
+					"verts": 18,
+					"faces": 18
+				},
+				{
+					"name": "Heavy_Ears_Side",
+					"slot": "Ears",
+					"desc": "옆으로 난 귀(소)",
+					"roles": [
+						"Fur"
+					],
+					"verts": 26,
+					"faces": 26
+				},
+				{
+					"name": "Heavy_Horns_Bull",
+					"slot": "Horns",
+					"desc": "앞으로 휜 황소 뿔",
+					"roles": [
+						"Horn"
+					],
+					"verts": 50,
+					"faces": 50
+				},
+				{
+					"name": "Heavy_Horns_Short",
+					"slot": "Horns",
+					"desc": "짧은 암소 뿔",
+					"roles": [
+						"Horn"
+					],
+					"verts": 26,
+					"faces": 26
+				},
+				{
+					"name": "Heavy_Tail_Thin",
+					"slot": "Tail",
+					"desc": "가는 꼬리(멧돼지)",
+					"roles": [
+						"Fur",
+						"FurDark"
+					],
+					"verts": 32,
+					"faces": 37
+				},
+				{
+					"name": "Heavy_Tail_Tuft",
+					"slot": "Tail",
+					"desc": "끝에 털 술이 달린 가는 꼬리(사자·소)",
+					"roles": [
+						"Fur",
+						"Mane"
+					],
+					"verts": 36,
+					"faces": 40
+				}
+			]
+		}
+	},
+	"roles": {
+		"Fur": "WolfGray",
+		"FurDark": "WolfDark",
+		"FurLight": "WolfLight",
+		"Mane": "LionMane",
+		"Eye": "AnimalEye",
+		"Nose": "Nose",
+		"Horn": "Horn",
+		"Hoof": "Hoof"
+	}
+}
