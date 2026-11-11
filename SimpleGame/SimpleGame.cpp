@@ -39,11 +39,13 @@ but WITHOUT ANY WARRANTY.
 #include "Mesh.h"
 #include "MeshCache.h"
 #include "MiniMap.h"
+#include "NameEntry.h"
 #include "Model.h"
 #include "Monitor.h"
 #include "NpcSociety.h"
 #include "PatronPowers.h"
 #include "PauseMenu.h"
+#include "PlayerProfile.h"
 #include "PostProcess.h"
 #include "Profiler.h"
 #include "Renderer.h"
@@ -109,7 +111,7 @@ namespace
 }
 
 // 검증용 화면 캡처(명령줄 --capture <파일.bmp> [초]): 그 시간이 지난 뒤 화면을 BMP로 저장하고 게임을 끝낸다. 비어 있으면 끔.
-// --zoom <배율>은 처음 줌, --at <지역ID> [dx dy]는 시작 자리(지역 중심 기준), --shapes는 3D 모델 대신 도형으로 시작, --pause는 일시 정지 메뉴를 연 채로 시작.
+// --zoom <배율>은 처음 줌, --at <지역ID> [dx dy]는 시작 자리(지역 중심 기준), --shapes는 3D 모델 대신 도형으로 시작, --pause는 일시 정지 메뉴를 연 채로 시작(--name과 함께), --name <닉네임>은 이름 입력 화면을 건너뜀.
 std::string g_CapturePath;
 float g_CaptureAfterSeconds = 4.f;
 
@@ -134,6 +136,7 @@ NpcSociety *g_Society = NULL;
 // 화면 오른쪽 아래의 스킬 칸(Q 기본 스킬, R 궁극기).
 SkillBar *g_SkillBar = NULL;
 PauseMenu *g_PauseMenu = NULL;
+NameEntryScreen *g_NameEntry = NULL;
 
 // 후처리가 그리는 출력 영역(창 좌표, 왼쪽 아래 원점 — Reshape). 마우스 위치를 UI 좌표로 바꿀 때 쓴다.
 int g_PresentX = 0;
@@ -1133,6 +1136,13 @@ void RenderScene(void)
 		g_Renderer->Flush();
 	}
 
+	// 게임을 시작할 때의 이름 입력 화면도 모든 UI 위에(첫 대화가 그 뒤에서 기다린다).
+	if (g_NameEntry->IsActive())
+	{
+		g_NameEntry->Draw(*g_Renderer);
+		g_Renderer->Flush();
+	}
+
 	// 일시 정지 메뉴(Esc)는 대화창·큰 지도까지 덮으므로 맨 마지막에.
 	if (g_PauseMenu->IsOpen())
 	{
@@ -1170,9 +1180,45 @@ void RenderScene(void)
 	Profiler::EndFrame(note);
 }
 
+namespace
+{
+	// 정한 닉네임을 게임 곳곳에 알린다: 머리 위 이름표·HUD(PlayerProfile), 대화창의 플레이어 이름표와 {PLAYER_NAME}(이야기),
+	// 다음에 켤 때 입력 칸에 미리 채울 마지막 이름.
+	void ApplyNickname(const std::string& nickname)
+	{
+		PlayerProfile::SetNickname(nickname);
+		PlayerProfile::SaveLastNickname(nickname);
+		g_Director->SetPlayerName(nickname);
+		GameLog::Add(GameLog::Kind::Info, "[이름] 이제부터 당신의 이름은 '" + nickname + "'.");
+	}
+}
+
 void Update(float deltaSeconds)
 {
 	g_ElapsedSeconds += deltaSeconds;
+
+	// 게임을 시작할 때 이름을 정하는 동안은 모든 것이 멈춘다(첫 대화도 그 뒤에서 기다림). 정하면 그 프레임부터 이어서 한다.
+	if (g_NameEntry->IsActive())
+	{
+		g_NameEntry->Update(deltaSeconds);
+
+		std::string nickname;
+		if (g_NameEntry->TakeResult(nickname))
+		{
+			ApplyNickname(nickname);
+		}
+		else
+		{
+			g_Player->SetMoveInput(0.f, 0.f);
+			g_AttackRing->SetTarget(NULL);
+			g_InteractRing->SetTarget(NULL);
+
+			Profiler::ScopedTimer timer(Profiler::Section::Monitor);
+			g_Monitor->SetSkillCooldowns(g_SkillCooldown, g_SkillCooldownTotal);
+			g_Monitor->Update(deltaSeconds, *g_World.scene, g_InStage ? g_Scene : NULL, *g_Director);
+			return;
+		}
+	}
 
 	// 일시 정지 메뉴(Esc)가 열려 있으면 이야기·쿨타임·씬·채팅창 모두 멈춘다(대화 중에 열었으면 대화도 그대로 기다린다).
 	// 월드 모니터는 브라우저 요청에 답해야 하므로 계속 돈다.
@@ -1462,7 +1508,7 @@ void MouseMotion(int x, int y)
 void MouseWheel(int wheel, int direction, int x, int y)
 {
 	// direction은 휠을 위로 굴리면 +1(확대), 아래로 굴리면 -1(축소)이다.
-	if (g_PauseMenu->IsOpen())
+	if (g_PauseMenu->IsOpen() || g_NameEntry->IsActive())
 	{
 		return;
 	}
@@ -1476,6 +1522,12 @@ void KeyInput(unsigned char key, int x, int y)
 	key = NormalizeKey(key);
 	bool repeat = g_KeyHeld[key];
 	g_KeyHeld[key] = true;
+
+	// 이름을 정하는 동안엔 글자를 이름 입력 화면이 받는다(freeglut 콜백까지 오는 키 — Delete 등 — 는 버림).
+	if (g_NameEntry->IsActive())
+	{
+		return;
+	}
 
 	// 일시 정지 메뉴가 열려 있으면 모든 키가 메뉴로 간다(이동도 하지 않음).
 	if (g_PauseMenu->IsOpen())
@@ -1576,6 +1628,12 @@ void KeyUp(unsigned char key, int x, int y)
 
 void SpecialKeyInput(int key, int x, int y)
 {
+	// 이름을 정하는 동안엔 F11(전체 화면 전환)만.
+	if (g_NameEntry->IsActive() && key != GLUT_KEY_F11)
+	{
+		return;
+	}
+
 	// 일시 정지 메뉴: ↑↓로 고른다(F11 전체 화면 전환 등은 그대로 받는다).
 	if (g_PauseMenu->IsOpen() && (key == GLUT_KEY_UP || key == GLUT_KEY_DOWN))
 	{
@@ -1629,6 +1687,8 @@ void ShutdownGame(void)
 	g_SkillBar = NULL;
 	delete g_PauseMenu;
 	g_PauseMenu = NULL;
+	delete g_NameEntry; // 가로챈 창 프로시저를 되돌린다
+	g_NameEntry = NULL;
 	Hud::Shutdown(); // 이름표 글자 텍스처
 	delete g_Director;
 	g_Director = NULL;
@@ -1682,6 +1742,7 @@ int main(int argc, char **argv)
 	float startZoom = 0.f;
 	bool startWithShapes = false;
 	bool startPaused = false;
+	std::string startName; // --name(UTF-8로 바꿔 둠)
 	for (int i = 1; i < argc; ++i)
 	{
 		std::string arg = argv[i];
@@ -1713,6 +1774,19 @@ int main(int argc, char **argv)
 		else if (arg == "--pause")
 		{
 			startPaused = true;
+		}
+		else if (arg == "--name" && i + 1 < argc)
+		{
+			// 명령줄은 시스템 코드페이지(한글 윈도우면 CP949)라 UTF-16을 거쳐 UTF-8로 바꾼다.
+			const char* text = argv[++i];
+			int length = MultiByteToWideChar(CP_ACP, 0, text, -1, NULL, 0);
+			std::wstring wide((length > 0) ? (size_t)length : 0, L'\0');
+			if (length > 0)
+			{
+				MultiByteToWideChar(CP_ACP, 0, text, -1, &wide[0], length);
+				wide.resize((size_t)length - 1);
+			}
+			startName = PlayerProfile::ToUtf8(PlayerProfile::Sanitize(wide));
 		}
 	}
 
@@ -1775,6 +1849,7 @@ int main(int argc, char **argv)
 	g_ChatWindow = new ChatWindow();
 	g_SkillBar = new SkillBar();
 	g_PauseMenu = new PauseMenu();
+	g_NameEntry = new NameEntryScreen();
 	g_Society = new NpcSociety();
 
 	// 이야기 데이터(대사·진행 단계·지역)를 읽는다. 파일이 없거나 깨져도 게임은 대화 없이 돌아간다.
@@ -1816,7 +1891,17 @@ int main(int argc, char **argv)
 	{
 		g_Camera->AdjustZoom(startZoom);
 	}
-	if (startPaused)
+	// 플레이어의 닉네임: 명령줄 --name이 있으면 그 이름으로, 아니면 이름 입력 화면을 띄운다(지난번 이름을 미리 채움).
+	if (!startName.empty())
+	{
+		ApplyNickname(startName);
+		NameEntryScreen::DisableIme(g_GameWindow);
+	}
+	else
+	{
+		g_NameEntry->Begin(g_GameWindow, PlayerProfile::LoadLastNickname());
+	}
+	if (startPaused && !g_NameEntry->IsActive())
 	{
 		OpenPauseMenu();
 	}

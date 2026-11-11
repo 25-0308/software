@@ -427,6 +427,13 @@ void StoryDirector::ApplyEffect(const std::string& effect)
 	}
 }
 
+void StoryDirector::SetPlayerName(const std::string& name)
+{
+	m_Database.SetSpeakerName("PLAYER", name);
+	m_Story.Set("PLAYER_NAME", name);
+	m_DialogueBox.RenameSpeaker("PLAYER", name);
+}
+
 // 수호신의 첫 축복(PATRON에 따라 — PatronPowers.h의 표). STORY.md 6장 MQ_01 표의 축복 테마를 딴 상시 능력치와
 // 레벨업 성장 몫을 더하고, 기본 스킬(Q)을 연다. 궁극기(R)는 이야기 속 주인공의 각성(EVENT AWAKEN) 뒤에 열린다.
 void StoryDirector::GrantBlessing()

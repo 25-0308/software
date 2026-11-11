@@ -25,6 +25,7 @@
 #include "Faith.h"
 #include "LevelBuilder.h"
 #include "SceneGraph.h"
+#include "PlayerProfile.h"
 #include "StoryDirector.h"
 #include "WorldActors.h"
 #include "WorldLayout.h"
@@ -862,6 +863,7 @@ std::string WorldMonitor::BuildStateJson(const StoryDirector& director, unsigned
 	json.EndObject();
 
 	json.BeginObject("player");
+	json.String("name", PlayerProfile::GetNickname());
 	json.String("map", here);
 	json.String("mapName", director.GetRegionName(here));
 	json.String("region", current);

@@ -8,6 +8,7 @@
 #include <string>
 
 #include "Renderer.h"
+#include "PlayerProfile.h"
 #include "TextRasterizer.h"
 
 #include "Actor.h"
@@ -113,6 +114,11 @@ namespace
 	}
 }
 
+namespace
+{
+	const TextTexture& NameTagTexture(const std::string& name); // 아래(이름표) — HUD의 닉네임도 같은 글자를 쓴다
+}
+
 void Hud::DrawStatus(Renderer& renderer, const MeshHandle& circleMesh, const PlayerStats& stats, float actionReadiness)
 {
 	Mat4 uiProjection = UiDraw::ScreenProjection();
@@ -149,6 +155,14 @@ void Hud::DrawStatus(Renderer& renderer, const MeshHandle& circleMesh, const Pla
 	float readyG = isReady ? 0.9f : 0.7f;
 	float readyB = isReady ? 0.5f : 0.25f;
 	DrawBar(renderer, kBarLeft, kBadgeY - 32.f, kBarWidth * 0.5f, 8.f, actionReadiness, readyR, readyG, readyB, uiProjection);
+
+	// 닉네임: 행동 쿨타임 막대 아래(이름표와 같은 글자 텍스처).
+	const std::string& nickname = PlayerProfile::GetNickname();
+	if (!nickname.empty())
+	{
+		const TextTexture& name = NameTagTexture(nickname);
+		UiDraw::TextTopLeft(renderer, uiProjection, name, kBarLeft - 6.f, kBadgeY - 40.f, 1.f, 0.9f, 0.6f, 1.f);
+	}
 }
 
 namespace
@@ -168,6 +182,12 @@ namespace
 		if (actor.GetType() == ActorType::Animal)
 		{
 			return GetAnimalNames(static_cast<const AnimalActor&>(actor).GetKind()).name;
+		}
+
+		// 플레이어는 게임을 시작할 때 정한 닉네임(정하기 전이면 "플레이어").
+		if (actor.GetType() == ActorType::Player && !PlayerProfile::GetNickname().empty())
+		{
+			return PlayerProfile::GetNickname().c_str();
 		}
 
 		struct Entry

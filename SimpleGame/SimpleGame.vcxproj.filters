@@ -90,6 +90,12 @@
     <ClInclude Include="Model.h">
       <Filter>헤더 파일</Filter>
     </ClInclude>
+    <ClInclude Include="NameEntry.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="PlayerProfile.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
     <ClInclude Include="PauseMenu.h">
       <Filter>헤더 파일</Filter>
     </ClInclude>
@@ -207,6 +213,12 @@
       <Filter>소스 파일</Filter>
     </ClCompile>
     <ClCompile Include="Model.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="NameEntry.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="PlayerProfile.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
     <ClCompile Include="PauseMenu.cpp">

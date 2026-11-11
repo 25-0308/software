@@ -782,7 +782,7 @@
 			card('등장 중인 NPC', esc(t.npcsPresent ?? 0), `가 본 마을 기준 · 숨은 것 포함 ${esc(t.npcs ?? 0)}명`),
 			card('몹', esc(t.mobsPresent ?? 0), `적대 ${esc(t.mobsHostile ?? 0)} · 추적 중 ${esc(t.mobsChasing ?? 0)} · 처치 ${esc(t.kills ?? 0)}`),
 			card('마을', `${esc(t.visited ?? 0)}<span class="small"> / ${esc(t.villages ?? 0)}</span>`, '가 본 마을 / 전체'),
-			card('플레이어', `Lv ${esc(p.level ?? '—')}`, `${hpBar(p.hp ?? 0, p.maxHp ?? 0)}${esc(p.mapName || villageName(p.map))} · ${esc(patron)}`),
+			card(p.name ? `플레이어 · ${p.name}` : '플레이어', `Lv ${esc(p.level ?? '—')}`, `${hpBar(p.hp ?? 0, p.maxHp ?? 0)}${esc(p.mapName || villageName(p.map))} · ${esc(patron)}`),
 			card('게임', `${esc(Number(w.fps || 0).toFixed(0))}<span class="small"> FPS</span>`, `게임 시각 ${formatTime(w.time)}`),
 		].join(''));
 	}

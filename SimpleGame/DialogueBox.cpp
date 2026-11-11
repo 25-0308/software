@@ -162,6 +162,23 @@ void DialogueBox::Start(const DialogueVariant& variant, const DialogueDatabase& 
 	}
 }
 
+void DialogueBox::RenameSpeaker(const std::string& speakerId, const std::string& displayName)
+{
+	for (size_t i = 0; i < m_Lines.size() && i < m_SpeakerNames.size(); ++i)
+	{
+		if (m_Lines[i].speaker == speakerId)
+		{
+			m_SpeakerNames[i] = displayName;
+		}
+	}
+
+	if (m_Active && !m_ShowingChoices && m_LineIndex < m_Lines.size() && m_Lines[m_LineIndex].speaker == speakerId)
+	{
+		TextRasterizer::Destroy(m_NameTexture);
+		m_NameTexture = m_NameText.Create(displayName, 300);
+	}
+}
+
 void DialogueBox::ShowLine(size_t index)
 {
 	TextRasterizer::Destroy(m_LineTexture);

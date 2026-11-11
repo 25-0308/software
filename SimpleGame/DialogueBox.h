@@ -29,6 +29,9 @@ public:
 	// 대사도 선택지도 없는 변형이면 대화창을 띄우지 않고 곧바로 끝난 것으로 친다(효과만 있는 대화).
 	void Start(const DialogueVariant& variant, const DialogueDatabase& database, const StoryState& story);
 
+	// 이미 열린 대화 속 화자의 이름을 바꾼다(첫 대화가 열린 뒤에 플레이어가 닉네임을 정했을 때). 지금 줄이면 이름표도 다시 만든다.
+	void RenameSpeaker(const std::string& speakerId, const std::string& displayName);
+
 	// 지금 목표가 있는 다른 지역. 그 지역으로 가는 선택지(TRAVEL 효과)에 "◆ 목표"를 붙이고 금빛으로 강조한다
 	// (이정표에서 어디로 가야 하는지 보이게). 비우면 강조하지 않는다. 선택지를 띄우기 전에 정해 둔다.
 	void SetObjectiveRegion(const std::string& locId) { m_ObjectiveRegion = locId; }

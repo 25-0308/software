@@ -32,6 +32,7 @@ Resource/
 │   ├─ Ground_Tiles.glb        땅·물 타일(텍스처 재질)
 │   ├─ Nature_Kit.glb          나무·덤불·풀·꽃·바위·통나무(단색 로우폴리)
 │   └─ Nature.json
+├─ Portraits/<화자ID>.png      대화창 초상화(3D 모델 흉상 렌더, 384×476)
 ├─ Animations/
 │   ├─ AnimGraph_Humanoid.json            인간형 애니메이션 조합 정보
 │   └─ AnimGraph_Quadruped_<몸틀>.json     짐승 몸틀별 조합 정보
@@ -124,13 +125,23 @@ Resource/
 - **풀·꽃**: `Bush_Round`, `Bush_Oleander`, `Grass_Tuft/TuftDry/Patch`, `Reeds`, `Flowers_Poppy/Anemone/Daisy/Yellow`
 - **바위·나무토막**: `Rock_Small/Medium/Large/Snowy/Mossy/Ash`, `Cliff`, `Pebbles`, `Stump`, `Log`, `Mushrooms`
 
+## 6. 대화창 초상화(3D)
+
+[Portraits/](Portraits)에 대사를 하는 화자(`Data/Story.txt`) 58명의 초상화가 있습니다. 각 인물의 3D 프리셋을 기본 자세로 세우고, 가슴 위를 3/4 각도에서 렌더했습니다. 배경은 인물마다 정한 색 그러데이션, 테두리빛은 인물의 상징색(제우스는 번갯빛, 하데스는 붉은빛, 크로노스는 보랏빛)이고, 안쪽엔 금선 액자를 넣었습니다.
+
+- 크기는 게임 초상화 텍스처와 같은 384×476입니다(화면 192×238의 두 배).
+- 왼손 소품(홀·지팡이)은 얼굴을 가려서 초상화에서는 뺐습니다. 오른손 소품(창·삼지창·지팡이)은 얼굴 옆으로 보입니다.
+- 프리셋이 없는 화자는 비슷한 것을 빌렸습니다. `NPC_THEBES_CITIZEN`은 아테네 시민을 디오니소스 색으로 바꿔 칠했고, `CHR_IO`는 하얀 암소 종입니다.
+- **게임에 쓰는 법**: 게임(`Portrait.cpp`)은 작업 폴더의 `./Portraits/<화자ID>.png`가 있으면 그린 2D 초상화 대신 그 그림을 씁니다. 이 폴더의 PNG를 게임 작업 폴더(`SimpleGame/Portraits/`)에 복사하면 됩니다. 콘솔에 "[초상화] … ./Portraits의 그림을 씁니다"가 뜹니다.
+- 배경 색·구도는 [Tools/portraits.py](Tools/portraits.py)의 `THEMES`·`VIEW_HEIGHT`·`CAMERA_YAW`에서 바꿉니다.
+
 ## 다시 만들기
 
 ```bash
 "C:/Program Files/Blender Foundation/Blender 5.2/blender.exe" -b --factory-startup --python Resource/Tools/build_all.py
 ```
 
-일부만 만들려면 `--` 뒤에 단계 이름을 적습니다(`humanoid`, `quadruped`, `buildings`, `nature`, `animgraph`, `previews`).
+일부만 만들려면 `--` 뒤에 단계 이름을 적습니다(`humanoid`, `quadruped`, `buildings`, `nature`, `animgraph`, `portraits`, `previews`).
 
 ```bash
 "C:/Program Files/Blender Foundation/Blender 5.2/blender.exe" -b --factory-startup --python Resource/Tools/build_all.py -- humanoid animgraph
@@ -147,6 +158,7 @@ Resource/
 | 짐승 종 | [Tools/quadruped.py](Tools/quadruped.py) |
 | 건축·생활도구 | [Tools/buildings.py](Tools/buildings.py) |
 | 자연·텍스처 | [Tools/nature.py](Tools/nature.py) |
+| 대화창 초상화 | [Tools/portraits.py](Tools/portraits.py) |
 
 새 애니메이션을 더하려면 `*_anims.py`에 자세 함수를 만들고 `CLIPS`/`Clips()` 목록에 한 줄 넣습니다. 자세는 발·손 위치(IK 표적)와 몸통 회전으로 잡고, 빌드할 때 FK 키로 구워집니다.
 

@@ -32,7 +32,7 @@ class StoryDirector;
 // {
 //   "schema": "world-monitor/1",
 //   "world":   { id, name, instance(실행마다 다른 수), time(게임 시각 초), fps, url },
-//   "player":  { map, mapName, x, y, level, hp, maxHp, xp, xpToNext, attack, patron, patronName, blessing, blessingName,
+//   "player":  { name(닉네임 — 정하기 전이면 빈 문자열), map, mapName, x, y, level, hp, maxHp, xp, xpToNext, attack, patron, patronName, blessing, blessingName,
 //                passive, defense, critChance, lifeOnKill, cooldownScale, speedScale, buffRemaining, awakened,
 //                skills: [ { slot(basic|ultimate), key(Q|R), name, summary, cooldown, remaining, unlocked } ] },
 //   "story":   { step, objective, objectiveRegion, travelRegion, dialogueActive, variables{이름: 값} },

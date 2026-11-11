@@ -673,8 +673,8 @@
 			"roles": [
 				"Skin"
 			],
-			"verts": 148,
-			"faces": 150
+			"verts": 112,
+			"faces": 98
 		},
 		{
 			"name": "Torso_Tunic_M",
@@ -745,8 +745,8 @@
 				"Skin",
 				"ClothB"
 			],
-			"verts": 196,
-			"faces": 194
+			"verts": 152,
+			"faces": 136
 		},
 		{
 			"name": "Torso_Dress_F",
@@ -770,8 +770,8 @@
 				"Metal",
 				"Leather"
 			],
-			"verts": 272,
-			"faces": 246
+			"verts": 236,
+			"faces": 194
 		},
 		{
 			"name": "Torso_Aegis_F",

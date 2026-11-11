@@ -584,6 +584,12 @@ def TorsoRing(body, z, off=0.0):
 	return r[1], r[2], r[3]
 
 
+def _Pec(mb, s, y, role):
+	"""남자 가슴 근육 — 가슴 곡면을 따라 살짝 비스듬한 넓고 납작한 판(둥근 덩어리는 여자 가슴처럼 보였음)."""
+	M = Matrix.Translation(V(s * 0.07, y, 1.338)) @ Matrix.Rotation(math.radians(s * 14), 4, 'Z') @ Matrix.Rotation(math.radians(-8), 4, 'X')
+	mb.Frustum((0, 0, -0.034), (0.112, 0.016), (0, -0.004, 0.034), (0.122, 0.026), role, M)
+
+
 def _TorsoLoft(mb, body, off, role, zMin=None):
 	rings = []
 	for (z, cy, rx, ry) in TORSO[body]:
@@ -602,7 +608,7 @@ def PartTorso(kind, body):
 	if kind == "Bare":
 		_TorsoLoft(mb, body, 0.0, "Skin")
 		for s in (1, -1):
-			mb.Ellipsoid((s * 0.068, -0.098, 1.33), (0.06, 0.02, 0.045), 8, 4, "Skin")
+			_Pec(mb, s, -0.1, "Skin")
 		desc = "맨몸 상체"
 	elif kind == "Tunic":
 		_TorsoLoft(mb, body, 0.01, "ClothA")
@@ -624,8 +630,7 @@ def PartTorso(kind, body):
 		path = [V(-0.17, -0.10, 1.25), V(-0.05, -0.125, 1.33), V(0.08, -0.11, 1.42), V(0.17, -0.03, 1.49),
 			V(0.19, 0.03, 1.48), V(0.10, 0.10, 1.42), V(-0.05, 0.115, 1.33), V(-0.17, 0.10, 1.25)]
 		mb.Tube(path, [0.022] * len(path), 6, "ClothB")
-		for s in (1, -1):
-			mb.Ellipsoid((s * 0.068, -0.098, 1.33), (0.06, 0.02, 0.045), 8, 4, "Skin")
+		_Pec(mb, -1, -0.103, "Skin")
 		desc = "왼어깨에 두른 히마티온(오른 가슴은 맨살)"
 	elif kind == "Dress":
 		_TorsoLoft(mb, body, 0.01, "ClothA")
@@ -637,7 +642,7 @@ def PartTorso(kind, body):
 	elif kind == "Cuirass":
 		_TorsoLoft(mb, body, 0.022, "Metal")
 		for s in (1, -1):
-			mb.Ellipsoid((s * 0.07, -0.112, 1.33), (0.062, 0.02, 0.045), 8, 4, "Metal")
+			_Pec(mb, s, -0.121, "Metal")
 			for row in range(3):
 				mb.Box((s * 0.033, -0.118 + row * 0.002, 1.22 - row * 0.065), (0.05, 0.012, 0.05), "Metal")
 			M = Matrix.Translation(V(s * 0.17, 0.0, 1.445)) @ Matrix.Rotation(math.radians(s * -22), 4, 'Y')

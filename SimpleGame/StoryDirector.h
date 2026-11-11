@@ -99,6 +99,10 @@ public:
 	// locId 지역에 있는 그 인물·물건이 지금 목표 대상인지(지금 지역이면 목표 마름모가 뜨는 것과 같은 판정),
 	// 지금 말을 걸면 열릴 대화가 있는지.
 	std::string GetSpeakerName(const std::string& storyId) const { return m_Database.GetSpeakerName(storyId); }
+
+	// 플레이어의 닉네임(UTF-8)을 이야기에 알린다: 대화창에서 플레이어(PLAYER)의 이름표가 닉네임이 되고(이미 열린 대화도),
+	// 대사에서 {PLAYER_NAME}으로 부를 수 있다.
+	void SetPlayerName(const std::string& name);
 	bool IsObjectiveTarget(const std::string& storyId, const std::string& locId) const;
 	bool CanTalkTo(const std::string& storyId) const;
 

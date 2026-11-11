@@ -179,7 +179,9 @@
     <ClInclude Include="GameModels.h" />
     <ClInclude Include="Json.h" />
     <ClInclude Include="Model.h" />
+    <ClInclude Include="NameEntry.h" />
     <ClInclude Include="PauseMenu.h" />
+    <ClInclude Include="PlayerProfile.h" />
     <ClInclude Include="NpcSociety.h" />
     <ClInclude Include="PatronPowers.h" />
     <ClInclude Include="Portrait.h" />
@@ -226,7 +228,9 @@
     <ClCompile Include="GameModels.cpp" />
     <ClCompile Include="Json.cpp" />
     <ClCompile Include="Model.cpp" />
+    <ClCompile Include="NameEntry.cpp" />
     <ClCompile Include="PauseMenu.cpp" />
+    <ClCompile Include="PlayerProfile.cpp" />
     <ClCompile Include="NpcSociety.cpp" />
     <ClCompile Include="PatronPowers.cpp" />
     <ClCompile Include="Portrait.cpp" />

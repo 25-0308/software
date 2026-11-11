@@ -13,9 +13,10 @@ import buildings
 import nature
 import animgraph
 import previews
+import portraits
 
 STEPS = {"humanoid": humanoid.Build, "quadruped": quadruped.Build, "buildings": buildings.Build, "nature": nature.Build,
-	"animgraph": animgraph.Build, "previews": previews.Build}
+	"animgraph": animgraph.Build, "portraits": portraits.Build, "previews": previews.Build}
 
 args = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
 for name in (args or list(STEPS)):

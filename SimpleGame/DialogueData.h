@@ -105,6 +105,9 @@ public:
 	// 화자 ID의 표시 이름(name 줄). 등록 안 됐으면 ID 그대로, "narr"처럼 이름 없이 등록했으면 빈 문자열.
 	std::string GetSpeakerName(const std::string& speakerId) const;
 
+	// 화자의 표시 이름을 바꾼다(플레이어의 닉네임 — PLAYER의 데이터 파일 이름 "나" 대신).
+	void SetSpeakerName(const std::string& speakerId, const std::string& displayName) { m_SpeakerNames[speakerId] = displayName; }
+
 	const std::vector<StoryStep>& GetSteps() const { return m_Steps; }
 	const StoryStep* FindStep(const std::string& id) const;
 	const std::vector<StoryRegion>& GetRegions() const { return m_Regions; }
