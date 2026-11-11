@@ -21,6 +21,7 @@ namespace Gdiplus
 #pragma comment(lib, "gdiplus.lib")
 
 #include "Dependencies\glew.h"
+#include "Model.h"
 
 namespace
 {
@@ -2081,15 +2082,34 @@ namespace
 
 	// ------------------------------------------------------------------ 파일·텍스처
 
-	std::wstring OverridePath(const std::string& speakerId)
-	{
-		return L"./Portraits/" + std::wstring(speakerId.begin(), speakerId.end()) + L".png";
-	}
-
 	bool FileExists(const std::wstring& path)
 	{
 		DWORD attributes = GetFileAttributesW(path.c_str());
 		return attributes != INVALID_FILE_ATTRIBUTES && (attributes & FILE_ATTRIBUTE_DIRECTORY) == 0;
+	}
+
+	// 화자의 초상화 그림 파일: 작업 폴더의 ./Portraits/<ID>.png(손으로 바꿔 넣은 그림 — 먼저 봄), 없으면 Resource 폴더의
+	// Portraits/<ID>.png(3D 프리셋 흉상을 렌더한 그림 — Resource/Tools/portraits.py). 둘 다 없으면 빈 문자열(표대로 그림).
+	std::wstring FindImageFile(const std::string& speakerId)
+	{
+		std::wstring id(speakerId.begin(), speakerId.end());
+
+		std::wstring local = L"./Portraits/" + id + L".png";
+		if (FileExists(local))
+		{
+			return local;
+		}
+
+		const std::string& root = ModelLibrary::GetResourceRoot();
+		if (!root.empty())
+		{
+			std::wstring rendered = std::wstring(root.begin(), root.end()) + L"Portraits/" + id + L".png";
+			if (FileExists(rendered))
+			{
+				return rendered;
+			}
+		}
+		return std::wstring();
 	}
 
 	// 그림 파일을 초상화 크기에 꽉 차게(비율을 지키고 넘치는 쪽은 잘라) 그린다.
@@ -2235,7 +2255,7 @@ bool PortraitLibrary::Has(const std::string& speakerId)
 	}
 
 	PortraitSpec spec;
-	bool has = FindSpec(speakerId, spec) || FileExists(OverridePath(speakerId));
+	bool has = FindSpec(speakerId, spec) || !FindImageFile(speakerId).empty();
 	m_Has[speakerId] = has;
 	return has;
 }
@@ -2260,12 +2280,13 @@ const TextTexture* PortraitLibrary::Get(const std::string& speakerId)
 			Gdiplus::Graphics graphics(&bitmap);
 			graphics.Clear(Gdiplus::Color(255, 0, 0, 0));
 
-			// 그림 파일이 있으면 그것을, 없으면 표대로 그린다.
-			std::wstring overridePath = OverridePath(speakerId);
-			if (FileExists(overridePath))
+			// 그림 파일(3D 흉상 렌더 등)이 있으면 그것을, 없으면 표대로 그린다.
+			std::wstring imagePath = FindImageFile(speakerId);
+			if (!imagePath.empty())
 			{
-				drawn = DrawImageFile(graphics, overridePath);
-				std::cout << "[초상화] " << speakerId << (drawn ? ": ./Portraits의 그림을 씁니다.\n" : ": ./Portraits의 그림을 읽지 못해 기본 초상화를 그립니다.\n");
+				drawn = DrawImageFile(graphics, imagePath);
+				const char* folder = (imagePath.compare(0, 12, L"./Portraits/") == 0) ? "./Portraits" : "Resource/Portraits";
+				std::cout << "[초상화] " << speakerId << (drawn ? ": 그림 파일을 씁니다(" : ": 그림 파일을 읽지 못해 기본 초상화를 그립니다(") << folder << ").\n";
 			}
 
 			PortraitSpec spec;
