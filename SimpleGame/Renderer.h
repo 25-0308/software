@@ -91,6 +91,53 @@ public:
 	void DrawTileBatchSolid(const TileBatchHandle& batch, const Mat4& viewProjection, float time);
 	void DrawTileBatchWater(const TileBatchHandle& batch, const Mat4& viewProjection, float time);
 
+	// 바닥 재질 텍스처(Resource/Nature/Textures — 잔디·돌바닥·흙길·바위). 있으면 지형 셰이더가 정점 색에 텍스처의
+	// 결을 얹는다. texture는 GL 텍스처(0이면 없음), averages는 텍스처마다 평균 색(rgb 3개씩 — 결만 뽑아 쓰려고 나눔).
+	static const int kGroundTextureCount = 4; // 0 잔디, 1 돌바닥, 2 흙길, 3 바위
+	void SetGroundTextures(const GLuint textures[kGroundTextureCount], const float averages[kGroundTextureCount * 3]);
+
+	// ---- 3D 모델(Resource 폴더의 glTF — Model.h) ----
+	// 정점 형식: 위치3 + 법선3 + 색3 + 발광1 + 색 역할1 + 뼈 번호4 + 뼈 가중치4 = 19 floats. 위치·법선은 게임 축(Z 위)이고
+	// 스킨이 없는 모델은 뼈 번호 0·가중치 1(바인드 자세 = 단위 행렬)로 채운다.
+	struct ModelMeshHandle
+	{
+		GLuint vao = 0;
+		GLuint vbo = 0;
+		GLuint ibo = 0;
+		int indexCount = 0;
+	};
+	static const int kModelFloatsPerVertex = 19;
+	static const int kModelRoleCount = 9;   // Model.h의 ModelAsset::Role 개수
+	static const int kModelMaxJoints = 40;  // 셰이더의 뼈 행렬 배열 크기
+
+	// 모델 한 번 그리기의 설정. model은 게임 축의 모델 행렬(위치·회전·크기), joints는 스킨 모델의 뼈 행렬(nullptr이면
+	// 단위 행렬 — 스킨 없는 모델·바인드 자세). 색은 모델 색에 tint를 곱하고 flash만큼 flash 색으로 섞는다(피격 플래시).
+	// roleColors[역할]의 a가 0보다 크면 그 역할의 정점 색을 rgb로 바꿔 칠한다(사람마다 다른 옷·머리 색).
+	struct ModelDrawParams
+	{
+		Mat4 model = Mat4::Identity();
+		const std::vector<Mat4>* joints = nullptr;
+		float tintR = 1.f, tintG = 1.f, tintB = 1.f;
+		float flashR = 1.f, flashG = 1.f, flashB = 1.f, flash = 0.f;
+		float alpha = 1.f;
+		float roleColors[kModelRoleCount][4] = {};
+		// 모델 원점에서 가장 먼 점까지의 거리(월드 단위, 넉넉하게). 모델의 깊이를 이 범위로만 펴서 좁은 깊이 구간 안에서도
+		// 앞뒤가 또렷이 갈린다(카메라 전체 깊이 범위 ±1000을 그대로 쓰면 구간 하나의 해상도가 0.5칸쯤이라 옷과 다리가 뒤섞임).
+		float depthRadius = 4.f;
+	};
+
+	ModelMeshHandle CreateModelMesh(const float* vertices, int vertexCount, const unsigned int* indices, int indexCount);
+	void DestroyModelMesh(ModelMeshHandle& mesh);
+
+	// 프레임마다 씬을 그리기 전에 부른다: 모델 깊이 구간을 처음으로 되돌린다.
+	void BeginModelFrame() { m_ModelSlice = 0; }
+
+	// 모델의 인덱스 [firstIndex, firstIndex + indexCount) 구간을 그린다. 먼저 모아 둔 도형을 Flush한다.
+	// 깊이: 이 렌더러는 그리기 순서(페인터 알고리즘)로 깊이를 흉내 내므로, 모델 하나 안에서만 깊이 테스트를 쓰고 모델끼리는
+	// 그린 순서를 따르게 한다 — 모델마다 깊이 버퍼의 좁은 구간(glDepthRange)을 하나씩, 나중에 그릴수록 앞쪽 구간을 준다.
+	// 도형(깊이를 쓰지 않음)과 섞여도 "나중에 그린 것이 위"는 그대로다.
+	void DrawModel(const ModelMeshHandle& mesh, int firstIndex, int indexCount, const Mat4& viewProjection, const ModelDrawParams& params);
+
 private:
 	void Initialize(int windowSizeX, int windowSizeY);
 	void CreateVertexBufferObjects();
@@ -124,4 +171,24 @@ private:
 	ShaderProgramInfo m_Text;
 	ShaderProgramInfo m_TileBatchSolid;
 	ShaderProgramInfo m_TileBatchWater;
+
+	// 바닥 재질 텍스처(SetGroundTextures).
+	GLuint m_GroundTextures[kGroundTextureCount] = {};
+	float m_GroundAverages[kGroundTextureCount * 3] = {};
+	bool m_HasGroundTextures = false;
+	GLint m_UniformGroundTextures[kGroundTextureCount] = { -1, -1, -1, -1 };
+	GLint m_UniformGroundAverages = -1;
+	GLint m_UniformUseGroundTextures = -1;
+
+	// 모델 셰이더와 유니폼.
+	GLuint m_ModelProgram = 0;
+	GLint m_ModelUniformMVP = -1;
+	GLint m_ModelUniformModel = -1;
+	GLint m_ModelUniformJoints = -1;
+	GLint m_ModelUniformTint = -1;
+	GLint m_ModelUniformFlash = -1;
+	GLint m_ModelUniformRoleColors = -1;
+	GLint m_ModelUniformDepthRemap = -1;
+	int m_ModelSlice = 0; // 이번 프레임에 그린 모델 수(깊이 구간 번호)
+	std::vector<float> m_IdentityJoints; // 뼈 행렬이 없을 때 보내는 단위 행렬
 };

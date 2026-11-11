@@ -31,6 +31,7 @@ private:
 	{
 		GLuint fbo = 0;
 		GLuint colorTexture = 0;
+		GLuint depthBuffer = 0; // 씬 버퍼만 — 3D 모델이 자기 안의 앞뒤를 가릴 때 쓴다(Renderer::DrawModel)
 	};
 
 	// 풀스크린 패스 셰이더 하나 + 그 유니폼 위치들을 캐시해 둔 것. Renderer.h의
@@ -50,7 +51,7 @@ private:
 		GLint uniformTime = -1;
 	};
 
-	FrameBuffer CreateColorFramebuffer(int width, int height);
+	FrameBuffer CreateColorFramebuffer(int width, int height, bool withDepth = false);
 	void DestroyFramebuffer(FrameBuffer& target);
 	void CreateFullscreenQuad();
 	PassShader CompileAndCache(const char* filenameVS, const char* filenameFS);

@@ -19,7 +19,7 @@ PostProcess::PostProcess(int width, int height)
 	, m_PresentWidth(width)
 	, m_PresentHeight(height)
 {
-	m_Scene = CreateColorFramebuffer(m_Width, m_Height);
+	m_Scene = CreateColorFramebuffer(m_Width, m_Height, true);
 	// 블룸 버퍼는 절반 해상도로 처리한다: 비용이 싸고, 어차피 블러가 다운
 	// 샘플링 흔적을 가려준다.
 	m_Bright = CreateColorFramebuffer(m_BlurWidth, m_BlurHeight);
@@ -83,7 +83,7 @@ PostProcess::PassShader PostProcess::CompileAndCache(const char* filenameVS, con
 	return shader;
 }
 
-PostProcess::FrameBuffer PostProcess::CreateColorFramebuffer(int width, int height)
+PostProcess::FrameBuffer PostProcess::CreateColorFramebuffer(int width, int height, bool withDepth)
 {
 	FrameBuffer result;
 
@@ -101,6 +101,16 @@ PostProcess::FrameBuffer PostProcess::CreateColorFramebuffer(int width, int heig
 	glBindFramebuffer(GL_FRAMEBUFFER, result.fbo);
 	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, result.colorTexture, 0);
 
+	// 씬 버퍼엔 깊이 버퍼를 붙인다(지우기는 RenderScene의 glClear — 깊이 테스트는 3D 모델을 그릴 때만 켠다).
+	if (withDepth)
+	{
+		glGenRenderbuffers(1, &result.depthBuffer);
+		glBindRenderbuffer(GL_RENDERBUFFER, result.depthBuffer);
+		glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, width, height);
+		glBindRenderbuffer(GL_RENDERBUFFER, 0);
+		glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, result.depthBuffer);
+	}
+
 	if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
 	{
 		std::cout << "PostProcess 프레임버퍼 생성에 실패했습니다.\n";
@@ -117,6 +127,11 @@ void PostProcess::DestroyFramebuffer(FrameBuffer& target)
 	{
 		glDeleteTextures(1, &target.colorTexture);
 		target.colorTexture = 0;
+	}
+	if (target.depthBuffer != 0)
+	{
+		glDeleteRenderbuffers(1, &target.depthBuffer);
+		target.depthBuffer = 0;
 	}
 	if (target.fbo != 0)
 	{

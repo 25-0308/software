@@ -2,6 +2,7 @@
 #include "WorldActors.h"
 
 #include <cmath>
+#include <cstring>
 
 #include "Shapes.h"
 
@@ -83,6 +84,29 @@ void TreeActor::OnRender(const RenderContext& ctx)
 	float y = GetWorldY();
 	float z = GetWorldZ();
 	float size = GetSize();
+
+	// 3D 모델: 활엽수는 올리브(셋)·참나무(둘)·월계수 중, 사이프러스는 둘 중 하나. 키를 도형 나무와 맞추고(활엽수 1.45×size,
+	// 사이프러스 1.8×size) 자리마다 돌려 세운다. 잎 색은 그루마다 살짝 밝기를 달리한다.
+	if (GameModels::IsEnabled())
+	{
+		unsigned int hash = GameModels::HashSpot(x, y);
+		if (!m_PieceChecked)
+		{
+			const char* kBroadleaf[] = { "Tree_Olive_A", "Tree_Olive_B", "Tree_Olive_C", "Tree_Oak_A", "Tree_Oak_B", "Tree_Laurel" };
+			const char* kCypress[] = { "Tree_Cypress_A", "Tree_Cypress_B" };
+			m_Piece = (m_Kind == TreeKind::Cypress) ? GameModels::NaturePiece(kCypress[hash % 2u]) : GameModels::NaturePiece(kBroadleaf[hash % 6u]);
+			m_PieceChecked = true;
+		}
+
+		if (m_Piece.IsValid() && m_Piece.Height() > 0.01f)
+		{
+			float scale = size * ((m_Kind == TreeKind::Cypress) ? 1.8f : 1.45f) / m_Piece.Height();
+			float yaw = (float)(hash % 360u) * 0.0174533f;
+			float tint = 0.9f + 0.2f * (float)((hash >> 9) % 100u) / 100.f;
+			GameModels::DrawPiece(ctx, m_Piece, x, y, z, yaw, scale, scale, scale, tint);
+			return;
+		}
+	}
 	float sway = sinf(ctx.time * 0.6f + x * 2.1f) * size * 0.03f; // 산들바람에 흔들리는 느낌
 
 	Shapes::Rgb wood = { 0.36f, 0.24f, 0.14f };
@@ -146,6 +170,28 @@ void BuildingActor::OnRender(const RenderContext& ctx)
 	float z = GetWorldZ();
 	float size = GetSize();
 	float half = size * 0.5f;
+
+	// 3D 모델: 4×4 m 집 프리팹(섬 마을 — 에게해·키프로스 — 과 열에 하나쯤은 평지붕 섬마을 집, 나머지는 박공지붕의 작은 집)을
+	// 발자국(한 변 size)에 맞춰 줄이고, 문이 난 앞면(모델의 -y)을 카메라 쪽(+y)으로 돌린다.
+	if (GameModels::IsEnabled())
+	{
+		if (!m_PieceChecked)
+		{
+			const char* region = GetHomeRegion();
+			bool island = (region != nullptr && (strcmp(region, "LOC_AEGEAN") == 0 || strcmp(region, "LOC_CYPRUS") == 0))
+				|| GameModels::HashSpot(x, y) % 10u == 0u;
+			m_Piece = GameModels::Prefab(island ? "House_Island" : "House_Small");
+			m_PieceChecked = true;
+		}
+
+		if (m_Piece.IsValid() && m_Piece.ExtentX() > 0.01f)
+		{
+			float scale = size / m_Piece.ExtentX();
+			GameModels::DrawPiece(ctx, m_Piece, x, y, z, 3.14159265f, scale, scale, scale);
+			return;
+		}
+	}
+
 
 	// 흰 회벽 + 테라코타 기와 지붕 + 푸른 문·덧창: 지중해(그리스) 마을 집.
 	Shapes::Rgb stone = { 0.56f, 0.53f, 0.49f };

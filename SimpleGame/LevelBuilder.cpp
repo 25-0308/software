@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "CharacterActors.h"
+#include "GameModels.h"
 #include "LandmarkActors.h"
 #include "LevelGenerator.h"
 #include "Renderer.h"
@@ -627,6 +628,11 @@ NpcActor* SpawnStoryNpc(SceneGraph& scene, float x, float y, float size, float r
 
 	// 믿는 신·돌아다니는 반경·다혈질·교류 여부(Faith.cpp의 표 — 마을 사람은 자기 자리 둘레를 거닐며 서로 어울린다).
 	npc->SetTraits(FaithInfo::TraitsFor(storyId));
+
+	// 3D 모델(Resource의 인간형 프리셋 — 이름 없는 주민은 자리마다 그 마을의 남녀 프리셋 중 하나를 골라 옷·머리 색을 바꿔 칠함).
+	bool recolor = false;
+	const ModelAsset* model = GameModels::ForPerson(storyId, nameTag, GameModels::HashSpot(x, y), recolor);
+	npc->SetModel(model, recolor);
 	return npc;
 }
 
@@ -637,6 +643,7 @@ LevelActors SpawnPlayerAndMarkers(SceneGraph& scene, float x, float y)
 	// 플레이어는 지역의 시작 지점(또는 도착한 이정표 앞)에서 시작한다(쓰러지면 여기로 되돌아옴).
 	result.player = scene.Spawn<PlayerActor>(x, y);
 	scene.SetPlayer(result.player);
+	result.player->SetModel(GameModels::ForPlayer(), false);
 
 	// 플레이어 발밑 위치 마커: 플레이어의 자식이라 이동을 자동으로 따라다닌다.
 	RingStyle markerStyle = { 1.0f, 0.92f, 0.6f, 0.8f, 0.1f, 0.14f, 0.08f, 2.5f };

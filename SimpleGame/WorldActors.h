@@ -3,6 +3,7 @@
 #include <vector>
 
 #include "Actor.h"
+#include "GameModels.h"
 #include "Renderer.h"
 
 // 청크 하나(예: 8x8칸)의 정적 바닥 타일들을 정점 색상 메시 하나로 구워서 드로우콜 1번에
@@ -50,6 +51,10 @@ public:
 
 private:
 	TreeKind m_Kind;
+
+	// 3D 모델(Resource의 Nature_Kit — 올리브·참나무·월계수 / 사이프러스). 처음 그릴 때 자리 해시로 고른다.
+	GameModels::Piece m_Piece;
+	bool m_PieceChecked = false;
 };
 
 // 건물: 흰 회벽 + 테라코타 박공지붕의 그리스 마을 집(돌 기단, 푸른 문, 불 켜진 창과 덧창).
@@ -76,6 +81,10 @@ public:
 private:
 	int m_HouseNumber = 0;
 	int m_Residents = 0;
+
+	// 3D 모델(Resource의 집 프리팹 — 작은 집 / 섬마을 평지붕 집). 처음 그릴 때 고른다.
+	GameModels::Piece m_Piece;
+	bool m_PieceChecked = false;
 };
 
 enum class ItemKind

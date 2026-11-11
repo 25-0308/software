@@ -6,6 +6,7 @@
 
 #include "CharacterActors.h"
 #include "GameLog.h"
+#include "GameModels.h"
 #include "LevelGenerator.h"
 #include "Renderer.h"
 #include "SceneGraph.h"
@@ -14,6 +15,18 @@
 namespace
 {
 	const float kPi = 3.14159265f;
+
+	// 키트 조각 하나를 그 자리에 고르게 늘려 그린다. 모델을 껐거나(F3) 조각이 없으면 false — 부르는 쪽이 도형으로 그린다.
+	bool DrawKitPiece(const RenderContext& ctx, const GameModels::Piece& piece, float x, float y, float z, float yaw, float scale)
+	{
+		if (!GameModels::IsEnabled() || !piece.IsValid())
+		{
+			return false;
+		}
+
+		GameModels::DrawPiece(ctx, piece, x, y, z, yaw, scale, scale, scale);
+		return true;
+	}
 
 	// 화면 가로 방향(월드 (1,-1)/√2). 카메라를 향해 세운 도형을 좌우로 펼칠 때 쓴다.
 	const float kScreenAxisX = 0.7071f;
@@ -169,6 +182,25 @@ void TempleActor::OnRender(const RenderContext& ctx)
 	float x = GetWorldX();
 	float y = GetWorldY();
 	float z = GetWorldZ();
+
+	// 3D 모델(그리스식만 — 로마식은 정면 계단·금빛 비문이 따로 있어 도형 그대로): 도리스식 신전 프리팹을 기단 크기(가로
+	// width·세로 depth + 둘레)에 맞춰 늘리고 정면(모델의 -y)을 +y로 돌린다. 높이는 가로·세로 배율의 평균(기둥이 너무 길거나
+	// 짧아지지 않게). 프리팹의 가운데를 이 자리에 맞춘다.
+	if (!m_Roman && GameModels::IsEnabled())
+	{
+		const GameModels::Piece& temple = GameModels::Prefab("Temple_Doric");
+		if (temple.IsValid() && temple.ExtentX() > 0.01f && temple.ExtentY() > 0.01f)
+		{
+			float scaleX = (m_Width + 0.8f) / temple.ExtentX();
+			float scaleY = (m_Depth + 0.8f) / temple.ExtentY();
+			float scaleZ = (scaleX + scaleY) * 0.5f;
+			float centerX = (temple.part->minX + temple.part->maxX) * 0.5f;
+			float centerY = (temple.part->minY + temple.part->maxY) * 0.5f;
+			GameModels::DrawPiece(ctx, temple, x + centerX * scaleX, y + centerY * scaleY, z, kPi, scaleX, scaleY, scaleZ);
+			return;
+		}
+	}
+
 	float halfWidth = m_Width * 0.5f;
 	float halfDepth = m_Depth * 0.5f;
 
@@ -325,6 +357,33 @@ void RockActor::OnRender(const RenderContext& ctx)
 	float z = GetWorldZ();
 	float s = GetSize();
 
+	// 3D 모델: 눈 덮인 바위(올림포스) / 크고 작은 바위·이끼 바위 중 자리마다 하나를 골라, 폭이 1.4×size가 되게 늘리고 돌려 세운다.
+	if (GameModels::IsEnabled())
+	{
+		static GameModels::Piece s_Rocks[7];
+		static GameModels::Piece s_Snowy;
+		static bool s_Loaded = false;
+		if (!s_Loaded)
+		{
+			const char* kNames[7] = { "Rock_Medium_A", "Rock_Medium_B", "Rock_Large_A", "Rock_Large_B", "Rock_Small_A", "Rock_Small_B", "Rock_Mossy" };
+			for (int i = 0; i < 7; ++i)
+			{
+				s_Rocks[i] = GameModels::NaturePiece(kNames[i]);
+			}
+			s_Snowy = GameModels::NaturePiece("Rock_Snowy");
+			s_Loaded = true;
+		}
+
+		unsigned int hash = GameModels::HashSpot(x, y) + (unsigned int)m_Variant * 7919u;
+		const GameModels::Piece& rock = m_Snowy ? s_Snowy : s_Rocks[hash % 7u];
+		float width = (std::max)(rock.ExtentX(), rock.ExtentY());
+		if (rock.IsValid() && width > 0.01f && DrawKitPiece(ctx, rock, x, y, z, (float)(hash % 360u) * 0.0174533f, s * 1.4f / width))
+		{
+			return;
+		}
+	}
+
+
 	// 변형 번호마다 고정된 난수로 덩어리 크기·밝기를 조금씩 다르게 한다(같은 바위는 늘 같은 모양).
 	float a = Terrain::Hash(m_Variant, 1, 71);
 	float b = Terrain::Hash(m_Variant, 2, 71);
@@ -419,6 +478,14 @@ void ColumnActor::OnRender(const RenderContext& ctx)
 	float y = GetWorldY();
 	float z = GetWorldZ();
 
+	// 3D 모델: 도리스식 기둥(3.6 m) / 부러진 기둥 — 기둥 높이에 맞춰 줄인다.
+	if (DrawKitPiece(ctx, GameModels::BuildingPiece(m_Broken ? "Column_Broken" : "Column_Doric"), x, y, z,
+		(float)(GameModels::HashSpot(x, y) % 4u) * kPi * 0.5f, m_Height / 3.6f))
+	{
+		return;
+	}
+
+
 	if (!m_Broken)
 	{
 		Shapes::DrawSolidBox(ctx, x, y, z, 0.56f, 0.56f, 0.1f, Shapes::Shade(kMarble, 0.95f));
@@ -508,6 +575,17 @@ void AltarActor::OnRender(const RenderContext& ctx)
 	float x = GetWorldX();
 	float y = GetWorldY();
 	float z = GetWorldZ();
+
+	// 3D 모델: 돌 제단 + 곁의 청동 삼발이(도형과 같은 자리).
+	const GameModels::Piece& altar = GameModels::BuildingPiece("Altar");
+	const GameModels::Piece& tripod = GameModels::BuildingPiece("Tripod");
+	if (altar.IsValid() && tripod.IsValid() && GameModels::IsEnabled())
+	{
+		DrawKitPiece(ctx, tripod, x - 0.8f, y - 0.15f, z, 0.f, 0.7f);
+		DrawKitPiece(ctx, altar, x, y, z, kPi, 0.75f);
+		return;
+	}
+
 
 	// 삼발이(무녀가 앉아 신탁을 받는 청동 의자): 제단보다 카메라에서 멀어서 먼저 그린다.
 	float tripodX = x - 0.8f;
@@ -599,6 +677,13 @@ void StatueActor::OnRender(const RenderContext& ctx)
 	float y = GetWorldY();
 	float z = GetWorldZ();
 	float s = GetSize();
+
+	// 3D 모델: 서 있는 신상(3.2 m) / 쓰러진 신상 — 키 1.6×size로, 정면을 카메라 쪽으로.
+	if (DrawKitPiece(ctx, GameModels::BuildingPiece(m_Fallen ? "Statue_Fallen" : "Statue"), x, y, z, kPi, s * 0.5f))
+	{
+		return;
+	}
+
 	Shapes::Rgb bolt = { 1.1f, 0.88f, 0.35f };
 
 	if (!m_Fallen)
@@ -703,6 +788,13 @@ void SignpostActor::OnRender(const RenderContext& ctx)
 	float x = GetWorldX();
 	float y = GetWorldY();
 	float z = GetWorldZ();
+
+	// 3D 모델: 방향판 달린 이정표(2.2 m → 키 1.25).
+	if (DrawKitPiece(ctx, GameModels::GoodsPiece("Signpost"), x, y, z, kPi, 0.57f))
+	{
+		return;
+	}
+
 	Shapes::Rgb board = { 0.62f, 0.46f, 0.28f };
 
 	// 기둥과 방향판 셋(각자 다른 쪽을 가리킴)을 카메라에서 먼 것부터.
@@ -896,6 +988,13 @@ void StallActor::OnRender(const RenderContext& ctx)
 	float x = GetWorldX();
 	float y = GetWorldY();
 	float z = GetWorldZ();
+
+	// 3D 모델: 천 차양 좌판(2 m 폭 → 도형 좌판의 폭 1.36에 맞춤), 앞을 카메라 쪽으로.
+	if (DrawKitPiece(ctx, GameModels::GoodsPiece("Stall"), x, y, z, kPi, 0.68f))
+	{
+		return;
+	}
+
 	Shapes::Rgb cloth = { GetR(), GetG(), GetB() };
 	const float kPostHeight = 1.35f;
 

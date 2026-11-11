@@ -6,6 +6,7 @@
 #include <string>
 
 #include "GameLog.h"
+#include "GameModels.h"
 #include "PatronPowers.h"
 #include "Renderer.h"
 #include "SceneGraph.h"
@@ -706,8 +707,120 @@ void CharacterActor::OnUpdate(const UpdateContext& ctx)
 	}
 }
 
+void CharacterActor::SetModel(const ModelAsset* model, bool recolor)
+{
+	m_Model = model;
+	m_Recolor = recolor;
+	m_AnimClock = -1.f;
+}
+
+// 3D 모델로 그린다. 동작: 공격 중이면 공격(게임이 정한 진행률로), 걷고 있으면 빠르기에 따라 걷기·달리기(재생 속도를
+// 빠르기에 맞춤), 아니면 서 있기 — 바뀔 때마다 짧게 섞어 넘어간다. 크기는 모델의 바인드 자세 키를 지금 크기(size)에
+// 맞춘 키로 늘리고(체형마다 정한 비율), 앞(-y)이 바라보는 쪽(facing)을 향하게 돌린다.
+bool CharacterActor::DrawModelBody(const RenderContext& ctx)
+{
+	const ModelAsset::Part* whole = m_Model->GetWhole();
+	if (whole == nullptr || whole->maxZ <= 0.01f)
+	{
+		return false;
+	}
+
+	float x = GetWorldX();
+	float y = GetWorldY();
+
+	// 지난번에 그린 뒤로 흐른 시간과 움직인 거리(멈춰 있던 동안 = 화면 밖·대화 중엔 0으로).
+	float dt = 0.f;
+	if (m_AnimClock >= 0.f)
+	{
+		dt = (std::max)(0.f, (std::min)(0.1f, ctx.time - m_AnimClock));
+	}
+	m_AnimClock = ctx.time;
+
+	if (dt > 0.f)
+	{
+		float dx = x - m_LastModelX;
+		float dy = y - m_LastModelY;
+		float speed = sqrtf(dx * dx + dy * dy) / dt;
+		m_MoveSpeed += (speed - m_MoveSpeed) * (std::min)(1.f, dt * 10.f);
+	}
+	m_LastModelX = x;
+	m_LastModelY = y;
+
+	// 동작 고르기. 빠르기 기준은 게임 단위(초당 칸) — 플레이어 4, 쫓아오는 괴물 2~3, 거니는 사람 1.1.
+	const float kRunSpeed = 2.2f;
+	int attack = m_Model->FindClip("Attack");
+	if (m_AttackProgress >= 0.f && attack >= 0)
+	{
+		m_Pose.Play(attack, 1.f, false, 0.06f);
+		m_Pose.SetProgress(*m_Model, m_AttackProgress);
+		m_Pose.Advance(*m_Model, 0.f);
+	}
+	else if (m_Walking && m_MoveSpeed > 0.15f)
+	{
+		bool run = (m_MoveSpeed >= kRunSpeed);
+		int clip = m_Model->FindClip(run ? "Run" : "Walk");
+		float rate = run ? m_MoveSpeed / 4.f : m_MoveSpeed / 1.2f;
+		m_Pose.Play(clip, (std::max)(0.6f, (std::min)(1.6f, rate)), true, 0.18f);
+		m_Pose.Advance(*m_Model, dt);
+	}
+	else
+	{
+		m_Pose.Play(m_Model->FindClip("Idle"), 1.f, true, 0.25f);
+		m_Pose.Advance(*m_Model, dt);
+	}
+	m_Pose.Compute(*m_Model, m_Joints);
+
+	// 크기: 체형마다 size당 키(사람은 머리 꼭대기, 짐승은 등·뿔 끝).
+	float heightPerSize = 1.3f;
+	switch (m_Shape)
+	{
+	case BodyShape::Deer: heightPerSize = 1.25f; break;
+	case BodyShape::Wolf: heightPerSize = 0.95f; break;
+	case BodyShape::Cow: heightPerSize = 0.95f; break;
+	default: break;
+	}
+	float scale = GetSize() * heightPerSize / whole->maxZ;
+
+	Renderer::ModelDrawParams params;
+	params.model = Mat4::Translate(x, y, GetWorldZ()) * Mat4::RotateZ(GetFacing() + 1.5707963f) * Mat4::Scale(scale, scale, scale);
+	params.joints = &m_Joints;
+	params.alpha = m_Opacity;
+	params.depthRadius = GetSize() * heightPerSize * 1.5f + 0.5f; // 내민 팔·창·꼬리까지
+
+	if (m_FlashTimer > 0.f && m_FlashDuration > 0.f)
+	{
+		params.flash = 0.7f * m_FlashTimer / m_FlashDuration;
+		if (m_FlashKind == FlashKind::Red)
+		{
+			params.flashR = 1.4f; params.flashG = 0.15f; params.flashB = 0.1f;
+		}
+		else
+		{
+			params.flashR = 1.6f; params.flashG = 1.6f; params.flashB = 1.6f;
+		}
+	}
+
+	if (m_Recolor)
+	{
+		float* cloth = params.roleColors[ModelAsset::RoleClothA];
+		cloth[0] = GetR(); cloth[1] = GetG(); cloth[2] = GetB(); cloth[3] = 1.f;
+		float* hair = params.roleColors[ModelAsset::RoleHair];
+		hair[0] = m_Look.hairR; hair[1] = m_Look.hairG; hair[2] = m_Look.hairB; hair[3] = 1.f;
+		float* accent = params.roleColors[ModelAsset::RoleClothB];
+		accent[0] = GetR() * 0.62f; accent[1] = GetG() * 0.62f; accent[2] = GetB() * 0.62f; accent[3] = 1.f;
+	}
+
+	ctx.renderer.DrawModel(m_Model->GetMesh(), whole->firstIndex, whole->indexCount, ctx.viewProjection, params);
+	return true;
+}
+
 void CharacterActor::OnRender(const RenderContext& ctx)
 {
+	if (m_Model != nullptr && GameModels::IsEnabled() && DrawModelBody(ctx))
+	{
+		return;
+	}
+
 	float time = ctx.time;
 	float facing = GetFacing();
 
@@ -1590,6 +1703,10 @@ AnimalActor::AnimalActor(AnimalKind kind, float anchorX, float anchorY, float ph
 		look.wineCup = true;
 		SetLook(look);
 	}
+
+	// 3D 모델(네 발 짐승은 종 모델, 사람 모양 괴물은 인간형 프리셋 — 뱀은 모델이 없어 도형 그대로).
+	bool recolor = false;
+	SetModel(GameModels::ForAnimal(kind, recolor), recolor);
 
 	FitBoundsToSize();
 }

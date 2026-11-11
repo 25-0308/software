@@ -176,6 +176,9 @@
     <ClInclude Include="Monitor.h" />
     <ClInclude Include="EffectActors.h" />
     <ClInclude Include="Faith.h" />
+    <ClInclude Include="GameModels.h" />
+    <ClInclude Include="Json.h" />
+    <ClInclude Include="Model.h" />
     <ClInclude Include="NpcSociety.h" />
     <ClInclude Include="PatronPowers.h" />
     <ClInclude Include="Portrait.h" />
@@ -219,6 +222,9 @@
     <ClCompile Include="Monitor.cpp" />
     <ClCompile Include="EffectActors.cpp" />
     <ClCompile Include="Faith.cpp" />
+    <ClCompile Include="GameModels.cpp" />
+    <ClCompile Include="Json.cpp" />
+    <ClCompile Include="Model.cpp" />
     <ClCompile Include="NpcSociety.cpp" />
     <ClCompile Include="PatronPowers.cpp" />
     <ClCompile Include="Portrait.cpp" />
@@ -250,6 +256,8 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="Shaders\ColorBatch.fs" />
+    <None Include="Shaders\Model.fs" />
+    <None Include="Shaders\Model.vs" />
     <None Include="Shaders\ColorBatch.vs" />
     <None Include="Shaders\PostProcess.vs" />
     <None Include="Shaders\BrightExtract.fs" />

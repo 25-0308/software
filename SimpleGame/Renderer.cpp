@@ -38,6 +38,7 @@ Renderer::~Renderer()
 	if (m_Text.program != 0) glDeleteProgram(m_Text.program);
 	if (m_TileBatchSolid.program != 0) glDeleteProgram(m_TileBatchSolid.program);
 	if (m_TileBatchWater.program != 0) glDeleteProgram(m_TileBatchWater.program);
+	if (m_ModelProgram != 0) glDeleteProgram(m_ModelProgram);
 
 	if (m_VaoRect != 0) glDeleteVertexArrays(1, &m_VaoRect);
 	if (m_VaoBatch != 0) glDeleteVertexArrays(1, &m_VaoBatch);
@@ -81,6 +82,38 @@ void Renderer::Initialize(int windowSizeX, int windowSizeY)
 	m_Text = CompileAndCache("./Shaders/Text.vs", "./Shaders/Text.fs");
 	m_TileBatchSolid = CompileAndCache("./Shaders/TileBatch.vs", "./Shaders/TileBatchSolid.fs");
 	m_TileBatchWater = CompileAndCache("./Shaders/TileBatch.vs", "./Shaders/TileBatchWater.fs");
+
+	// 바닥 재질 텍스처 유니폼(텍스처가 없으면 셰이더가 예전처럼 절차적 무늬만 쓴다).
+	const char* kGroundNames[kGroundTextureCount] = { "u_GroundGrass", "u_GroundStone", "u_GroundPath", "u_GroundRock" };
+	for (int i = 0; i < kGroundTextureCount; ++i)
+	{
+		m_UniformGroundTextures[i] = glGetUniformLocation(m_TileBatchSolid.program, kGroundNames[i]);
+	}
+	m_UniformGroundAverages = glGetUniformLocation(m_TileBatchSolid.program, "u_GroundAverages");
+	m_UniformUseGroundTextures = glGetUniformLocation(m_TileBatchSolid.program, "u_UseGroundTextures");
+
+	// 3D 모델 셰이더(Resource 폴더의 glTF 모델 — 스킨·바꿔 칠하기·면 방향 명암).
+	m_ModelProgram = ShaderUtil::CompileShaderProgram("./Shaders/Model.vs", "./Shaders/Model.fs");
+	if (m_ModelProgram != 0)
+	{
+		m_ModelUniformMVP = glGetUniformLocation(m_ModelProgram, "u_MVP");
+		m_ModelUniformModel = glGetUniformLocation(m_ModelProgram, "u_Model");
+		m_ModelUniformJoints = glGetUniformLocation(m_ModelProgram, "u_Joints");
+		m_ModelUniformTint = glGetUniformLocation(m_ModelProgram, "u_Tint");
+		m_ModelUniformFlash = glGetUniformLocation(m_ModelProgram, "u_Flash");
+		m_ModelUniformRoleColors = glGetUniformLocation(m_ModelProgram, "u_RoleColors");
+		m_ModelUniformDepthRemap = glGetUniformLocation(m_ModelProgram, "u_DepthRemap");
+	}
+
+	// 뼈 행렬이 없을 때 보내는 단위 행렬들(스킨 없는 모델은 모든 정점이 0번 뼈 하나에 매달려 있다).
+	m_IdentityJoints.assign((size_t)kModelMaxJoints * 16, 0.f);
+	for (int i = 0; i < kModelMaxJoints; ++i)
+	{
+		for (int d = 0; d < 4; ++d)
+		{
+			m_IdentityJoints[(size_t)i * 16 + (size_t)d * 5] = 1.f;
+		}
+	}
 
 	CreateVertexBufferObjects();
 
@@ -359,6 +392,18 @@ void Renderer::DrawTileBatchSolid(const TileBatchHandle& batch, const Mat4& view
 	glUseProgram(m_TileBatchSolid.program);
 	glUniformMatrix4fv(m_TileBatchSolid.uniformMVP, 1, GL_FALSE, viewProjection.m);
 	glUniform1f(m_TileBatchSolid.uniformTime, time);
+	glUniform1i(m_UniformUseGroundTextures, m_HasGroundTextures ? 1 : 0);
+	if (m_HasGroundTextures)
+	{
+		for (int i = 0; i < kGroundTextureCount; ++i)
+		{
+			glActiveTexture(GL_TEXTURE1 + i);
+			glBindTexture(GL_TEXTURE_2D, m_GroundTextures[i]);
+			glUniform1i(m_UniformGroundTextures[i], 1 + i);
+		}
+		glActiveTexture(GL_TEXTURE0);
+		glUniform3fv(m_UniformGroundAverages, kGroundTextureCount, m_GroundAverages);
+	}
 
 	glBindVertexArray(batch.vao);
 	glDrawArrays(GL_TRIANGLES, 0, batch.vertexCount);
@@ -379,4 +424,132 @@ void Renderer::DrawTileBatchWater(const TileBatchHandle& batch, const Mat4& view
 
 	glBindVertexArray(batch.vao);
 	glDrawArrays(GL_TRIANGLES, 0, batch.vertexCount);
+}
+
+void Renderer::SetGroundTextures(const GLuint textures[kGroundTextureCount], const float averages[kGroundTextureCount * 3])
+{
+	m_HasGroundTextures = true;
+	for (int i = 0; i < kGroundTextureCount; ++i)
+	{
+		m_GroundTextures[i] = textures[i];
+		m_HasGroundTextures = m_HasGroundTextures && (textures[i] != 0);
+	}
+	for (int i = 0; i < kGroundTextureCount * 3; ++i)
+	{
+		m_GroundAverages[i] = averages[i];
+	}
+}
+
+Renderer::ModelMeshHandle Renderer::CreateModelMesh(const float* vertices, int vertexCount, const unsigned int* indices, int indexCount)
+{
+	ModelMeshHandle mesh;
+	if (vertexCount <= 0 || indexCount <= 0)
+	{
+		return mesh;
+	}
+
+	glGenVertexArrays(1, &mesh.vao);
+	glBindVertexArray(mesh.vao);
+
+	glGenBuffers(1, &mesh.vbo);
+	glBindBuffer(GL_ARRAY_BUFFER, mesh.vbo);
+	glBufferData(GL_ARRAY_BUFFER, (GLsizeiptr)(sizeof(float) * kModelFloatsPerVertex * (size_t)vertexCount), vertices, GL_STATIC_DRAW);
+
+	glGenBuffers(1, &mesh.ibo);
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, mesh.ibo);
+	glBufferData(GL_ELEMENT_ARRAY_BUFFER, (GLsizeiptr)(sizeof(unsigned int) * (size_t)indexCount), indices, GL_STATIC_DRAW);
+
+	// 위치3 + 법선3 + 색3 + 발광1 + 역할1 + 뼈 번호4 + 가중치4(Shaders/Model.vs의 위치 0~6).
+	GLsizei stride = (GLsizei)(sizeof(float) * kModelFloatsPerVertex);
+	const int kSizes[7] = { 3, 3, 3, 1, 1, 4, 4 };
+	size_t offset = 0;
+	for (int i = 0; i < 7; ++i)
+	{
+		glEnableVertexAttribArray((GLuint)i);
+		glVertexAttribPointer((GLuint)i, kSizes[i], GL_FLOAT, GL_FALSE, stride, (void*)(sizeof(float) * offset));
+		offset += (size_t)kSizes[i];
+	}
+
+	glBindVertexArray(0);
+	mesh.indexCount = indexCount;
+	return mesh;
+}
+
+void Renderer::DestroyModelMesh(ModelMeshHandle& mesh)
+{
+	if (mesh.vao != 0)
+	{
+		glDeleteVertexArrays(1, &mesh.vao);
+	}
+	if (mesh.vbo != 0)
+	{
+		glDeleteBuffers(1, &mesh.vbo);
+	}
+	if (mesh.ibo != 0)
+	{
+		glDeleteBuffers(1, &mesh.ibo);
+	}
+	mesh = ModelMeshHandle();
+}
+
+void Renderer::DrawModel(const ModelMeshHandle& mesh, int firstIndex, int indexCount, const Mat4& viewProjection, const ModelDrawParams& params)
+{
+	if (m_ModelProgram == 0 || mesh.vao == 0 || indexCount <= 0)
+	{
+		return;
+	}
+
+	Flush();
+
+	// 모델마다 깊이 버퍼의 좁은 구간 하나: 나중에 그리는 모델일수록 앞쪽(작은 값) 구간이라 모델끼리는 그린 순서가
+	// 이기고, 모델 안에서는 깊이 테스트가 앞뒤를 가린다. 구간을 다 쓰면(그럴 일은 거의 없음) 마지막 구간을 같이 쓴다.
+	const int kSlices = 4096;
+	int slice = (m_ModelSlice < kSlices - 1) ? m_ModelSlice : kSlices - 1;
+	++m_ModelSlice;
+	double farEdge = 1.0 - (double)slice / (double)kSlices;
+	double nearEdge = farEdge - 1.0 / (double)kSlices;
+
+	glEnable(GL_DEPTH_TEST);
+	glDepthFunc(GL_LESS);
+	glDepthMask(GL_TRUE);
+	glDepthRange(nearEdge, farEdge);
+
+	Mat4 mvp = viewProjection * params.model;
+
+	glUseProgram(m_ModelProgram);
+	glUniformMatrix4fv(m_ModelUniformMVP, 1, GL_FALSE, mvp.m);
+	glUniformMatrix4fv(m_ModelUniformModel, 1, GL_FALSE, params.model.m);
+
+	if (params.joints != nullptr && !params.joints->empty())
+	{
+		int count = (int)params.joints->size();
+		if (count > kModelMaxJoints)
+		{
+			count = kModelMaxJoints;
+		}
+		glUniformMatrix4fv(m_ModelUniformJoints, count, GL_FALSE, (*params.joints)[0].m);
+	}
+	else
+	{
+		glUniformMatrix4fv(m_ModelUniformJoints, kModelMaxJoints, GL_FALSE, m_IdentityJoints.data());
+	}
+
+	glUniform4f(m_ModelUniformTint, params.tintR, params.tintG, params.tintB, params.alpha);
+	glUniform4f(m_ModelUniformFlash, params.flashR, params.flashG, params.flashB, params.flash);
+	glUniform4fv(m_ModelUniformRoleColors, kModelRoleCount, &params.roleColors[0][0]);
+
+	// 깊이를 모델 원점의 클립 z 둘레 ±depthRadius로만 편다. 월드 1칸이 클립 z로 얼마인지는 view-projection 셋째 행의 길이.
+	const float* vp = viewProjection.m;
+	float clipZPerUnit = sqrtf(vp[2] * vp[2] + vp[6] * vp[6] + vp[10] * vp[10]);
+	float centerZ = mvp.m[14];
+	float radius = (params.depthRadius > 0.01f) ? params.depthRadius : 4.f;
+	float depthScale = (clipZPerUnit > 0.f) ? 1.f / (radius * clipZPerUnit) : 1.f;
+	glUniform2f(m_ModelUniformDepthRemap, centerZ, depthScale);
+
+	glBindVertexArray(mesh.vao);
+	glDrawElements(GL_TRIANGLES, indexCount, GL_UNSIGNED_INT, (void*)(sizeof(unsigned int) * (size_t)firstIndex));
+	glBindVertexArray(0);
+
+	glDepthRange(0.0, 1.0);
+	glDisable(GL_DEPTH_TEST);
 }

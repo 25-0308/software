@@ -1,7 +1,10 @@
 #pragma once
 
+#include <vector>
+
 #include "Actor.h"
 #include "Faith.h"
+#include "Model.h"
 
 struct PatronDef;
 
@@ -92,6 +95,11 @@ public:
 	void OnRenderShadow(const RenderContext& ctx) override;
 	bool CastsShadow() const override { return true; }
 
+	// 3D 모델(Resource 폴더의 인간형·짐승 프리셋 — GameModels.h). 있으면 도형 대신 모델로 그리고, 걷기·달리기·공격·
+	// 서 있기 동작을 지금 상태에 맞춰 섞어 튼다. recolor면 옷(ClothA = SetColor 색)·머리(HumanLook의 머리 색)를 그 사람의
+	// 색으로 바꿔 칠한다(이름 없는 주민·순례객처럼 같은 프리셋을 여럿이 쓰는 사람). nullptr이면 도형.
+	void SetModel(const ModelAsset* model, bool recolor);
+
 protected:
 	// 하위 클래스 생성자가 SetSize 뒤에 호출: 몸·머리·팔다리·손에 든 물건(공격 때 앞으로 뻗는 것 포함)과
 	// 발밑 그림자를 감싸는 경계 구를 크기·체형에 맞춰 잡는다.
@@ -123,6 +131,9 @@ protected:
 	virtual float PersonalSpace() const;
 
 private:
+	// 모델로 그린다(동작 고르기·재생 포함). 모델이 없거나 그릴 수 없으면 false(도형으로 그림).
+	bool DrawModelBody(const RenderContext& ctx);
+
 	BodyShape m_Shape;
 	HumanLook m_Look;
 	bool m_Walking = false;
@@ -133,6 +144,16 @@ private:
 	FlashKind m_FlashKind = FlashKind::White;
 	float m_FlashTimer = 0.f;
 	float m_FlashDuration = 0.f;
+
+	// 3D 모델과 지금 동작. 걷는 빠르기는 그릴 때마다 위치 변화로 잰다(걷기·달리기 고르기와 재생 속도).
+	const ModelAsset* m_Model = nullptr;
+	bool m_Recolor = false;
+	ModelPose m_Pose;
+	std::vector<Mat4> m_Joints;
+	float m_AnimClock = -1.f;
+	float m_LastModelX = 0.f;
+	float m_LastModelY = 0.f;
+	float m_MoveSpeed = 0.f;
 };
 
 // NPC가 지금 하고 있는 일. 거닐기는 NPC 스스로, 다른 NPC·플레이어와의 교류는 NpcSociety가 정한다.

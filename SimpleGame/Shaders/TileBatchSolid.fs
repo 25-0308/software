@@ -9,6 +9,24 @@ layout(location=0) out vec4 FragColor;
 
 uniform float u_Time;
 
+// Resource 폴더의 바닥 재질 텍스처(이어 붙는 512×512 — 잔디·돌바닥·흙길·바위). 있으면 정점 색(주변 지형과 섞이고
+// 물가는 모래색)에 텍스처의 결(텍스처 색 ÷ 그 평균 색)을 곱해서, 색 배치는 그대로 두고 표면만 그림처럼 바꾼다.
+uniform int u_UseGroundTextures;
+uniform sampler2D u_GroundGrass;
+uniform sampler2D u_GroundStone;
+uniform sampler2D u_GroundPath;
+uniform sampler2D u_GroundRock;
+uniform vec3 u_GroundAverages[4];
+
+// 텍스처 한 장이 덮는 땅(칸). 리소스는 2 m에 한 장이고, 게임의 한 칸이 그보다 작으므로 두 칸에 한 장.
+const float kTextureSpan = 2.0;
+
+vec3 Detail(sampler2D tex, vec3 average, vec2 p)
+{
+	vec3 texel = texture(tex, p / kTextureSpan).rgb;
+	return texel / max(average, vec3(0.02));
+}
+
 float Hash(vec2 p)
 {
 	return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
@@ -44,7 +62,17 @@ void main()
 	vec2 p = v_WorldPos.xy;
 	float material = v_Extra.y;
 
-	if (material < 0.5)
+	if (u_UseGroundTextures == 1 && material < 3.5)
+	{
+		// 텍스처 결: 너무 튀지 않게 조금 눌러서(평균 1 둘레로 0.75배) 곱한다.
+		vec3 detail;
+		if (material < 0.5) detail = Detail(u_GroundGrass, u_GroundAverages[0], p);
+		else if (material < 1.5) detail = Detail(u_GroundStone, u_GroundAverages[1], p);
+		else if (material < 2.5) detail = Detail(u_GroundPath, u_GroundAverages[2], p);
+		else detail = Detail(u_GroundRock, u_GroundAverages[3], p);
+		color *= mix(vec3(1.0), detail, 0.75);
+	}
+	else if (material < 0.5)
 	{
 		// 잔디: 크기가 다른 얼룩 두 겹으로 풀밭의 결을 낸다.
 		float mottle = Noise(p * 1.8) * 0.6 + Noise(p * 4.7) * 0.4;

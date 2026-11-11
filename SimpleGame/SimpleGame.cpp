@@ -31,6 +31,7 @@ but WITHOUT ANY WARRANTY.
 #include "CharacterActors.h"
 #include "DrawCallHook.h"
 #include "EffectActors.h"
+#include "GameModels.h"
 #include "GameLog.h"
 #include "Hud.h"
 #include "LevelBuilder.h"
@@ -38,6 +39,7 @@ but WITHOUT ANY WARRANTY.
 #include "Mesh.h"
 #include "MeshCache.h"
 #include "MiniMap.h"
+#include "Model.h"
 #include "Monitor.h"
 #include "NpcSociety.h"
 #include "PatronPowers.h"
@@ -101,6 +103,11 @@ namespace
 	const bool kOpenMonitorOnStart = true;
 	const float kMonitorAutoOpenDelay = 2.f;
 }
+
+// 검증용 화면 캡처(명령줄 --capture <파일.bmp> [초]): 그 시간이 지난 뒤 화면을 BMP로 저장하고 게임을 끝낸다. 비어 있으면 끔.
+// --zoom <배율>은 처음 줌, --at <지역ID> [dx dy]는 시작 자리(지역 중심 기준), --shapes는 3D 모델 대신 도형으로 시작.
+std::string g_CapturePath;
+float g_CaptureAfterSeconds = 4.f;
 
 Renderer *g_Renderer = NULL;
 Camera *g_Camera = NULL;
@@ -972,10 +979,68 @@ namespace
 	}
 }
 
+void ShutdownGame(void);
+
+namespace
+{
+	// 명령줄 인자가 수(음수 포함)인지 — 옵션 이름(--at 등)과 가른다.
+	bool IsNumberArgument(const char* text)
+	{
+		char* end = NULL;
+		strtod(text, &end);
+		return end != text && *end == '\0';
+	}
+
+	// 지금 창 화면(뒤 버퍼)을 24비트 BMP로 저장한다(검증용 캡처).
+	bool SaveScreenshot(const std::string& path)
+	{
+		int width = glutGet(GLUT_WINDOW_WIDTH);
+		int height = glutGet(GLUT_WINDOW_HEIGHT);
+		if (width <= 0 || height <= 0)
+		{
+			return false;
+		}
+
+		int rowBytes = (width * 3 + 3) & ~3;
+		std::vector<unsigned char> pixels((size_t)rowBytes * height);
+		glBindFramebuffer(GL_FRAMEBUFFER, 0);
+		glReadBuffer(GL_BACK);
+		glPixelStorei(GL_PACK_ALIGNMENT, 4);
+		glReadPixels(0, 0, width, height, GL_BGR, GL_UNSIGNED_BYTE, pixels.data());
+
+		FILE* file = NULL;
+		if (fopen_s(&file, path.c_str(), "wb") != 0 || file == NULL)
+		{
+			return false;
+		}
+
+		BITMAPFILEHEADER fileHeader = {};
+		BITMAPINFOHEADER infoHeader = {};
+		fileHeader.bfType = 0x4D42;
+		fileHeader.bfOffBits = sizeof(fileHeader) + sizeof(infoHeader);
+		fileHeader.bfSize = fileHeader.bfOffBits + (DWORD)pixels.size();
+		infoHeader.biSize = sizeof(infoHeader);
+		infoHeader.biWidth = width;
+		infoHeader.biHeight = height; // 아래에서 위로 — glReadPixels와 같은 순서
+		infoHeader.biPlanes = 1;
+		infoHeader.biBitCount = 24;
+		infoHeader.biCompression = BI_RGB;
+
+		fwrite(&fileHeader, sizeof(fileHeader), 1, file);
+		fwrite(&infoHeader, sizeof(infoHeader), 1, file);
+		fwrite(pixels.data(), 1, pixels.size(), file);
+		fclose(file);
+		return true;
+	}
+}
+
 void RenderScene(void)
 {
 	// 이 프레임의 드로우 콜 카운터를 0으로 돌린다 (후킹된 glDrawArrays가 센다).
 	DrawCallHook::BeginFrame();
+
+	// 3D 모델의 깊이 칸을 처음부터 다시 나눠 쓴다(모델끼리는 그린 순서, 모델 안에서는 깊이로 가림).
+	g_Renderer->BeginModelFrame();
 
 	g_PostProcess->BeginCapture();
 
@@ -1062,6 +1127,16 @@ void RenderScene(void)
 		// 유난히 크게 나온다고 해서 우리 코드가 그만큼 느린 건 아닐 수 있다(구간 이름에
 		// 그 가능성을 남겨 둔 이유).
 		Profiler::ScopedTimer timer(Profiler::Section::Present);
+
+		// 검증용 캡처: 정해진 시간이 지나면 이 프레임을 저장하고 끝낸다.
+		if (!g_CapturePath.empty() && g_ElapsedSeconds >= g_CaptureAfterSeconds)
+		{
+			bool saved = SaveScreenshot(g_CapturePath);
+			std::cout << "[캡처] " << g_CapturePath << (saved ? " 저장" : " 저장 실패") << "\n";
+			ShutdownGame();
+			exit(0);
+		}
+
 		glutSwapBuffers();
 	}
 
@@ -1352,6 +1427,13 @@ void SpecialKeyInput(int key, int x, int y)
 	{
 		g_Monitor->OpenInBrowser();
 	}
+
+	// F3: 3D 모델(Resource 폴더) ↔ 예전 도형으로 바꿔 가며 비교한다.
+	if (key == GLUT_KEY_F3)
+	{
+		GameModels::SetEnabled(!GameModels::IsEnabled());
+		GameLog::Add(GameLog::Kind::Info, GameModels::IsEnabled() ? "[F3] 3D 모델로 그린다" : "[F3] 도형으로 그린다(3D 모델 끔)");
+	}
 }
 
 // 게임을 끝낼 때의 정리(모니터 소켓, 이야기·UI, 씬·GPU 자원, 드로우 콜 후킹). 창을 닫으면 freeglut이 창과 OpenGL
@@ -1405,6 +1487,9 @@ void ShutdownGame(void)
 	delete g_Wilderness;
 	g_Wilderness = NULL;
 
+	// 3D 모델의 GPU 버퍼와 바닥 텍스처(렌더러보다 먼저, 씬을 지운 뒤).
+	GameModels::Shutdown();
+
 	delete g_PostProcess;
 	g_PostProcess = NULL;
 	delete g_Camera;
@@ -1419,6 +1504,42 @@ int main(int argc, char **argv)
 	// (소스 파일이 UTF-8로 저장되어 있으므로, 콘솔도 같은 인코딩으로 맞춰야 한다.)
 	SetConsoleOutputCP(CP_UTF8);
 	SetConsoleCP(CP_UTF8);
+
+	// 검증용 명령줄 옵션(위 g_CapturePath 설명).
+	std::string startRegion;
+	float startOffsetX = 0.f;
+	float startOffsetY = 0.f;
+	float startZoom = 0.f;
+	bool startWithShapes = false;
+	for (int i = 1; i < argc; ++i)
+	{
+		std::string arg = argv[i];
+		if (arg == "--capture" && i + 1 < argc)
+		{
+			g_CapturePath = argv[++i];
+			if (i + 1 < argc && IsNumberArgument(argv[i + 1]))
+			{
+				g_CaptureAfterSeconds = (float)atof(argv[++i]);
+			}
+		}
+		else if (arg == "--zoom" && i + 1 < argc)
+		{
+			startZoom = (float)atof(argv[++i]);
+		}
+		else if (arg == "--at" && i + 1 < argc)
+		{
+			startRegion = argv[++i];
+			if (i + 2 < argc && IsNumberArgument(argv[i + 1]) && IsNumberArgument(argv[i + 2]))
+			{
+				startOffsetX = (float)atof(argv[++i]);
+				startOffsetY = (float)atof(argv[++i]);
+			}
+		}
+		else if (arg == "--shapes")
+		{
+			startWithShapes = true;
+		}
+	}
 
 	// 첫 드로우 콜이 일어나기 전에 OpenGL 드로우 콜 후킹을 걸어서, 이후 모든
 	// glDrawArrays 호출이 카운터를 거치게 한다.
@@ -1492,14 +1613,36 @@ int main(int argc, char **argv)
 	// 하나로 이어진 월드를 짓고 델포이에서 시작한다. 지역 사이는 걸어서 오간다.
 	g_SessionSeed = std::random_device{}();
 	g_Wilderness = new Wilderness();
+
+	// Resource 폴더의 3D 모델(인물·짐승·집·나무·바위·물건)과 바닥 텍스처. 폴더가 없으면 예전처럼 도형으로 그린다.
+	ModelLibrary::SetRenderer(g_Renderer);
+	GameModels::LoadGroundTextures(*g_Renderer);
+	if (startWithShapes)
+	{
+		GameModels::SetEnabled(false);
+	}
+
 	LoadWorld();
+
+	if (!startRegion.empty())
+	{
+		const WorldPlace* place = WorldLayout::Find(startRegion);
+		if (place != NULL)
+		{
+			g_Player->SetPosition(place->centerX + startOffsetX, place->centerY + startOffsetY, 0.f);
+		}
+	}
+	if (startZoom > 0.f)
+	{
+		g_Camera->AdjustZoom(startZoom);
+	}
 
 	GameLog::Add(GameLog::Kind::Info, "[조작] WASD 이동, E 대화·조사, Space 공격, Q 기본 스킬·R 궁극기(수호신의 축복 뒤), M 지도, 마우스 휠 확대/축소. 대화는 E/Space로 넘기고 숫자키로 고른다.");
 	GameLog::Add(GameLog::Kind::Info, "[길잡이] 발밑의 금빛 화살표와 미니맵의 금빛 점이 지금 목표를 가리킨다. 다른 마을은 길을 따라 걸어서 간다 — 마을 사이의 황야엔 몬스터가 산다.");
 	if (g_Monitor->IsRunning())
 	{
 		GameLog::Add(GameLog::Kind::Info, "[모니터] 월드 상태는 브라우저의 " + g_Monitor->GetUrl() + " 에서 볼 수 있다(F2로 다시 열기).");
-		if (kOpenMonitorOnStart)
+		if (kOpenMonitorOnStart && g_CapturePath.empty())
 		{
 			g_Monitor->RequestAutoOpen(kMonitorAutoOpenDelay);
 		}

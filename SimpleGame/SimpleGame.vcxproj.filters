@@ -81,6 +81,15 @@
     <ClInclude Include="EffectActors.h">
       <Filter>헤더 파일</Filter>
     </ClInclude>
+    <ClInclude Include="GameModels.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="Json.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="Model.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
     <ClInclude Include="Faith.h">
       <Filter>헤더 파일</Filter>
     </ClInclude>
@@ -188,6 +197,15 @@
     <ClCompile Include="EffectActors.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
+    <ClCompile Include="GameModels.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="Json.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="Model.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
     <ClCompile Include="Faith.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
@@ -274,6 +292,12 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
+    <None Include="Shaders\Model.fs">
+      <Filter>소스 파일\Shaders</Filter>
+    </None>
+    <None Include="Shaders\Model.vs">
+      <Filter>소스 파일\Shaders</Filter>
+    </None>
     <None Include="Shaders\ColorBatch.fs">
       <Filter>소스 파일\Shaders</Filter>
     </None>
