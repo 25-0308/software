@@ -25,7 +25,7 @@ namespace
 	const int kMaxEffectDepth = 16;    // GOTO가 GOTO를 부를 수 있는 최대 깊이
 
 	// 목표 표시(오른쪽 위 미니맵 아래).
-	const float kObjectiveRight = 788.f;
+	const float kObjectiveRight = UiDraw::kScreenWidth - 12.f;
 	const float kObjectiveTop = 452.f;
 	const int kObjectiveWrapWidth = 250;
 	const int kObjectiveHintWrapWidth = 340; // 목적지 안내는 한 줄로 보이게 조금 더 넓게
@@ -971,14 +971,14 @@ void StoryDirector::Draw(Renderer& renderer)
 		float bandBottom = titleTop - titleHeight - tipHeight - 22.f;
 
 		UiDraw::Rect(renderer, ui, 0.f, bandBottom, UiDraw::kScreenWidth, titleTop - bandBottom + 10.f, 0.f, 0.f, 0.f, 0.38f * alpha);
-		UiDraw::TextTopLeft(renderer, ui, m_BannerTitleTexture, floorf(400.f - titleWidth * 0.5f), titleTop, 1.f, 0.88f, 0.55f, alpha);
-		UiDraw::Rect(renderer, ui, floorf(400.f - titleWidth * 0.5f - 30.f), titleTop - titleHeight - 5.f, titleWidth + 60.f, 2.f,
+		UiDraw::TextTopLeft(renderer, ui, m_BannerTitleTexture, floorf(UiDraw::kScreenWidth * 0.5f - titleWidth * 0.5f), titleTop, 1.f, 0.88f, 0.55f, alpha);
+		UiDraw::Rect(renderer, ui, floorf(UiDraw::kScreenWidth * 0.5f - titleWidth * 0.5f - 30.f), titleTop - titleHeight - 5.f, titleWidth + 60.f, 2.f,
 			0.9f, 0.72f, 0.32f, 0.9f * alpha);
 
 		if (m_BannerTipTexture.id != 0)
 		{
 			float tipWidth = (float)m_BannerTipTexture.width;
-			UiDraw::TextTopLeft(renderer, ui, m_BannerTipTexture, floorf(400.f - tipWidth * 0.5f), titleTop - titleHeight - 10.f,
+			UiDraw::TextTopLeft(renderer, ui, m_BannerTipTexture, floorf(UiDraw::kScreenWidth * 0.5f - tipWidth * 0.5f), titleTop - titleHeight - 10.f,
 				0.88f, 0.9f, 0.95f, alpha);
 		}
 	}

@@ -15,7 +15,7 @@ class StoryState;
 // 효과를 실제로 적용하는 건 StoryDirector다(맵 이동·경험치처럼 게임 쪽 일이 섞여 있어서).
 // 신·주요 인물이 말하면 패널 오른쪽 위에 그 인물의 초상화(PortraitLibrary)가 서고, 플레이어·지문 차례엔 듣고 있는
 // 인물의 초상화를 어둡게 남겨 둔다.
-// HUD와 같은 화면 고정 좌표계(800x600)로 후처리 이후에 그린다.
+// HUD와 같은 화면 고정 좌표계(UiDraw)로 후처리 이후에 그린다.
 class DialogueBox
 {
 public:

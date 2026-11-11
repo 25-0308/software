@@ -10,13 +10,13 @@
 
 namespace
 {
-	// 대화창 패널(화면 아래 가운데, 800x600 화면 좌표).
-	const float kPanelLeft = 80.f;
-	const float kPanelRight = 720.f;
+	// 대화창 패널(화면 아래 가운데, UI 좌표 — 폭 640).
+	const float kPanelLeft = floorf(UiDraw::kScreenWidth * 0.5f - 320.f);
+	const float kPanelRight = kPanelLeft + 640.f;
 	const float kPanelBottom = 14.f;
 	const float kPanelTop = 146.f;
 
-	const float kTextLeft = 100.f;       // 본문 글자 왼쪽 끝
+	const float kTextLeft = kPanelLeft + 20.f; // 본문 글자 왼쪽 끝
 	const int kTextWrapWidth = 600;      // 본문 줄바꿈 폭(픽셀)
 	const int kChoiceWrapWidth = 590;    // 선택지 줄바꿈 폭(픽셀)
 	const float kFadeInSeconds = 0.15f;  // 대사가 바뀔 때 글자가 떠오르는 시간

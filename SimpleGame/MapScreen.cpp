@@ -12,17 +12,19 @@ namespace
 {
 	// 큰 지도(화면 왼쪽): 미니맵과 같은 코드를 크게 놓아 월드 전체를 보여 준다. 점·마름모 같은 표시는 지도만큼 키우지
 	// 않고 조금만 키운다.
-	const float kMapCenterX = 292.f;
+	// 배치는 800 폭 기준으로 짰고, 넓은 화면에선 통째로 가운데로 민다.
+	const float kLayoutLeft = floorf((UiDraw::kScreenWidth - 800.f) * 0.5f);
+	const float kMapCenterX = kLayoutLeft + 292.f;
 	const float kMapCenterY = 290.f;
 	const float kMapHalfSize = 248.f;
 	const float kMapMarkerScale = 1.4f;
 
 	// 제목(큰 지도 위).
-	const float kTitleLeft = 44.f;
+	const float kTitleLeft = kLayoutLeft + 44.f;
 	const float kTitleTop = 594.f;
 
 	// 오른쪽 칸(현재 목표·마을 목록·범례).
-	const float kSidebarLeft = 560.f;
+	const float kSidebarLeft = kLayoutLeft + 560.f;
 	const float kSidebarTop = 594.f;
 	const float kSidebarWidth = 228.f;
 	const int kSidebarWrapWidth = 228;

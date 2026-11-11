@@ -1,5 +1,6 @@
 #include "stdafx.h"
 #include "Hud.h"
+#include "UiDraw.h"
 
 #include "Renderer.h"
 #include "Dependencies\freeglut.h"
@@ -109,7 +110,7 @@ namespace
 
 void Hud::DrawStatus(Renderer& renderer, const MeshHandle& circleMesh, const PlayerStats& stats, float actionReadiness)
 {
-	Mat4 uiProjection = Mat4::Ortho(0.f, 800.f, 0.f, 600.f, -1.f, 1.f);
+	Mat4 uiProjection = UiDraw::ScreenProjection();
 
 	const float kBadgeX = 40.f;
 	const float kBadgeY = 560.f;
@@ -159,7 +160,18 @@ void Hud::DrawNameTags(SceneGraph& scene, const Mat4& viewProjection)
 	float pixelToNdcX = 2.f / (float)((viewport[2] > 0) ? viewport[2] : 800);
 	float pixelToNdcY = 2.f / (float)((viewport[3] > 0) ? viewport[3] : 600);
 
-	scene.ForEach([&viewProjection, pixelToNdcX, pixelToNdcY](Actor& actor)
+	// 비트맵 글꼴은 실제 화면 픽셀 크기라, 출력 영역이 크면(1920x1080 등) 큰 글꼴로 바꿔 화면 대비 크기를 비슷하게 둔다.
+	void* font = GLUT_BITMAP_HELVETICA_10;
+	if (viewport[3] >= 950)
+	{
+		font = GLUT_BITMAP_HELVETICA_18;
+	}
+	else if (viewport[3] >= 700)
+	{
+		font = GLUT_BITMAP_HELVETICA_12;
+	}
+
+	scene.ForEach([&viewProjection, pixelToNdcX, pixelToNdcY, font](Actor& actor)
 	{
 		const char* name = actor.GetName();
 		if (name == nullptr || !actor.IsVisible() || actor.IsPendingDestroy())
@@ -185,7 +197,7 @@ void Hud::DrawNameTags(SceneGraph& scene, const Mat4& viewProjection)
 		int textWidth = 0;
 		for (const char* c = name; *c != '\0'; ++c)
 		{
-			textWidth += glutBitmapWidth(GLUT_BITMAP_HELVETICA_10, *c);
+			textWidth += glutBitmapWidth(font, *c);
 		}
 
 		// 텍스트 폭의 절반만큼 왼쪽으로 밀어서 가운데 정렬한다.
@@ -197,14 +209,14 @@ void Hud::DrawNameTags(SceneGraph& scene, const Mat4& viewProjection)
 		glRasterPos2f(left + pixelToNdcX, ndcY - pixelToNdcY);
 		for (const char* c = name; *c != '\0'; ++c)
 		{
-			glutBitmapCharacter(GLUT_BITMAP_HELVETICA_10, *c);
+			glutBitmapCharacter(font, *c);
 		}
 
 		glColor3f(1.f, 1.f, 1.f);
 		glRasterPos2f(left, ndcY);
 		for (const char* c = name; *c != '\0'; ++c)
 		{
-			glutBitmapCharacter(GLUT_BITMAP_HELVETICA_10, *c);
+			glutBitmapCharacter(font, *c);
 		}
 	});
 }

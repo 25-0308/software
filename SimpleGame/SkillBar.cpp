@@ -12,8 +12,8 @@ namespace
 	// 칸 위의 스킬 이름(최대 약 96픽셀)이 서로 겹치거나 화면 밖으로 나가지 않게 칸 사이를 넉넉히 둔다.
 	const float kSlotSize = 54.f;
 	const float kSlotGap = 46.f;
-	const float kRight = 767.f;   // 오른쪽 칸(R)의 오른쪽 끝
-	const float kScreenRightLimit = 796.f;
+	const float kRight = UiDraw::kScreenWidth - 33.f;   // 오른쪽 칸(R)의 오른쪽 끝
+	const float kScreenRightLimit = UiDraw::kScreenWidth - 4.f;
 	const float kBottom = 16.f;   // 칸의 아래쪽 끝
 	const float kBorder = 3.f;
 	const int kNameWrapWidth = 100;

@@ -8,16 +8,24 @@
 #define NOMINMAX
 #endif
 #include <Windows.h>
+#include <cmath>
 #include <cstring>
 #include <vector>
 
 #include "Dependencies\glew.h"
+#include "UiDraw.h"
 
 namespace
 {
-	// 글자 영역 둘레의 여백(픽셀). 채팅 줄 배경이 글자에 딱 붙어 보이지 않게 한다.
+	// 글자 영역 둘레의 여백(UI 좌표). 채팅 줄 배경이 글자에 딱 붙어 보이지 않게 한다.
 	const int kPaddingX = 6;
 	const int kPaddingY = 3;
+
+	// UI 좌표 → 실제 화면 픽셀(글꼴 크기·줄바꿈 폭·여백을 이만큼 키워 그린다).
+	int ToPixels(int uiUnits)
+	{
+		return (int)(uiUnits * UiDraw::kPixelScale + 0.5f);
+	}
 
 	std::wstring ToWide(const std::string& utf8)
 	{
@@ -46,7 +54,7 @@ TextRasterizer::TextRasterizer(int fontPixelHeight, bool bold)
 
 	// 한글이 들어 있는 맑은 고딕. 없는 시스템에서는 GDI가 비슷한 글꼴로 대신한다.
 	// ANTIALIASED_QUALITY: 색 번짐 없는 회색조 안티앨리어싱(알파로 쓰기 좋다).
-	HFONT font = CreateFontW(-fontPixelHeight, 0, 0, 0, bold ? FW_BOLD : FW_NORMAL, FALSE, FALSE, FALSE,
+	HFONT font = CreateFontW(-ToPixels(fontPixelHeight), 0, 0, 0, bold ? FW_BOLD : FW_NORMAL, FALSE, FALSE, FALSE,
 		DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, ANTIALIASED_QUALITY,
 		DEFAULT_PITCH | FF_DONTCARE, L"Malgun Gothic");
 
@@ -80,7 +88,9 @@ TextTexture TextRasterizer::Create(const std::string& utf8Text, int maxWidth) co
 	HFONT oldFont = (HFONT)SelectObject(dc, (HFONT)m_Font);
 
 	// 1) 줄바꿈까지 반영한 글자 영역 크기를 먼저 잰다.
-	RECT measure = { 0, 0, maxWidth - kPaddingX * 2, 0 };
+	int paddingX = ToPixels(kPaddingX);
+	int paddingY = ToPixels(kPaddingY);
+	RECT measure = { 0, 0, ToPixels(maxWidth) - paddingX * 2, 0 };
 	DrawTextW(dc, text.c_str(), (int)text.size(), &measure, DT_CALCRECT | DT_WORDBREAK | DT_NOPREFIX);
 
 	int textWidth = measure.right - measure.left;
@@ -91,8 +101,8 @@ TextTexture TextRasterizer::Create(const std::string& utf8Text, int maxWidth) co
 		return result;
 	}
 
-	int width = textWidth + kPaddingX * 2;
-	int height = textHeight + kPaddingY * 2;
+	int width = textWidth + paddingX * 2;
+	int height = textHeight + paddingY * 2;
 
 	// 2) 32비트 DIB(위에서 아래 순서라 biHeight가 음수)를 만들어 검은 바탕에 흰 글자를 그린다.
 	BITMAPINFO info = {};
@@ -117,7 +127,7 @@ TextTexture TextRasterizer::Create(const std::string& utf8Text, int maxWidth) co
 	SetBkMode(dc, TRANSPARENT);
 	SetTextColor(dc, RGB(255, 255, 255));
 
-	RECT drawRect = { kPaddingX, kPaddingY, kPaddingX + textWidth, kPaddingY + textHeight };
+	RECT drawRect = { paddingX, paddingY, paddingX + textWidth, paddingY + textHeight };
 	DrawTextW(dc, text.c_str(), (int)text.size(), &drawRect, DT_WORDBREAK | DT_NOPREFIX);
 	GdiFlush();
 
@@ -151,9 +161,10 @@ TextTexture TextRasterizer::Create(const std::string& utf8Text, int maxWidth) co
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 
+	// 크기는 UI 좌표로 돌려준다(그리는 쪽은 그 크기로 그리고, 텍스처는 화면 픽셀에 맞게 줄어든다).
 	result.id = id;
-	result.width = width;
-	result.height = height;
+	result.width = (int)ceilf((float)width / UiDraw::kPixelScale);
+	result.height = (int)ceilf((float)height / UiDraw::kPixelScale);
 	return result;
 }
 

@@ -1,5 +1,6 @@
 #include "stdafx.h"
 #include "MiniMap.h"
+#include "UiDraw.h"
 
 #include <algorithm>
 #include <cmath>
@@ -13,9 +14,9 @@
 
 namespace
 {
-	// 화면 크기: HUD와 같은 800x600 픽셀 좌표계(원점은 왼쪽 아래).
-	const float kScreenWidth = 800.f;
-	const float kScreenHeight = 600.f;
+	// 화면 크기: HUD와 같은 UI 좌표계(UiDraw — 높이 600의 16:9, 원점은 왼쪽 아래).
+	const float kScreenWidth = UiDraw::kScreenWidth;
+	const float kScreenHeight = UiDraw::kScreenHeight;
 
 	const float kDefaultHalfSize = 64.f; // 기본 미니맵 패널 한 변 128픽셀
 	const float kDefaultWindow = 30.f;   // 기본 미니맵이 보여 주는 플레이어 둘레(반 변, 월드 칸 — 가로세로 60칸)

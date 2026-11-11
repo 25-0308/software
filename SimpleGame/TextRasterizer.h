@@ -6,7 +6,7 @@
 struct TextTexture
 {
 	unsigned int id = 0; // OpenGL 텍스처 이름(GLuint). 0이면 없음
-	int width = 0;       // 픽셀
+	int width = 0;       // UI 좌표(UiDraw — 텍스처 자체는 그 kPixelScale배 해상도라 화면에서 또렷하다)
 	int height = 0;
 };
 
@@ -24,8 +24,8 @@ public:
 	TextRasterizer(const TextRasterizer&) = delete;
 	TextRasterizer& operator=(const TextRasterizer&) = delete;
 
-	// UTF-8 문장을 maxWidth 픽셀 안에서 (공백 기준으로) 줄바꿈하며 그린 텍스처를 만든다.
-	// 텍스처 크기는 글자 영역 + 여백이다. 실패하면 id가 0인 텍스처를 돌려준다.
+	// UTF-8 문장을 maxWidth(UI 좌표) 안에서 (공백 기준으로) 줄바꿈하며 그린 텍스처를 만든다. 글꼴 크기·폭·여백은 모두
+	// UI 좌표로 받고, 실제로는 UiDraw::kPixelScale배로 키워 그린다. 텍스처 크기(width/height)는 글자 영역 + 여백(UI 좌표)이다. 실패하면 id가 0인 텍스처를 돌려준다.
 	// OpenGL 컨텍스트가 현재 상태여야 한다.
 	TextTexture Create(const std::string& utf8Text, int maxWidth) const;
 

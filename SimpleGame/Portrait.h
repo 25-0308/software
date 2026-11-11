@@ -15,7 +15,7 @@
 class PortraitLibrary
 {
 public:
-	// 화면(800x600 UI 픽셀)에 그리는 크기. 텍스처는 그 두 배(384x476) 해상도다.
+	// 화면(UiDraw의 UI 좌표)에 그리는 크기. 텍스처는 그 두 배(384x476) 해상도다.
 	static const int kWidth = 192;
 	static const int kHeight = 238;
 

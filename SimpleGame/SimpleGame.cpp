@@ -64,8 +64,10 @@ namespace
 
 	// 게임 화면의 기준 해상도(4:3). HUD·미니맵·채팅창도 이 픽셀 좌표계로 그린다. 창 크기가 바뀌면
 	// 이 비율을 유지한 채 창 가운데에 맞춰 늘리거나 줄인다(Reshape 참고).
-	const int kScreenWidth = 800;
-	const int kScreenHeight = 600;
+	const int kScreenWidth = 1920;
+	const int kScreenHeight = 1080;
+	const int kWindowedWidth = 1600; // 창 모드(F11)의 창 크기 — 같은 16:9
+	const int kWindowedHeight = 900;
 
 	// 한 프레임에 진행하는 게임 시간의 상한(초). 창을 드래그하는 동안처럼 루프가 잠깐 멈췄다 풀리면
 	// 한 프레임의 dt가 수 초가 될 수 있는데, 이동 충돌은 도착 지점만 검사하므로 그 한 걸음에 건물·물을
@@ -1307,7 +1309,7 @@ void Idle(void)
 	RenderScene();
 }
 
-// 창 크기가 바뀌면 게임 화면(800x600, 4:3)의 비율을 유지한 채 창 가운데에 맞추고, 남는 곳은 검은 띠로
+// 창 크기가 바뀌면 게임 화면(1920x1080, 16:9)의 비율을 유지한 채 창 가운데에 맞추고, 남는 곳은 검은 띠로
 // 둔다. 예전엔 800x600이 곳곳에 고정돼 있어서 창을 최대화하면 왼쪽 아래 800x600에만 그려졌다.
 // HUD·미니맵·채팅창·이름표도 이 영역을 기준으로 그려지므로 같이 커지고 줄어든다.
 void Reshape(int width, int height)
@@ -1434,6 +1436,12 @@ void SpecialKeyInput(int key, int x, int y)
 		GameModels::SetEnabled(!GameModels::IsEnabled());
 		GameLog::Add(GameLog::Kind::Info, GameModels::IsEnabled() ? "[F3] 3D 모델로 그린다" : "[F3] 도형으로 그린다(3D 모델 끔)");
 	}
+
+	// F11: 전체 화면 ↔ 창(1600x900). 게임 화면은 어느 쪽이든 1920x1080으로 그려 창에 맞춰 늘리거나 줄인다.
+	if (key == GLUT_KEY_F11)
+	{
+		glutFullScreenToggle();
+	}
 }
 
 // 게임을 끝낼 때의 정리(모니터 소켓, 이야기·UI, 씬·GPU 자원, 드로우 콜 후킹). 창을 닫으면 freeglut이 창과 OpenGL
@@ -1548,9 +1556,13 @@ int main(int argc, char **argv)
 	// OpenGL 초기화
 	glutInit(&argc, argv);
 	glutInitDisplayMode(GLUT_DEPTH | GLUT_DOUBLE | GLUT_RGBA);
-	glutInitWindowPosition(0, 0);
-	glutInitWindowSize(kScreenWidth, kScreenHeight);
+	// 게임 화면은 1920x1080이고 전체 화면(테두리 없는 창 — 1920x1080 모니터면 화면 그대로)으로 시작한다. 1920x1080
+	// 모니터에선 제목 표시줄까지 붙은 1920x1080 창이 화면에 다 들어가지 않으므로, 창 모드(F11)는 같은 16:9의
+	// 1600x900으로 둔다(freeglut이 전체 화면에서 돌아올 때 이 크기로 되돌림).
+	glutInitWindowPosition(40, 40);
+	glutInitWindowSize(kWindowedWidth, kWindowedHeight);
 	glutCreateWindow("Game Software Engineering KPU");
+	glutFullScreen();
 
 	// 방금 만든 창의 OpenGL 컨텍스트가 현재 컨텍스트이므로, 그 DC에서 창 핸들을 얻어 둔다.
 	g_GameWindow = WindowFromDC(wglGetCurrentDC());
@@ -1572,9 +1584,9 @@ int main(int argc, char **argv)
 		std::cout << "렌더러를 초기화하지 못했습니다.\n";
 	}
 
-	// 기본 시야 16x12 월드 단위(예전 8x6의 2배 = 카메라를 두 배 멀리 뺀 것과 같음). 직교 투영이라
-	// "거리"는 한 화면에 담기는 범위로 정해진다.
-	g_Camera = new Camera(16.f, 12.f, 1.f);
+	// 기본 시야는 세로 12 월드 단위, 가로는 화면 비율(16:9)만큼 — 예전 4:3(16x12)과 세로 범위가 같아서 사물 크기는
+	// 그대로고 양옆이 더 보인다. 직교 투영이라 "거리"는 한 화면에 담기는 범위로 정해진다.
+	g_Camera = new Camera(12.f * (float)kScreenWidth / (float)kScreenHeight, 12.f, 1.f);
 
 	// 카메라 화면을 좌우·상하로 모두 뒤집는다(그림이 180도 돌아간 상태). HUD는 별도의 화면
 	// 좌표계라 뒤집히지 않고, 이름표는 뒤집힌 화면 위치를 따라간다. 되돌리려면 (false, false).

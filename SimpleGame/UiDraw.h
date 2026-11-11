@@ -6,13 +6,17 @@
 class Renderer;
 
 // 화면 고정 UI(대화창·목표·지역 배너 등)를 그릴 때 여러 곳에서 같이 쓰는 작은 도구들.
-// 좌표계는 HUD·채팅창과 같은 800x600 픽셀(원점은 왼쪽 아래)이다.
+// 좌표계는 HUD·채팅창·미니맵이 함께 쓰는 높이 600의 16:9 UI 좌표(약 1067x600, 원점은 왼쪽 아래)다. 게임 화면은
+// 1920x1080이라 UI 좌표 1 = 실제 화면 1.8픽셀(kPixelScale) — 글자는 그만큼 큰 글꼴로 그려 또렷하게 둔다(TextRasterizer).
 namespace UiDraw
 {
-	const float kScreenWidth = 800.f;
 	const float kScreenHeight = 600.f;
+	const float kScreenWidth = kScreenHeight * 16.f / 9.f;
 
-	// 800x600 화면 좌표계의 투영 행렬.
+	// 게임 화면(1920x1080)의 픽셀 수 / UI 좌표. SimpleGame.cpp의 화면 크기를 바꾸면 같이 바꾼다.
+	const float kPixelScale = 1080.f / kScreenHeight;
+
+	// UI 화면 좌표계의 투영 행렬.
 	Mat4 ScreenProjection();
 
 	// 왼쪽 아래 모서리 (left, bottom)부터 width x height 크기의 단색 사각형.

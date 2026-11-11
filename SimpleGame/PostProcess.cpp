@@ -9,13 +9,22 @@ namespace
 	// 밝기 버퍼에 적용할 가로+세로 블러 쌍의 횟수. 클수록 더 넓고 부드러운
 	// 발광 효과가 나오지만 드로우 콜이 늘어난다.
 	const int kBlurPasses = 5;
+
+	// 블러 버퍼의 세로 크기(가로는 화면 비율대로). 블러가 텍셀 단위로 번지므로, 화면 해상도와 상관없이 이 크기로 두면
+	// 발광의 화면 대비 크기가 늘 같다(예전 800x600 화면의 절반 해상도 = 300).
+	const int kBlurHeight = 300;
+
+	int BlurHeightFor(int height)
+	{
+		return (height / 2 < kBlurHeight) ? height / 2 : kBlurHeight;
+	}
 }
 
 PostProcess::PostProcess(int width, int height)
 	: m_Width(width)
 	, m_Height(height)
-	, m_BlurWidth(width / 2)
-	, m_BlurHeight(height / 2)
+	, m_BlurWidth(width * BlurHeightFor(height) / height)
+	, m_BlurHeight(BlurHeightFor(height))
 	, m_PresentWidth(width)
 	, m_PresentHeight(height)
 {

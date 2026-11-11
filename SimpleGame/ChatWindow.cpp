@@ -1,5 +1,6 @@
 #include "stdafx.h"
 #include "ChatWindow.h"
+#include "UiDraw.h"
 
 #include "Renderer.h"
 
@@ -12,8 +13,8 @@ namespace
 	const int kFontPixelHeight = 16;
 	const int kMaxLineWidth = 420;      // 한 줄 최대 너비(픽셀). 넘으면 줄바꿈한다
 
-	const float kScreenWidth = 800.f;
-	const float kScreenHeight = 600.f;
+	const float kScreenWidth = UiDraw::kScreenWidth;
+	const float kScreenHeight = UiDraw::kScreenHeight;
 	const float kLeftMargin = 12.f;
 	const float kBottomMargin = 12.f;
 	const float kLineGap = 2.f;         // 줄 사이 간격(픽셀)
