@@ -43,6 +43,7 @@ but WITHOUT ANY WARRANTY.
 #include "Monitor.h"
 #include "NpcSociety.h"
 #include "PatronPowers.h"
+#include "PauseMenu.h"
 #include "PostProcess.h"
 #include "Profiler.h"
 #include "Renderer.h"
@@ -50,6 +51,7 @@ but WITHOUT ANY WARRANTY.
 #include "SkillBar.h"
 #include "StoryDirector.h"
 #include "TileMap.h"
+#include "UiDraw.h"
 #include "Wilderness.h"
 #include "WorldActors.h"
 #include "WorldLayout.h"
@@ -107,7 +109,7 @@ namespace
 }
 
 // 검증용 화면 캡처(명령줄 --capture <파일.bmp> [초]): 그 시간이 지난 뒤 화면을 BMP로 저장하고 게임을 끝낸다. 비어 있으면 끔.
-// --zoom <배율>은 처음 줌, --at <지역ID> [dx dy]는 시작 자리(지역 중심 기준), --shapes는 3D 모델 대신 도형으로 시작.
+// --zoom <배율>은 처음 줌, --at <지역ID> [dx dy]는 시작 자리(지역 중심 기준), --shapes는 3D 모델 대신 도형으로 시작, --pause는 일시 정지 메뉴를 연 채로 시작.
 std::string g_CapturePath;
 float g_CaptureAfterSeconds = 4.f;
 
@@ -131,6 +133,13 @@ NpcSociety *g_Society = NULL;
 
 // 화면 오른쪽 아래의 스킬 칸(Q 기본 스킬, R 궁극기).
 SkillBar *g_SkillBar = NULL;
+PauseMenu *g_PauseMenu = NULL;
+
+// 후처리가 그리는 출력 영역(창 좌표, 왼쪽 아래 원점 — Reshape). 마우스 위치를 UI 좌표로 바꿀 때 쓴다.
+int g_PresentX = 0;
+int g_PresentY = 0;
+int g_PresentWidth = 1;
+int g_PresentHeight = 1;
 
 // 마을과 마을 사이 황야의 몬스터(마을마다 주민 수만큼 — 쓰러지면 얼마 뒤 다시 채운다).
 Wilderness *g_Wilderness = NULL;
@@ -1068,11 +1077,11 @@ void RenderScene(void)
 	// 보이게 한다. 렌더 큐에 모인 도형은 구간마다 끝에서 Flush해서, 그 구간의 비용이
 	// 그 구간에 잡히고 레거시 GL로 그리는 이름표와 순서가 섞이지 않게 한다.
 	{
-		// 이름표는 레거시 glRasterPos/glutBitmapCharacter 경로라 드로우콜 카운터엔 안
-		// 잡히지만 실제 비용은 있으므로, 여기서 따로 재서 눈에 보이게 한다.
+		// 이름표: 이름 하나가 글자 텍스처 하나(그림자까지 드로우 콜 2회). 처음 보는 이름은 글자를 굽는 비용이 든다.
 		Profiler::ScopedTimer timer(Profiler::Section::NameTags);
 		g_Renderer->Flush();
-		Hud::DrawNameTags(*g_Scene, viewProjection);
+		Hud::DrawNameTags(*g_Renderer, *g_Scene, viewProjection);
+		g_Renderer->Flush();
 	}
 	{
 		Profiler::ScopedTimer timer(Profiler::Section::Hud);
@@ -1124,6 +1133,13 @@ void RenderScene(void)
 		g_Renderer->Flush();
 	}
 
+	// 일시 정지 메뉴(Esc)는 대화창·큰 지도까지 덮으므로 맨 마지막에.
+	if (g_PauseMenu->IsOpen())
+	{
+		g_PauseMenu->Draw(*g_Renderer);
+		g_Renderer->Flush();
+	}
+
 	{
 		// 수직동기화가 켜져 있으면 다음 화면 갱신 시점까지 여기서 기다리므로, 이 구간이
 		// 유난히 크게 나온다고 해서 우리 코드가 그만큼 느린 건 아닐 수 있다(구간 이름에
@@ -1157,6 +1173,22 @@ void RenderScene(void)
 void Update(float deltaSeconds)
 {
 	g_ElapsedSeconds += deltaSeconds;
+
+	// 일시 정지 메뉴(Esc)가 열려 있으면 이야기·쿨타임·씬·채팅창 모두 멈춘다(대화 중에 열었으면 대화도 그대로 기다린다).
+	// 월드 모니터는 브라우저 요청에 답해야 하므로 계속 돈다.
+	if (g_PauseMenu->IsOpen())
+	{
+		g_PauseMenu->Update(deltaSeconds);
+		g_Player->SetMoveInput(0.f, 0.f);
+		g_AttackRing->SetTarget(NULL);
+		g_InteractRing->SetTarget(NULL);
+
+		Profiler::ScopedTimer timer(Profiler::Section::Monitor);
+		g_Monitor->SetSkillCooldowns(g_SkillCooldown, g_SkillCooldownTotal);
+		g_Monitor->Update(deltaSeconds, *g_World.scene, g_InStage ? g_Scene : NULL, *g_Director);
+		return;
+	}
+
 
 	if (g_ActionCooldown > 0.f)
 	{
@@ -1325,16 +1357,116 @@ void Reshape(int width, int height)
 
 	int viewWidth = (int)(kScreenWidth * scale);
 	int viewHeight = (int)(kScreenHeight * scale);
-	g_PostProcess->SetPresentViewport((width - viewWidth) / 2, (height - viewHeight) / 2, viewWidth, viewHeight);
+	g_PresentX = (width - viewWidth) / 2;
+	g_PresentY = (height - viewHeight) / 2;
+	g_PresentWidth = (viewWidth > 0) ? viewWidth : 1;
+	g_PresentHeight = (viewHeight > 0) ? viewHeight : 1;
+	g_PostProcess->SetPresentViewport(g_PresentX, g_PresentY, viewWidth, viewHeight);
+}
+
+namespace
+{
+	// 게임을 처음부터 다시 시작한다: 같은 실행 파일을 같은 명령줄·작업 폴더로 새로 띄우고 이 게임은 끝낸다. 이야기·월드·
+	// 마을·몬스터·모니터 등 상태가 곳곳에 있어서, 하나하나 되돌리는 대신 프로세스째 새로 시작하는 쪽이 빠짐없이 깨끗하다.
+	// 새 게임은 멈춘 채로 만들어 두고, 이 게임을 정리(모니터 포트 반납 등)한 뒤에 출발시킨다. 새 게임을 띄우지 못하면
+	// 메뉴를 닫고 이어서 한다.
+	void RestartGame()
+	{
+		wchar_t exePath[MAX_PATH] = {};
+		DWORD length = GetModuleFileNameW(NULL, exePath, MAX_PATH);
+		std::wstring commandLine = GetCommandLineW();
+
+		STARTUPINFOW startup = {};
+		startup.cb = sizeof(startup);
+		PROCESS_INFORMATION process = {};
+		if (length == 0 || length >= MAX_PATH
+			|| !CreateProcessW(exePath, &commandLine[0], NULL, NULL, FALSE, CREATE_SUSPENDED, NULL, NULL, &startup, &process))
+		{
+			std::cout << "[다시 시작] 새 게임을 띄우지 못했습니다(오류 " << GetLastError() << ").\n";
+			GameLog::Add(GameLog::Kind::Info, "[다시 시작] 새 게임을 띄우지 못했다 — 게임을 끄고 다시 켜 주세요.");
+			g_PauseMenu->Close();
+			return;
+		}
+
+		std::cout << "[다시 시작] 게임을 처음부터 다시 시작합니다.\n";
+		ShutdownGame();
+		ResumeThread(process.hThread);
+		CloseHandle(process.hThread);
+		CloseHandle(process.hProcess);
+		exit(0);
+	}
+
+	void ApplyPauseAction(PauseAction action)
+	{
+		switch (action)
+		{
+		case PauseAction::Resume:
+			g_PauseMenu->Close();
+			break;
+
+		case PauseAction::Restart:
+			RestartGame();
+			break;
+
+		case PauseAction::Quit:
+			std::cout << "[종료] 게임을 끝냅니다.\n";
+			ShutdownGame();
+			exit(0);
+			break;
+
+		default:
+			break;
+		}
+	}
+
+	// Esc로 메뉴를 연다. 누르고 있던 방향키는 뗀 것으로 친다(메뉴를 닫자마자 혼자 걸어가지 않게).
+	void OpenPauseMenu()
+	{
+		g_KeyW = g_KeyA = g_KeyS = g_KeyD = false;
+		g_PauseMenu->Open();
+	}
+
+	// 창 좌표(마우스, 왼쪽 위 원점) → UI 좌표(UiDraw, 왼쪽 아래 원점).
+	void WindowToUi(int x, int y, float& uiX, float& uiY)
+	{
+		int windowHeight = glutGet(GLUT_WINDOW_HEIGHT);
+		float fromLeft = (float)(x - g_PresentX) / (float)g_PresentWidth;
+		float fromBottom = (float)(windowHeight - y - g_PresentY) / (float)g_PresentHeight;
+		uiX = fromLeft * UiDraw::kScreenWidth;
+		uiY = fromBottom * UiDraw::kScreenHeight;
+	}
 }
 
 void MouseInput(int button, int state, int x, int y)
 {
+	// 일시 정지 메뉴: 왼쪽 단추를 누르면 가리킨 항목을 고른다.
+	if (g_PauseMenu->IsOpen() && button == GLUT_LEFT_BUTTON && state == GLUT_DOWN)
+	{
+		float uiX, uiY;
+		WindowToUi(x, y, uiX, uiY);
+		ApplyPauseAction(g_PauseMenu->HandleMouse(uiX, uiY, true));
+	}
+}
+
+// 단추를 누르지 않고 움직일 때 — 일시 정지 메뉴에서 가리킨 항목을 밝힌다.
+void MouseMotion(int x, int y)
+{
+	if (g_PauseMenu->IsOpen())
+	{
+		float uiX, uiY;
+		WindowToUi(x, y, uiX, uiY);
+		g_PauseMenu->HandleMouse(uiX, uiY, false);
+	}
 }
 
 void MouseWheel(int wheel, int direction, int x, int y)
 {
 	// direction은 휠을 위로 굴리면 +1(확대), 아래로 굴리면 -1(축소)이다.
+	if (g_PauseMenu->IsOpen())
+	{
+		return;
+	}
+
 	const float kZoomStep = 1.1f;
 	g_Camera->AdjustZoom(direction > 0 ? kZoomStep : 1.f / kZoomStep);
 }
@@ -1344,6 +1476,26 @@ void KeyInput(unsigned char key, int x, int y)
 	key = NormalizeKey(key);
 	bool repeat = g_KeyHeld[key];
 	g_KeyHeld[key] = true;
+
+	// 일시 정지 메뉴가 열려 있으면 모든 키가 메뉴로 간다(이동도 하지 않음).
+	if (g_PauseMenu->IsOpen())
+	{
+		if (!repeat)
+		{
+			ApplyPauseAction(g_PauseMenu->HandleKey(key));
+		}
+		return;
+	}
+
+	// Esc: 큰 지도가 열려 있으면 지도를 닫고(아래), 아니면 일시 정지 메뉴(계속하기·다시 시작·종료)를 연다 — 대화 중에도.
+	if (key == kEscapeKey && !g_MapScreen->IsOpen())
+	{
+		if (!repeat)
+		{
+			OpenPauseMenu();
+		}
+		return;
+	}
 
 	// 이동 키는 대화 중에도 눌림 상태를 기록해 둔다(대화가 끝나는 순간 누르고 있던 방향으로 바로 걷도록).
 	switch (key)
@@ -1424,6 +1576,13 @@ void KeyUp(unsigned char key, int x, int y)
 
 void SpecialKeyInput(int key, int x, int y)
 {
+	// 일시 정지 메뉴: ↑↓로 고른다(F11 전체 화면 전환 등은 그대로 받는다).
+	if (g_PauseMenu->IsOpen() && (key == GLUT_KEY_UP || key == GLUT_KEY_DOWN))
+	{
+		ApplyPauseAction(g_PauseMenu->HandleSpecialKey(key));
+		return;
+	}
+
 	// F2: 월드 모니터를 기본 브라우저로 연다(게임은 그대로 돈다).
 	if (key == GLUT_KEY_F2)
 	{
@@ -1468,6 +1627,9 @@ void ShutdownGame(void)
 	g_Society = NULL;
 	delete g_SkillBar; // 글자 텍스처를 지우므로 렌더러·컨텍스트가 살아 있을 때
 	g_SkillBar = NULL;
+	delete g_PauseMenu;
+	g_PauseMenu = NULL;
+	Hud::Shutdown(); // 이름표 글자 텍스처
 	delete g_Director;
 	g_Director = NULL;
 	delete g_MapScreen;
@@ -1519,6 +1681,7 @@ int main(int argc, char **argv)
 	float startOffsetY = 0.f;
 	float startZoom = 0.f;
 	bool startWithShapes = false;
+	bool startPaused = false;
 	for (int i = 1; i < argc; ++i)
 	{
 		std::string arg = argv[i];
@@ -1546,6 +1709,10 @@ int main(int argc, char **argv)
 		else if (arg == "--shapes")
 		{
 			startWithShapes = true;
+		}
+		else if (arg == "--pause")
+		{
+			startPaused = true;
 		}
 	}
 
@@ -1607,6 +1774,7 @@ int main(int argc, char **argv)
 	g_MapScreen = new MapScreen();
 	g_ChatWindow = new ChatWindow();
 	g_SkillBar = new SkillBar();
+	g_PauseMenu = new PauseMenu();
 	g_Society = new NpcSociety();
 
 	// 이야기 데이터(대사·진행 단계·지역)를 읽는다. 파일이 없거나 깨져도 게임은 대화 없이 돌아간다.
@@ -1648,8 +1816,12 @@ int main(int argc, char **argv)
 	{
 		g_Camera->AdjustZoom(startZoom);
 	}
+	if (startPaused)
+	{
+		OpenPauseMenu();
+	}
 
-	GameLog::Add(GameLog::Kind::Info, "[조작] WASD 이동, E 대화·조사, Space 공격, Q 기본 스킬·R 궁극기(수호신의 축복 뒤), M 지도, 마우스 휠 확대/축소. 대화는 E/Space로 넘기고 숫자키로 고른다.");
+	GameLog::Add(GameLog::Kind::Info, "[조작] WASD 이동, E 대화·조사, Space 공격, Q 기본 스킬·R 궁극기(수호신의 축복 뒤), M 지도, Esc 메뉴(다시 시작·종료), 마우스 휠 확대/축소. 대화는 E/Space로 넘기고 숫자키로 고른다.");
 	GameLog::Add(GameLog::Kind::Info, "[길잡이] 발밑의 금빛 화살표와 미니맵의 금빛 점이 지금 목표를 가리킨다. 다른 마을은 길을 따라 걸어서 간다 — 마을 사이의 황야엔 몬스터가 산다.");
 	if (g_Monitor->IsRunning())
 	{
@@ -1670,6 +1842,7 @@ int main(int argc, char **argv)
 	glutMouseFunc(MouseInput);
 	glutMouseWheelFunc(MouseWheel);
 	glutSpecialFunc(SpecialKeyInput);
+	glutPassiveMotionFunc(MouseMotion);
 	glutCloseFunc(ShutdownGame);
 
 	glutMainLoop();

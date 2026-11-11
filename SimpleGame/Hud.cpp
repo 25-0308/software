@@ -2,8 +2,13 @@
 #include "Hud.h"
 #include "UiDraw.h"
 
+#include <cmath>
+#include <cstring>
+#include <map>
+#include <string>
+
 #include "Renderer.h"
-#include "Dependencies\freeglut.h"
+#include "TextRasterizer.h"
 
 #include "Actor.h"
 #include "CharacterActors.h"
@@ -146,32 +151,118 @@ void Hud::DrawStatus(Renderer& renderer, const MeshHandle& circleMesh, const Pla
 	DrawBar(renderer, kBarLeft, kBadgeY - 32.f, kBarWidth * 0.5f, 8.f, actionReadiness, readyR, readyG, readyB, uiProjection);
 }
 
-// 화면 위치는 월드 좌표를 직접 NDC로 계산해서 glRasterPos에 넘긴다(레거시
-// 모델뷰/프로젝션 행렬은 이 프로젝트 어디서도 건드리지 않아 항등행렬 상태이므로,
-// NDC 좌표를 그대로 써도 정확히 맞는다).
-void Hud::DrawNameTags(SceneGraph& scene, const Mat4& viewProjection)
+namespace
 {
-	glUseProgram(0);
+	// 이름표 글자(UI 좌표 크기 — 실제로는 UiDraw::kPixelScale배로 그림). 이름은 몇십 가지뿐이라 한 번 만든 글자는
+	// 끝날 때까지 들고 있다(Hud::Shutdown).
+	const int kNameTagFontHeight = 12;
+	const int kNameTagWrapWidth = 240;
 
-	// 글자 폭(픽셀)을 NDC 길이로 바꾸려면 지금 그리는 영역의 픽셀 크기가 필요하다(창 크기를 바꾸면
-	// 출력 영역도 달라지므로 800 같은 고정값 대신 현재 뷰포트를 읽는다).
-	GLint viewport[4] = { 0, 0, 800, 600 };
-	glGetIntegerv(GL_VIEWPORT, viewport);
-	float pixelToNdcX = 2.f / (float)((viewport[2] > 0) ? viewport[2] : 800);
-	float pixelToNdcY = 2.f / (float)((viewport[3] > 0) ? viewport[3] : 600);
+	TextRasterizer* s_NameTagText = nullptr;
+	std::map<std::string, TextTexture> s_NameTagTextures;
 
-	// 비트맵 글꼴은 실제 화면 픽셀 크기라, 출력 영역이 크면(1920x1080 등) 큰 글꼴로 바꿔 화면 대비 크기를 비슷하게 둔다.
-	void* font = GLUT_BITMAP_HELVETICA_10;
-	if (viewport[3] >= 950)
+	// 액터의 영문 이름표(Actor::GetName — 모델 고르기·모니터가 그대로 씀)에 맞는 한글 이름. 짐승·괴물은 채팅창 로그와
+	// 같은 이름(GetAnimalNames), 그 밖은 아래 표. 표에 없으면 영문 그대로.
+	const char* KoreanNameTag(const Actor& actor)
 	{
-		font = GLUT_BITMAP_HELVETICA_18;
-	}
-	else if (viewport[3] >= 700)
-	{
-		font = GLUT_BITMAP_HELVETICA_12;
+		if (actor.GetType() == ActorType::Animal)
+		{
+			return GetAnimalNames(static_cast<const AnimalActor&>(actor).GetKind()).name;
+		}
+
+		struct Entry
+		{
+			const char* english;
+			const char* korean;
+		};
+		static const Entry kNames[] =
+		{
+			{ "Player", "플레이어" },
+			{ "Pythia", "피티아" },
+			{ "Old Woman", "떠돌이 노파" },
+			{ "Eris", "에리스" },
+			{ "Hermes", "헤르메스" },
+			{ "Zeus", "제우스" },
+			{ "Poseidon", "포세이돈" },
+			{ "Hades", "하데스" },
+			{ "Aphrodite", "아프로디테" },
+			{ "Hera", "헤라" },
+			{ "Athena", "아테나" },
+			{ "Ares", "아레스" },
+			{ "Dionysus", "디오니소스" },
+			{ "Hephaestus", "헤파이스토스" },
+			{ "Pan", "판" },
+			{ "Apollo", "아폴론" },
+			{ "Persephone", "페르세포네" },
+			{ "Prometheus", "프로메테우스" },
+			{ "Clotho", "클로토" },
+			{ "Lachesis", "라케시스" },
+			{ "Atropos", "아트로포스" },
+			{ "Tantalus", "탄탈로스" },
+			{ "Terminus", "경계석의 신" },
+			{ "Pilgrim", "순례객" },
+			{ "Merchant", "상인" },
+			{ "Villager", "주민" },
+			{ "Citizen", "시민" },
+			{ "Theban", "테베 시민" },
+			{ "Shepherd", "양치기" },
+			{ "Priest", "사제" },
+			{ "High Priest", "사제장" },
+			{ "Philosopher", "철학자" },
+			{ "Fisher", "어부" },
+			{ "Castaway", "조난자" },
+			{ "Soul", "영혼" },
+			{ "Elder", "돌아온 노인" },
+			{ "Undying", "돌아온 자" },
+			{ "Guest", "가면 쓴 손님" },
+			{ "Servant", "시종" },
+			{ "Keeper", "기록 관리인" },
+			{ "Survivor", "살아남은 양치기" },
+		};
+
+		const char* english = actor.GetName();
+		for (const Entry& entry : kNames)
+		{
+			if (strcmp(entry.english, english) == 0)
+			{
+				return entry.korean;
+			}
+		}
+		return english;
 	}
 
-	scene.ForEach([&viewProjection, pixelToNdcX, pixelToNdcY, font](Actor& actor)
+	const TextTexture& NameTagTexture(const std::string& name)
+	{
+		std::map<std::string, TextTexture>::iterator found = s_NameTagTextures.find(name);
+		if (found != s_NameTagTextures.end())
+		{
+			return found->second;
+		}
+
+		if (s_NameTagText == nullptr)
+		{
+			s_NameTagText = new TextRasterizer(kNameTagFontHeight, true);
+		}
+		TextTexture& texture = s_NameTagTextures[name];
+		texture = s_NameTagText->Create(name, kNameTagWrapWidth);
+		return texture;
+	}
+
+	// UI 좌표를 실제 화면 픽셀 경계에 맞춘다(글자가 픽셀 사이에 걸려 흐려지지 않게).
+	float SnapToPixel(float ui)
+	{
+		return floorf(ui * UiDraw::kPixelScale + 0.5f) / UiDraw::kPixelScale;
+	}
+}
+
+// 이름표는 채팅창과 같은 GDI 글자 텍스처(TextRasterizer)로 그려 한글이 나온다. 머리 위 자리는 월드 좌표를 NDC로
+// 옮긴 뒤 UI 좌표(UiDraw — 후처리가 남겨 둔 출력 영역 전체)로 바꾼다.
+void Hud::DrawNameTags(Renderer& renderer, SceneGraph& scene, const Mat4& viewProjection)
+{
+	Mat4 ui = UiDraw::ScreenProjection();
+	const float kShadowOffset = 1.f / UiDraw::kPixelScale; // 실제 화면 1픽셀
+
+	scene.ForEach([&renderer, &ui, &viewProjection, kShadowOffset](Actor& actor)
 	{
 		const char* name = actor.GetName();
 		if (name == nullptr || !actor.IsVisible() || actor.IsPendingDestroy())
@@ -194,29 +285,32 @@ void Hud::DrawNameTags(SceneGraph& scene, const Mat4& viewProjection)
 			return; // 화면 밖이면 그리지 않음.
 		}
 
-		int textWidth = 0;
-		for (const char* c = name; *c != '\0'; ++c)
+		const TextTexture& texture = NameTagTexture(KoreanNameTag(actor));
+		if (texture.id == 0)
 		{
-			textWidth += glutBitmapWidth(font, *c);
+			return;
 		}
 
-		// 텍스트 폭의 절반만큼 왼쪽으로 밀어서 가운데 정렬한다.
-		float left = ndcX - (float)textWidth * 0.5f * pixelToNdcX;
+		// 가운데 정렬, 글자 아래쪽(여백 제외)이 머리 위 자리에 오게.
+		float uiX = (ndcX + 1.f) * 0.5f * UiDraw::kScreenWidth;
+		float uiY = (ndcY + 1.f) * 0.5f * UiDraw::kScreenHeight;
+		float left = SnapToPixel(uiX - (float)texture.width * 0.5f);
+		float top = SnapToPixel(uiY + (float)texture.height - 3.f);
 
-		// 1픽셀 오른쪽 아래에 검은 그림자를 먼저 찍어서, 밝은 모래·돌바닥 위에서도 글자가 또렷하게
-		// 읽히게 한다. 래스터 색은 glRasterPos를 부르는 순간의 색으로 정해지므로 색을 먼저 바꾼다.
-		glColor3f(0.f, 0.f, 0.f);
-		glRasterPos2f(left + pixelToNdcX, ndcY - pixelToNdcY);
-		for (const char* c = name; *c != '\0'; ++c)
-		{
-			glutBitmapCharacter(font, *c);
-		}
-
-		glColor3f(1.f, 1.f, 1.f);
-		glRasterPos2f(left, ndcY);
-		for (const char* c = name; *c != '\0'; ++c)
-		{
-			glutBitmapCharacter(font, *c);
-		}
+		// 1픽셀 오른쪽 아래에 검은 그림자를 먼저 찍어서, 밝은 모래·돌바닥 위에서도 글자가 또렷하게 읽히게 한다.
+		UiDraw::TextTopLeft(renderer, ui, texture, left + kShadowOffset, top - kShadowOffset, 0.f, 0.f, 0.f, 0.85f);
+		UiDraw::TextTopLeft(renderer, ui, texture, left, top, 1.f, 1.f, 1.f, 1.f);
 	});
+}
+
+void Hud::Shutdown()
+{
+	for (std::map<std::string, TextTexture>::value_type& entry : s_NameTagTextures)
+	{
+		TextRasterizer::Destroy(entry.second);
+	}
+	s_NameTagTextures.clear();
+
+	delete s_NameTagText;
+	s_NameTagText = nullptr;
 }

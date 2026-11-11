@@ -17,7 +17,10 @@ namespace Hud
 	// 월드 카메라와 별개인 화면 좌표계(UiDraw — 높이 600의 16:9 UI 좌표)로 그린다.
 	void DrawStatus(Renderer& renderer, const MeshHandle& circleMesh, const PlayerStats& stats, float actionReadiness);
 
-	// 씬의 플레이어/NPC/짐승 머리 위에 이름을 그린다. 이 엔진엔 자체 폰트가 없어서
-	// freeglut 내장 비트맵 폰트를 쓰며, 한글 글리프가 없어 영문 이름만 표시된다.
-	void DrawNameTags(SceneGraph& scene, const Mat4& viewProjection);
+	// 씬의 플레이어/NPC/짐승 머리 위에 한글 이름을 그린다(영문 이름표 Actor::GetName을 한글로 바꿔, 채팅창과 같은
+	// GDI 글자 텍스처로 — 이름마다 한 번 만들어 둔다).
+	void DrawNameTags(Renderer& renderer, SceneGraph& scene, const Mat4& viewProjection);
+
+	// 이름표 글자 텍스처를 지운다(렌더러·OpenGL 컨텍스트가 살아 있을 때).
+	void Shutdown();
 }
